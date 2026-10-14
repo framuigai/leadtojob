@@ -42,6 +42,16 @@
       only a one-way fingerprint of each code and never a record of who
       received it.</li>
     {% endif %}
+    {#
+      THE REPORTING PROMISE FOLLOWS THE THRESHOLD IN FORCE.
+
+      `promise` comes from reporting_promise() in app/survey/routes.py. The
+      same discipline that gives open_link and ticketed different anonymity
+      wording applies here: a form claiming group-only reporting while the
+      threshold is 1 is a false statement to someone being asked to answer
+      candidly about their employer. tests assert the match.
+    #}
+    {% if promise == 'group' %}
     <li><strong>Results are only ever reported for groups.</strong> Any group
       smaller than {{ cycle.min_reporting_n }} people is suppressed, and the
       next-smallest group with it, so a suppressed figure cannot be worked out
@@ -49,6 +59,26 @@
     <li><strong>No individual response is shown to anyone</strong> - not to
       your manager, not to HR, not in any report or export. Managers receive
       group results for their team and nothing else.</li>
+    {% elif promise == 'pair' %}
+    <li><strong>Results are reported for groups of two or more.</strong> We
+      will not show a figure that rests on a single response. You should know
+      that in a group of exactly two, the other person could work out your
+      answers from the pair's average and their own.</li>
+    <li><strong>No individual response is shown as such</strong> in any report
+      or export.</li>
+    {% else %}
+    <li><strong>Please read this before answering.</strong> This survey is
+      currently set up to report a result even when only one person in a group
+      has responded. That means a figure shown for your team may be based on
+      your answers alone, and someone who knows who is in your team may be able
+      to work out that it is yours.</li>
+    <li>We are telling you this rather than claiming your answers are grouped
+      with other people's, because for now they may not be.</li>
+    <li><strong>Answer only what you are comfortable putting your name to</strong>,
+      and leave anything else blank or mark it as not applicable. A blank
+      answer is left out of the results; it is not counted against you or
+      treated as a middle answer.</li>
+    {% endif %}
     <li><strong>Answering honestly carries no consequence.</strong> Your
       responses are not used in any decision about you as an individual.</li>
     <li>In the interest of being complete: like any website, the servers that

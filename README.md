@@ -35,8 +35,19 @@ pytest -q                        # DB-backed tests skip without TEST_DATABASE_UR
 | 3 | Taxonomy & instrument | ✅ done |
 | 4 | Cycles & segments | ✅ done |
 | 5 | Deployment & the anonymous form | ✅ done |
-| 6 | Scoring engine | next |
-| 7–11 | see `docs/jobsat build plan.md` §11 | |
+| 6 | Scoring engine | ✅ done |
+| 7 | Association engine & Reports screen | next |
+| 8–11 | see `docs/jobsat build plan.md` §11 | |
+
+## The reporting threshold
+
+`MIN_REPORTING_N` is **1 in development and testing** (so small fixtures
+produce visible numbers) and **5 in production**, set per environment in
+`config.py` and overridable by environment variable.
+
+Whatever it is set to, the survey landing page renders a claim that MATCHES it
+— at 1 it tells respondents plainly that a result may rest on their answers
+alone. See `reporting_promise()` in `app/survey/routes.py`.
 
 ## Seeding a fresh database
 

@@ -1,6 +1,6 @@
 # Scoring rule
 
-**Status:** in force from phase 6. Recorded here because spec §10.2 requires the
+**Status:** in force — implemented in `app/analytics/scoring.py` (phase 6). Recorded here because spec §10.2 requires the
 organisation to *document which method it uses* — not because it mandates a
 particular one.
 

@@ -83,10 +83,22 @@ consequence.">{{ form.purpose_statement }}</textarea>
 
   <div class="form-group">
     <label for="min_reporting_n">Minimum reporting threshold</label>
-    <input type="number" id="min_reporting_n" name="min_reporting_n" min="5"
+    {# The `min` attribute follows the PLATFORM FLOOR, not a literal. Hardcoding
+       5 here while the floor is 1 makes the browser reject a value the server
+       accepts — the two disagreeing is how a form becomes untrustworthy. #}
+    <input type="number" id="min_reporting_n" name="min_reporting_n"
+           min="{{ config.MIN_REPORTING_N }}"
            value="{{ form.min_reporting_n }}">
-    <small class="muted">May be raised, never lowered. Groups below it are
-      suppressed.</small>
+    <small class="muted">
+      May be raised, never lowered below {{ config.MIN_REPORTING_N }}. Groups
+      below it are suppressed, together with their next-smallest sibling so the
+      hidden figure cannot be recovered by subtraction.
+      {% if config.MIN_REPORTING_N < 3 %}
+      <br><strong>At {{ config.MIN_REPORTING_N }}, a result can rest on a
+      single response.</strong> The survey form tells respondents so, in those
+      words, while the threshold is this low.
+      {% endif %}
+    </small>
   </div>
 
   <div class="form-group">

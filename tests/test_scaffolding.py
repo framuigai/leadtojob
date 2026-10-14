@@ -218,11 +218,37 @@ def test_production_boots_when_everything_is_set(monkeypatch):
 
 # ── The threshold is configured, not scattered ──────────────────────────────
 
-def test_the_reporting_threshold_has_a_sane_default(app):
+def test_the_reporting_threshold_is_set_PER_ENVIRONMENT(app):
     """
-    5 is the common standard. It may be raised per cycle and never lowered —
-    the enforcement lives in app/analytics/ and is pinned by
-    test_suppression.py once the engine exists (phase 6).
+    1 locally, 5 in production — deliberately not one shared default.
+
+    A threshold convenient for a local walkthrough must not reach a real
+    workforce by inheritance, and "we forgot to change it before go-live" is
+    the most ordinary way that happens. This test is what makes the production
+    default a decision rather than an accident.
     """
-    assert app.config['MIN_REPORTING_N'] == 5
+    from config import DevelopmentConfig, ProductionConfig, TestingConfig
+
+    assert TestingConfig.MIN_REPORTING_N == 1
+    assert DevelopmentConfig.MIN_REPORTING_N == 1
+    assert ProductionConfig.MIN_REPORTING_N == 5
+
+    assert app.config['MIN_REPORTING_N'] == 1        # this app is 'testing'
     assert app.config['ASSOCIATION_MIN_N'] == 30
+
+
+def test_a_low_production_threshold_is_logged_not_silently_accepted(
+        monkeypatch, caplog):
+    """
+    Refusing would be wrong — a genuinely tiny client may have accepted a low
+    threshold with the respondent wording changed to match. Passing unremarked
+    would also be wrong. So it warns.
+    """
+    import logging
+
+    from config import ProductionConfig
+    monkeypatch.setattr(ProductionConfig, 'MIN_REPORTING_N', 1, raising=False)
+
+    with caplog.at_level(logging.WARNING):
+        _prod(monkeypatch)
+    assert any('MIN_REPORTING_N' in r.getMessage() for r in caplog.records)

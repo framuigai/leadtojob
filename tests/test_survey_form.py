@@ -657,3 +657,60 @@ def test_subdomains_are_interleaved_on_the_page(client, wave):
     subs = [items[i].subdomain_code for i in ids]
     assert len(subs) == 12
     assert not any(a == b for a, b in zip(subs, subs[1:])), subs
+
+# ── The promise follows the threshold ──────────────────────────────────────
+
+@pytest.mark.parametrize('min_n, must_say, must_not_say', [
+    (5, ['smaller than 5 people is suppressed',
+         'No individual response is shown to anyone'],
+        ['may be based on your answers alone']),
+    (2, ['groups of two or more',
+         'the other person could work out your answers'],
+        ['No individual response is shown to anyone',
+         'smaller than 2 people is suppressed']),
+    (1, ['may be based on your answers alone',
+         'work out that it is yours',
+         'comfortable putting your name to'],
+        ['No individual response is shown to anyone',
+         'only ever reported for groups']),
+])
+def test_the_reporting_promise_matches_the_threshold_in_force(
+        client, db, wave, min_n, must_say, must_not_say):
+    """
+    THE SAME DISCIPLINE AS THE DELIVERY-MODE WORDING, APPLIED TO THE THRESHOLD.
+
+    Spec §9.2: "avoid promising absolute anonymity if the administration method
+    cannot guarantee it." A form claiming group-only reporting while the
+    threshold is 1 is a false statement to someone being asked to answer
+    candidly about their employer — and a false promise is worse than no
+    promise, because it is believed once and never again.
+
+    The threshold is 1 in development and testing for local convenience. This
+    test is what stops that convenience quietly turning the landing page into a
+    lie.
+    """
+    wave['cycle'].min_reporting_n = min_n
+    db.session.commit()
+
+    html = re.sub(r'\s+', ' ', client.get(f'/survey/{wave["slug"]}').get_data(as_text=True))
+
+    for phrase in must_say:
+        assert phrase in html, f'min_n={min_n} should say {phrase!r}'
+    for phrase in must_not_say:
+        assert phrase not in html, f'min_n={min_n} must NOT say {phrase!r}'
+
+
+def test_at_a_threshold_of_one_the_form_tells_respondents_to_self_censor(
+        client, db, wave):
+    """
+    Unpleasant, and correct. If a result can be one person's answers, the only
+    honest thing to do is say so and let them decide what to put in writing —
+    rather than collect candour under a promise we are not keeping.
+    """
+    wave['cycle'].min_reporting_n = 1
+    db.session.commit()
+
+    html = re.sub(r'\s+', ' ', client.get(f'/survey/{wave["slug"]}').get_data(as_text=True))
+    assert 'Answer only what you are comfortable putting your name to' in html
+    # And it must still say a blank costs them nothing, or the advice is a trap.
+    assert 'not counted against you' in html

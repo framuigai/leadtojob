@@ -207,19 +207,29 @@ def test_a_pulse_wave_of_the_outcome_plus_one_diagnostic_is_allowed(
 
 
 def test_the_reporting_threshold_cannot_be_lowered_through_the_form(
-        client, db, org_world):
+        app, client, db, org_world):
     """
-    The platform floor. permissions.LOWER_MIN_N exists and is held by no role
-    precisely so that this cannot be waived from a screen under client
-    pressure — and this test is what stops someone "fixing" the refusal by
-    lowering the config default instead.
+    The platform floor, whatever it is set to.
+
+    The floor is raised to 5 FOR THIS TEST rather than relying on the
+    configured default, which is 1 in development and testing. A suppression
+    rule that only holds at one particular configured value is a rule nobody
+    has tested — and the point of the floor is that it binds at whatever it is
+    set to, not that it happens to equal 5.
+
+    permissions.LOWER_MIN_N exists and is held by no role precisely so that
+    this cannot be waived from a screen under client pressure.
     """
-    login(client, org_world['admin'])
-    res = client.post('/org/cycles/new',
-                      data=_cycle_form(min_reporting_n='2'),
-                      follow_redirects=True)
-    assert 'cannot go below' in res.get_data(as_text=True)
-    assert db.session.get(MeasurementCycle, 'JS-2026-H1') is None
+    app.config['MIN_REPORTING_N'] = 5
+    try:
+        login(client, org_world['admin'])
+        res = client.post('/org/cycles/new',
+                          data=_cycle_form(min_reporting_n='2'),
+                          follow_redirects=True)
+        assert 'cannot go below' in res.get_data(as_text=True)
+        assert db.session.get(MeasurementCycle, 'JS-2026-H1') is None
+    finally:
+        app.config['MIN_REPORTING_N'] = 1
 
 
 def test_the_reporting_threshold_may_be_raised(client, db, org_world):

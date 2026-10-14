@@ -207,6 +207,21 @@ def _check_required_config(app, config_name):
             'http:// link would drop the session cookie and fail to sign in.'
         )
 
+    # The reporting threshold is a deliberate decision in production, so a low
+    # one is logged loudly rather than refused. Refusing would be wrong — a
+    # genuinely tiny client may have accepted it with the respondent wording
+    # changed to match — but it must never pass unremarked, because the most
+    # ordinary way it gets here is the local testing value surviving the
+    # cutover.
+    min_n = app.config.get('MIN_REPORTING_N', 5)
+    if min_n < 3:
+        app.logger.warning(
+            'MIN_REPORTING_N is %s in production. At this threshold a group '
+            'result can be a single respondent, readable by their manager. '
+            'The survey form states this to respondents. Confirm it is '
+            'intended.', min_n,
+        )
+
     # A default secret key in production means every session cookie is
     # forgeable by anyone who has read the source.
     secret = app.config.get('SECRET_KEY') or ''

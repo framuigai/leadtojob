@@ -12,3 +12,8 @@ logs/
 # Generated report artefacts — never committed; they contain client data.
 out/
 *.pdf.tmp
+
+# Office lock files. Created while a .xlsx/.docx is open and unreadable by
+# git, so an open workbook would otherwise block every commit.
+~$*
+.~lock.*

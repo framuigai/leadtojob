@@ -151,6 +151,37 @@ def _require_session(deployment):
     return session
 
 
+def reporting_promise(min_n):
+    """
+    What we are entitled to tell a respondent, given the threshold in force.
+
+    THE CLAIM FOLLOWS THE SETTING. Spec §9.2: "avoid promising absolute
+    anonymity if the administration method cannot guarantee it." The same
+    discipline that gives open_link and ticketed different wording applies
+    here: a form promising group-only reporting while the threshold is 1 is a
+    false statement to someone being asked to answer candidly about their
+    employer, and a false promise is worse than no promise.
+
+    Three bands, because the honest sentence genuinely differs:
+
+      min_n >= 3  the group is large enough that a reader cannot reduce it to
+                  one person by elimination. The full promise holds.
+
+      min_n == 2  a pair. Each of the two can subtract their own answers and
+                  read the other's exactly, so the promise is made to the
+                  READER, not between the respondents.
+
+      min_n <= 1  there is no group. A "result" may be one person's answers,
+                  and we say that in those words. This is the local testing
+                  setting; a real wave running at 1 has to mean it.
+    """
+    if min_n >= 3:
+        return 'group'
+    if min_n == 2:
+        return 'pair'
+    return 'individual'
+
+
 # ── Landing ─────────────────────────────────────────────────────────────────
 
 @survey_bp.route('/<slug>')
@@ -178,6 +209,7 @@ def landing(slug):
         'survey/landing.html',
         deployment=deployment,
         cycle=cycle,
+        promise=reporting_promise(cycle.min_reporting_n),
         resuming=session is not None,
         already_submitted=already,
         section_count=len(_sections(deployment)),

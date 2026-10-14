@@ -42,6 +42,21 @@ class Config:
     # can be granted to nobody. Enforced in app/analytics/, never in a template
     # — a template-level check is one {% if %} away from being forgotten in the
     # next report.
+    #
+    # THE DEFAULT IS SET PER ENVIRONMENT, NOT ONCE HERE. See the subclasses:
+    # development and testing default to 1 so a two-person fixture produces a
+    # visible number, production defaults to 5. Both are overridable by
+    # environment variable.
+    #
+    # It is deliberately NOT a single shared default. A threshold convenient
+    # for a local walkthrough is not a threshold that should reach a real
+    # workforce by inheritance, and "we forgot to change it before go-live" is
+    # the most ordinary way that happens.
+    #
+    # Whatever it is set to, app/templates/survey/landing.html renders a claim
+    # that MATCHES it — see _reporting_promise() in app/survey/routes.py. A
+    # form that promises group-only reporting while the threshold is 1 is a
+    # false statement to a respondent, which is worse than no promise at all.
     MIN_REPORTING_N = int(os.environ.get('MIN_REPORTING_N', 5))
 
     # Below this many sessions an association coefficient is not reported
@@ -55,12 +70,29 @@ class DevelopmentConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
 
+    # 1 locally, so a hand-made fixture of two or three responses produces a
+    # visible number instead of a wall of "Suppressed". Walking the reports
+    # with 5 real respondents to set up is friction that gets in the way of
+    # actually looking at them.
+    #
+    # This is a LOCAL convenience and nothing else. At 1 a "group result" is
+    # one person's answer sheet with a different heading, and the survey form
+    # says so plainly while the threshold is this low.
+    MIN_REPORTING_N = int(os.environ.get('MIN_REPORTING_N', 1))
+
 
 class TestingConfig(Config):
     TESTING = True
     DEBUG = False
     LOG_TO_FILE = False
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'WARNING').upper()
+
+    # 1, matching development, so route-level tests can assert on real numbers
+    # from small fixtures. The SUPPRESSION tests do not rely on this: they pass
+    # an explicit threshold to the scoring functions, because a suppression
+    # rule that only works at the configured default is a rule nobody has
+    # actually tested.
+    MIN_REPORTING_N = int(os.environ.get('MIN_REPORTING_N', 1))
 
     # TEST_DATABASE_URL ONLY — NEVER fall back to DATABASE_URL.
     #
@@ -92,6 +124,15 @@ class ProductionConfig(Config):
     # cannot silently switch on the interactive debugger in production.
     DEBUG = False
     TESTING = False
+
+    # 5 in production, NOT inherited from development.
+    #
+    # Settable downward by environment variable if a client genuinely needs it
+    # — that is a decision for a real engagement, taken deliberately, with the
+    # respondent-facing wording changed to match. What it must not be is the
+    # local testing value arriving in production because nobody remembered to
+    # change it. app/__init__.py logs a warning at boot if it is below 3.
+    MIN_REPORTING_N = int(os.environ.get('MIN_REPORTING_N', 5))
 
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
 
