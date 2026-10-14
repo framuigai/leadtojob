@@ -1,0 +1,56 @@
+# Render Blueprint — THE service definition.
+#
+# CREATE THE SERVICE FROM THIS FILE (New > Blueprint), never by hand in the
+# dashboard. A hand-created service keeps its settings in the dashboard, ignores
+# this file completely, and has its LANGUAGE FIXED AT CREATION. The sibling
+# promo service had to be destroyed and recreated for exactly that reason: it
+# was created against an empty repository, Render guessed Go, and no amount of
+# later configuration could change it.
+services:
+  - type: web
+    name: leadtojobsat
+    runtime: python
+    plan: free
+    branch: main
+    region: frankfurt          # must match the Supabase project's region —
+                               # cross-region latency on a synchronous report
+                               # render is the difference between a 10s PDF and
+                               # a gateway timeout.
+    buildCommand: pip install -r requirements.txt
+    # `python -m gunicorn`, not bare `gunicorn`: it depends only on gunicorn
+    # being importable, never on the console script being on PATH.
+    #
+    # --timeout 120 is load-bearing. Report generation is synchronous inside the
+    # request by design (no Celery, no redis, no worker), and gunicorn's 30s
+    # default kills the worker mid-render and returns a 502.
+    #
+    # No --bind: gunicorn already binds 0.0.0.0:$PORT. One worker on the free
+    # tier; revisit together with the plan, not before.
+    startCommand: python -m gunicorn run:app --timeout 120
+    healthCheckPath: /login
+    envVars:
+      # Must match .python-version. A mismatch pins wheels built for the wrong
+      # interpreter and the deploy fails at install while the last good build
+      # keeps serving — a failure that looks like nothing happening.
+      - key: PYTHON_VERSION
+        value: 3.13.3
+      - key: FLASK_ENV
+        value: production
+      - key: SURVEY_BASE_URL
+        value: https://jobs.leadto.co.ke
+      - key: LOG_TO_FILE
+        value: 'False'          # Render's filesystem is ephemeral; stderr is
+                                # the only durable destination.
+      - key: LOG_TO_STDERR
+        value: 'True'
+      - key: LOG_LEVEL
+        value: INFO
+      # Secrets: set in the Render dashboard, never in this file.
+      - key: FLASK_SECRET_KEY
+        sync: false
+      - key: DATABASE_URL       # the SESSION-MODE POOLER URI, username
+        sync: false             # postgres.<project-ref> — not db.<ref>....,
+                                # which resolves IPv6-only. This cost promo a
+                                # deploy.
+      - key: ANTHROPIC_API_KEY
+        sync: false

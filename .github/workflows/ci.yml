@@ -1,0 +1,56 @@
+# CI exists for ONE reason above all others: the privacy and suppression tests.
+#
+# This product's correctness guarantees are that no respondent can be
+# re-identified and that no group below the reporting threshold is ever shown
+# as a number. Those are properties a refactor can silently remove, and a
+# reviewer cannot see their absence. So they run on every push.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Postgres 16, matching local development. The schema uses ARRAY, JSONB,
+        # a computed column and a partial unique index — a suite that passed on
+        # SQLite would prove nothing about any of them.
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jobsat_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      FLASK_ENV: testing
+      FLASK_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef
+      TEST_DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/jobsat_test
+      # DATABASE_URL is deliberately left UNSET. tests/conftest.py fails the run
+      # if it ever equals TEST_DATABASE_URL, and the fixture calls drop_all().
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.3'   # must match .python-version and render.yaml
+          cache: pip
+
+      - name: Install system libraries for WeasyPrint
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libcairo2 libgdk-pixbuf-2.0-0
+
+      - run: pip install -r requirements.txt
+
+      - run: pytest -q

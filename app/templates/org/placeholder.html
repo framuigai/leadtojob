@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} — leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <div class="section-label">{{ role_label(current_user.role) }}{% if branch_scoped %} · {{ current_user.branch.name if current_user.branch }}{% endif %}</div>
+        <h1>{{ heading }}</h1>
+        {% if detail %}
+        <p style="color:var(--text-muted);font-size:.875rem;max-width:62ch;">{{ detail }}</p>
+        {% endif %}
+    </div>
+</div>
+<div class="empty-state">
+    <div class="empty-icon">—</div>
+    <h2>Not built yet</h2>
+    <p>This screen arrives in <strong>{{ phase }}</strong>. The route and its
+       permission gate are already in place.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — leadTo Job Satisfaction{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <div class="section-label">
+            {{ role_label(current_user.role) }}
+            {% if current_user.org %} · {{ current_user.org.name }}{% endif %}
+        </div>
+        <h1>Job Satisfaction</h1>
+        {% if branch_scoped %}
+        <p style="color:var(--text-muted);font-size:.875rem;">
+            Showing results for
+            {{ current_user.branch.name if current_user.branch else 'your branch' }} only.
+        </p>
+        {% endif %}
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('org.cycles_list') }}" class="btn btn-secondary">Cycles</a>
+        <a href="{{ url_for('org.reports') }}" class="btn btn-primary">Reports</a>
+    </div>
+</div>
+
+{# ────────────────────────────────────────────────────────────────────────────
+   WHAT IS NOT AT THE TOP OF THIS PAGE, AND WHY.
+
+   There is no single "Organisational Satisfaction 3.4 / 5" headline. Both
+   sibling products put a figure in this slot and it is the first thing a client
+   asks for here.
+
+     §10.3 — the three Overall Satisfaction subdomains "should initially be
+             reported separately. An overall GEM composite should only be
+             introduced if validation supports its interpretation and the
+             intended use."
+     §10.5 — a band label on that number would not be validated merely because
+             the scale runs 1 to 5.
+
+   The slot and its styling are preserved. The metric is participation plus the
+   three Overall Satisfaction subdomains side by side — the same amount of room,
+   a more honest answer to the same question.
+   ──────────────────────────────────────────────────────────────────────────── #}
+
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-val">—</div>
+        <div class="stat-label">Responses</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">—</div>
+        <div class="stat-label">Response rate</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">—</div>
+        <div class="stat-label">Open waves</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">—</div>
+        <div class="stat-label">Reporting threshold</div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head">
+        <div class="panel-title">
+            {{ domain_label(OUTCOME_DOMAIN) }} — the outcome measure
+        </div>
+    </div>
+    <div class="panel-body">
+        <p class="panel-note">
+            Reported as three separate subdomains, each with its own response
+            distribution. {{ BANDS_DEFERRED_NOTE }}
+        </p>
+        <div class="domain-grid">
+            {% for domain_code, sub_code in gem_subdomains %}
+            <div class="domain-card">
+                <div class="domain-card-header">
+                    <div class="domain-card-name">{{ subdomain_label(domain_code, sub_code) }}</div>
+                </div>
+                <div class="domain-card-empty-body">
+                    <div class="domain-card-waiting-msg">Awaiting responses</div>
+                    <div class="domain-card-waiting-meta">
+                        {{ subdomain_definition(domain_code, sub_code) }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head">
+        <div class="panel-title">Diagnostic domains</div>
+    </div>
+    <div class="panel-body">
+        <p class="panel-note">
+            Task, Relationships and Reward Satisfaction are reported
+            <strong>in relation to</strong> {{ domain_label(OUTCOME_DOMAIN) }}.
+            {{ ASSOCIATION_CAVEAT }}
+        </p>
+        <div class="domain-grid">
+            {% for d in DIAGNOSTIC_DOMAINS %}
+            <div class="domain-card">
+                <div class="domain-card-header">
+                    <div class="domain-card-name">{{ domain_label(d) }}</div>
+                </div>
+                <div class="domain-card-empty-body">
+                    <div class="domain-card-waiting-msg">Awaiting responses</div>
+                    <div class="domain-card-waiting-meta">
+                        {{ subdomains_of(d) | length }} subdomains ·
+                        {% for s in subdomains_of(d) %}{{ subdomain_label(d, s) }}{% if not loop.last %} · {% endif %}{% endfor %}
+                    </div>
+                    {% if domain_scope_note(d) %}
+                    <div class="domain-card-waiting-meta">{{ domain_scope_note(d) }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head">
+        <div class="panel-title">Where to look first</div>
+    </div>
+    <div class="panel-body">
+        {# Investigative language, never verdict language. Phase 7 drives this
+           from the priority view: current score against strength of association
+           with the outcome domain. The quadrants are labelled "Investigate
+           first", "Monitor", "Maintain", "Lower priority" — never "Critical",
+           "Failing" or "At risk". #}
+        <p class="panel-note">
+            Once a wave has closed and the reporting threshold is met, this card
+            ranks subdomains by current score and by strength of association
+            with {{ domain_label(OUTCOME_DOMAIN) }}, as areas to investigate
+            first. {{ ASSOCIATION_CAVEAT }}
+        </p>
+        <div class="empty-state">
+            <div class="empty-icon">—</div>
+            <p>No closed wave yet.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}leadTo Job Satisfaction{% endblock %}</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <!-- Plotly loaded once for all embedded charts — must NOT be deferred so
+         inline chart scripts can call Plotly.newPlot immediately on parse -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    {# Page-level CSS belongs here, NOT in a <style> at the end of a template.
+       Plotly sizes a chart to its container at parse time; a rule that arrives
+       after the chart div means the chart is measured against the wrong width
+       and then clipped when the real layout applies. #}
+    {% block head %}{% endblock %}
+    <script src="{{ url_for('static', filename='js/filters.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/collapse.js') }}" defer></script>
+</head>
+<body>
+    {# ──────────────────────────────────────────────────────────────────────
+       THIS LAYOUT IS FOR ADMINISTRATORS ONLY.
+
+       The anonymous survey has its own layout (survey/layout.html) with no
+       navbar, no wordmark and no leadTo chrome of any kind. A respondent is
+       answering their employer's survey, not touring a vendor's product, and a
+       branded admin shell around the form changes what people are willing to
+       say. Never extend this template from anything under /survey.
+       ────────────────────────────────────────────────────────────────────── #}
+    <nav class="navbar">
+        {# Brand link — takes each role to their own home #}
+        {% if current_user.is_authenticated %}
+            {% if current_user.role == 'master_admin' %}
+                <a href="{{ url_for('admin.dashboard') }}" class="brand">
+                    <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LeadTO" height="32">
+                </a>
+            {% else %}
+                <a href="{{ url_for('org.dashboard') }}" class="brand">
+                    <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LeadTO" height="32">
+                </a>
+            {% endif %}
+        {% else %}
+            <a href="{{ url_for('auth.login') }}" class="brand">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LeadTO" height="32">
+            </a>
+        {% endif %}
+
+        {% if current_user.is_authenticated %}
+        <div class="nav-right">
+            {% if current_user.role == 'org_admin' %}
+                <a href="{{ url_for('org.dashboard') }}"         class="nav-link">Dashboard</a>
+                <a href="{{ url_for('org.cycles_list') }}"       class="nav-link">Cycles</a>
+                <a href="{{ url_for('org.segments_list') }}"     class="nav-link">Segments</a>
+                <a href="{{ url_for('org.deployments_list') }}"  class="nav-link">Deployments</a>
+                <a href="{{ url_for('org.branches_list') }}"     class="nav-link">Branches</a>
+                <a href="{{ url_for('org.reports') }}"           class="nav-link">Reports</a>
+            {% elif current_user.role == 'branch_admin' %}
+                {# L3: no Branches tab — they manage none — and no Segments tab:
+                   the reporting vocabulary is the org's, frozen before a wave
+                   opens, or two spellings of one department become two groups
+                   and neither reaches the reporting threshold. #}
+                <a href="{{ url_for('org.dashboard') }}"         class="nav-link">Dashboard</a>
+                <a href="{{ url_for('org.cycles_list') }}"       class="nav-link">Cycles</a>
+                <a href="{{ url_for('org.deployments_list') }}"  class="nav-link">Deployments</a>
+                <a href="{{ url_for('org.reports') }}"           class="nav-link">Reports</a>
+            {% elif current_user.role == 'master_admin' %}
+                <a href="{{ url_for('admin.dashboard') }}"       class="nav-link">All Orgs</a>
+                <a href="{{ url_for('admin.templates_list') }}"  class="nav-link">Templates</a>
+                <a href="{{ url_for('admin.catalogue') }}"       class="nav-link">Catalogue</a>
+                <a href="{{ url_for('admin.users_list') }}"      class="nav-link">Users</a>
+                <a href="{{ url_for('admin.usage') }}"           class="nav-link">Usage &amp; Costs</a>
+                <a href="{{ url_for('admin.audit_log') }}"       class="nav-link">Audit</a>
+                <a href="{{ url_for('admin.validation') }}"      class="nav-link">Validation</a>
+                <a href="{{ url_for('admin.orgs_new') }}"        class="nav-link">+ New Org</a>
+            {% endif %}
+            <span class="nav-user">{{ current_user.email }}</span>
+            <a href="{{ url_for('auth.logout') }}" class="nav-link nav-logout">Logout</a>
+        </div>
+        {% endif %}
+    </nav>
+
+    <main class="{% block container_class %}container{% endblock %}">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+    // Re-fit every embedded Plotly chart once the document has finished parsing
+    // and the real layout is known. Plotly's config.responsive only reacts to
+    // window resize, so a chart measured mid-parse against a container that
+    // later narrows stays at its original width and gets cropped.
+    (function(){
+        function fitCharts(){
+            if (!window.Plotly) return;
+            document.querySelectorAll('.plotly-graph-div').forEach(function(d){
+                if (d.offsetParent !== null) { try { Plotly.Plots.resize(d); } catch(e){} }
+            });
+        }
+        fitCharts();
+        window.addEventListener('load', fitCharts);
+        window.leadToFitCharts = fitCharts;
+    })();
+
+    (function(){
+        document.querySelectorAll('.nav-link:not(.nav-logout)').forEach(function(l){
+            try {
+                if (new URL(l.href).pathname === window.location.pathname) l.classList.add('active');
+            } catch(e){}
+        });
+    })();
+    </script>
+</body>
+</html>

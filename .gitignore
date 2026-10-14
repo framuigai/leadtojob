@@ -1,0 +1,14 @@
+venv/
+__pycache__/
+*.pyc
+.env
+instance/
+logs/
+.pytest_cache/
+*.sqlite
+*.db
+*.dump
+*.sql.gz
+# Generated report artefacts — never committed; they contain client data.
+out/
+*.pdf.tmp

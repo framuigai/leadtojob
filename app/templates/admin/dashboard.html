@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Client Organisations — leadTo{% endblock %}
+{% block container_class %}container-wide board-page{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <div class="section-label">Master Admin</div>
+        <h1>Client Organisations</h1>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('admin.orgs_new') }}" class="btn btn-primary">+ New Organisation</a>
+    </div>
+</div>
+
+{# KPI strip. Same shape and thresholds as the sibling boards so one operator
+   reads all three the same way. #}
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-val">{{ stats.organisations }}</div>
+        <div class="stat-label">Organisations</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">{{ stats.active }}</div>
+        <div class="stat-label">Active</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">{{ stats.needs_attention }}</div>
+        <div class="stat-label">Needs attention</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">{{ stats.inactive }}</div>
+        <div class="stat-label">Inactive</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">{{ stats.waves }}</div>
+        <div class="stat-label">Measurement waves</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">{{ stats.responses }}</div>
+        <div class="stat-label">Responses</div>
+    </div>
+</div>
+
+{% if rows %}
+<div class="panel">
+    <div class="panel-head">
+        <div class="panel-title">Organisation Status Board</div>
+    </div>
+    <div class="table-scroll">
+        <table class="table">
+            <thead>
+            <tr>
+                <th>Organisation</th>
+                <th>Industry</th>
+                <th class="num">Cycles</th>
+                <th class="num">Waves</th>
+                <th class="num">Closed</th>
+                {# A RESPONSE COUNT, never a satisfaction figure.
+                   A cross-client column of satisfaction scores would be a
+                   league table of employers built from anonymous employee
+                   feedback, and §10.5 forbids the band it would imply in any
+                   case. Participation is the thing an operator can act on. #}
+                <th class="num">Responses</th>
+                <th>Last deployed</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for r in rows %}
+            <tr>
+                <td><strong>{{ r.org.name }}</strong></td>
+                <td>{{ r.org.industry or '—' }}</td>
+                <td class="num">{{ r.cycles }}</td>
+                <td class="num">{{ r.waves }}</td>
+                <td class="num">{{ r.closed }}</td>
+                <td class="num">{{ r.responses }}</td>
+                <td>{{ r.last_deployed.strftime('%d %b %Y') if r.last_deployed else 'Never' }}</td>
+                <td>
+                    <span class="status-pill status-{{ r.light }}">
+                        {% if r.light == 'green' %}Active
+                        {% elif r.light == 'amber' %}Needs attention
+                        {% else %}Inactive{% endif %}
+                    </span>
+                </td>
+                <td class="row-actions">
+                    {% if not r.org.setup_complete %}
+                    <span class="badge badge-outline">Setup incomplete</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">—</div>
+    <h2>No client organisations yet</h2>
+    <p>Create the first one to begin. The master instrument template is
+       infrastructure and is deliberately not listed here.</p>
+    <a href="{{ url_for('admin.orgs_new') }}" class="btn btn-primary">+ New Organisation</a>
+</div>
+{% endif %}
+{% endblock %}
