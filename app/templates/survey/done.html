@@ -1,0 +1,17 @@
+{% extends "survey/layout.html" %}
+{% block title %}Thank you{% endblock %}
+{% block content %}
+<h1 class="sv-h1">Thank you</h1>
+<div class="sv-note sv-note-ok">
+  Your response has been recorded.
+</div>
+<p class="sv-lede">
+  Your answers are now pooled with everyone else's. Results are reported only
+  for groups of {{ cycle.min_reporting_n }} or more, and no individual response
+  is shown to anyone.
+</p>
+<p class="sv-muted">
+  You can close this page. There is nothing further to do, and nothing here
+  that identifies you.
+</p>
+{% endblock %}

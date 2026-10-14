@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Deployments - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">{{ role_label(current_user.role) }}</div>
+  <h1>Deployments</h1>
+  <p class="muted">One wave, one anonymous link. A wave is deployed from its
+    cycle.</p>
+  {% if branch_scoped %}
+  <p class="muted">Showing results for
+    {{ current_user.branch.name if current_user.branch else 'your branch' }} only.</p>
+  {% endif %}
+</div></div>
+
+<div class="panel"><div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>Cycle</th><th>Scope</th><th>Delivery</th>
+      <th class="num">Responses</th><th>Rate</th><th>Deployed</th>
+      <th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for d in deployments %}
+      <tr>
+        <td><strong>{{ cycles[d.cycle_id].cycle_name if d.cycle_id in cycles
+                       else d.cycle_id }}</strong><br>
+            <code>{{ d.cycle_id }}</code></td>
+        <td>{% if d.branch_id %}branch{% else %}organisation-wide{% endif %}</td>
+        <td>{{ 'open link' if d.delivery_mode == 'open_link' else 'ticketed' }}</td>
+        <td class="num">{{ d.responses_received }} / {{ d.expected_respondents }}</td>
+        <td>{{ d.response_rate_pct | round | int if d.response_rate_pct else 0 }}%</td>
+        <td>{{ d.deployed_at.strftime('%d %b %Y') if d.deployed_at else '-' }}</td>
+        <td><span class="status-pill status-{{ 'red' if d.closed else 'green' }}">
+          {{ 'closed' if d.closed else 'open' }}</span></td>
+        <td class="row-actions">
+          <a href="{{ url_for('org.deployment_detail', deployment_id=d.id) }}"
+             class="btn btn-sm btn-secondary">Open</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="muted">Nothing deployed yet. Open a cycle,
+        then deploy it.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

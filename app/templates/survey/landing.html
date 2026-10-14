@@ -1,0 +1,102 @@
+{% extends "survey/layout.html" %}
+{% block title %}{{ cycle.cycle_name }}{% endblock %}
+{% block content %}
+
+<h1 class="sv-h1">{{ cycle.cycle_name }}</h1>
+
+{% if already_submitted %}
+<div class="sv-note sv-note-ok">
+  Our records on this device say you have already submitted a response. If that
+  is wrong, you can still continue.
+</div>
+{% endif %}
+
+<section class="sv-card">
+  <h2 class="sv-h2">Why you are being asked</h2>
+  <p class="sv-purpose">{{ cycle.purpose_statement }}</p>
+</section>
+
+<section class="sv-card">
+  <h2 class="sv-h2">What we can and cannot promise</h2>
+
+  {#
+    THE ANONYMITY CLAIM, STATED HONESTLY FOR THE DELIVERY MODE.
+
+    Specification 9.2: "avoid promising absolute anonymity if the administration
+    method cannot guarantee it." The two modes earn two different claims, and
+    a page that gave the open-link wave the ticketed wave's wording would be a
+    bug, not marketing. tests/test_privacy_and_wording.py asserts the match.
+  #}
+  <ul class="sv-list">
+    {% if deployment.delivery_mode == 'open_link' %}
+    <li><strong>Your answers are not linked to you.</strong> This survey asks
+      for no name, no email address and no employee number, and the system has
+      nowhere to store one.</li>
+    <li><strong>We cannot strictly prevent duplicate submissions.</strong>
+      Everyone receives the same link, so we have no way to tell whether one
+      person answered twice. We are telling you this rather than claiming
+      something we cannot deliver.</li>
+    {% else %}
+    <li><strong>One response per code.</strong> Your code can be used once.</li>
+    <li><strong>We do not know which code is yours.</strong> The system stores
+      only a one-way fingerprint of each code and never a record of who
+      received it.</li>
+    {% endif %}
+    <li><strong>Results are only ever reported for groups.</strong> Any group
+      smaller than {{ cycle.min_reporting_n }} people is suppressed, and the
+      next-smallest group with it, so a suppressed figure cannot be worked out
+      by subtraction.</li>
+    <li><strong>No individual response is shown to anyone</strong> - not to
+      your manager, not to HR, not in any report or export. Managers receive
+      group results for their team and nothing else.</li>
+    <li><strong>Answering honestly carries no consequence.</strong> Your
+      responses are not used in any decision about you as an individual.</li>
+    <li>In the interest of being complete: like any website, the servers that
+      carry this page keep ordinary technical logs, which include the network
+      address you connect from. Those logs are separate from your answers and
+      cannot be joined to them. We would rather say so than claim perfect
+      anonymity.</li>
+  </ul>
+</section>
+
+<section class="sv-card">
+  <h2 class="sv-h2">What it involves</h2>
+  <ul class="sv-list">
+    <li><strong>{{ item_count }} questions</strong>, in
+      {{ section_count }} short sections{% if segments %}, after a few optional
+      questions about which part of the organisation you work in{% endif %}.</li>
+    <li>About <strong>{{ ((item_count * 11) / 60) | round | int }} to
+      {{ ((item_count * 14) / 60) | round | int }} minutes.</strong></li>
+    <li>Each question is answered on a five-point agree/disagree scale. Where a
+      question genuinely does not apply to you, or you do not have enough
+      information to answer, there is a separate
+      "{{ not_applicable_label }}" choice. It is not counted as a
+      middle answer.</li>
+    <li><strong>You can stop and come back.</strong> Your progress is saved in
+      this browser as you go. Because nothing identifies you, that also means
+      a draft cannot be recovered on a different device or after clearing your
+      browser data.</li>
+  </ul>
+</section>
+
+{% if deployment.delivery_mode == 'ticketed' %}
+<form method="post" action="{{ url_for('survey.begin', slug=deployment.public_slug) }}"
+      class="sv-card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="sv-label" for="ticket">Enter the code from your slip</label>
+  <input class="sv-input" type="text" id="ticket" name="ticket" required
+         autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button class="sv-btn sv-btn-primary" type="submit">Begin</button>
+</form>
+{% else %}
+<form method="post" action="{{ url_for('survey.begin', slug=deployment.public_slug) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="sv-btn sv-btn-primary" type="submit">
+    {% if resuming %}Continue where you left off{% else %}Begin{% endif %}</button>
+</form>
+{% endif %}
+
+{% if resuming %}
+<p class="sv-muted">You have an unfinished response saved in this browser.</p>
+{% endif %}
+{% endblock %}

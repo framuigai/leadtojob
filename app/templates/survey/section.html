@@ -1,0 +1,83 @@
+{% extends "survey/layout.html" %}
+{% block title %}Section {{ index }} of {{ section_count }}{% endblock %}
+{% block content %}
+
+{#
+  WHAT IS NOT IN THIS PAGE, and is asserted absent by
+  tests/test_privacy_and_wording.py:
+
+    - no item_code ("GEM-G-01")
+    - no subdomain_code or subdomain NAME. The respondent sees twelve questions
+      about their work, not four questions labelled "Trust". Telling them which
+      construct is being scored changes the answer.
+    - no "Daunting" - the word is a mnemonic for appropriate challenge and must
+      never be read as pressure or stress (specification 6.4).
+    - the domain NAME is shown, deliberately: the framework is client-facing
+      (4, 18) and a section needs to say what it is about.
+#}
+
+<p class="sv-progress">Section {{ index }} of {{ section_count }}</p>
+<div class="sv-bar"><div class="sv-bar-fill"
+     style="width: {{ ((index - 1) / section_count * 100) | round(1) }}%"></div></div>
+
+<h1 class="sv-h1">{{ domain_label(domain_code) }}</h1>
+<p class="sv-lede">
+  These questions are about {{ domain_definition(domain_code) }}
+</p>
+{% if domain_scope_note(domain_code) %}
+<p class="sv-muted">{{ domain_scope_note(domain_code) }}</p>
+{% endif %}
+
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  {% for item in items %}
+  {% set current = answers.get(item.id|string) %}
+  <fieldset class="sv-q">
+    <legend class="sv-q-text">{{ item.item_text }}</legend>
+
+    {# The 1-5 row. #}
+    <div class="sv-scale">
+      {% for label in anchor_labels(item.anchor_type) %}
+      {% set value = loop.index %}
+      <label class="sv-opt">
+        <input type="radio" name="q_{{ item.id }}" value="{{ value }}"
+               {% if current == value|string %}checked{% endif %}>
+        <span class="sv-opt-label">{{ label }}</span>
+      </label>
+      {% endfor %}
+    </div>
+
+    {#
+      N/A IS A SEPARATE, SECOND CLICK - never a sixth button in the row above.
+
+      Specification 9.1 is explicit that it is not a neutral score. Sitting it
+      beside "Neither agree nor disagree" would make it the lazy answer to 48
+      questions, and it is excluded from the score entirely rather than
+      averaged in.
+    #}
+    {% if item.allows_na %}
+    <label class="sv-na">
+      <input type="radio" name="q_{{ item.id }}" value="na"
+             {% if current == 'na' %}checked{% endif %}>
+      <span>{{ not_applicable_label }}</span>
+    </label>
+    {% endif %}
+  </fieldset>
+  {% endfor %}
+
+  <div class="sv-actions">
+    {% if index > 1 %}
+    <button class="sv-btn sv-btn-plain" type="submit" name="direction" value="back">
+      Back</button>
+    {% endif %}
+    <button class="sv-btn sv-btn-primary" type="submit" name="direction" value="next">
+      {% if index < section_count %}Save and continue{% else %}Save and review{% endif %}
+    </button>
+  </div>
+  <p class="sv-muted">
+    Your answers on this page are saved when you continue. You can leave and
+    come back in this browser.
+  </p>
+</form>
+{% endblock %}

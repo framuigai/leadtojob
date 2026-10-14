@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Deploy - leadTo{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">{{ role_label(current_user.role) }} / Deploy</div>
+  <h1>{{ cycle.cycle_name }}</h1>
+  <p class="muted">
+    {% if branch_id %}This wave will cover your branch only.
+    {% else %}This wave will cover the whole organisation.{% endif %}
+  </p>
+</div></div>
+
+<div class="panel"><div class="panel-body">
+<form method="post" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-group">
+    <label for="expected_respondents">How many people are being invited?</label>
+    <input type="number" id="expected_respondents" name="expected_respondents"
+           min="1" required autofocus>
+    <small class="muted">
+      A headcount, not a list - no staff list is ever imported. It is the
+      denominator of the response rate, and a rate without one is a percentage
+      of nothing.
+    </small>
+  </div>
+
+  <div class="form-group">
+    <label>Delivery</label>
+
+    <label style="display:block;font-weight:normal;margin-bottom:.6rem">
+      <input type="radio" name="delivery_mode" value="open_link" checked>
+      <strong>Open link</strong> (recommended)
+    </label>
+    <small class="muted" style="display:block;margin:-.4rem 0 1rem 1.5rem">
+      One link for everyone, by email or on a noticeboard. Honest claim to
+      respondents: their answers are not linked to them, and duplicate
+      submissions cannot be strictly prevented. A duplicate is a small, bounded
+      error in a pooled result.
+    </small>
+
+    <label style="display:block;font-weight:normal;margin-bottom:.6rem">
+      <input type="radio" name="delivery_mode" value="ticketed">
+      <strong>Ticketed</strong>
+    </label>
+    <small class="muted" style="display:block;margin:-.4rem 0 0 1.5rem">
+      One single-use code per person. Choose this when the findings will be
+      contested and someone will claim people answered twice. The system stores
+      only a one-way fingerprint of each code and never who received it - but
+      that mapping can still be written down outside the system, and employees
+      know it. Hand the codes out shuffled and in bulk, or you buy integrity
+      with the candour the survey depends on.
+    </small>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Deploy and get the link</button>
+  <a href="{{ url_for('org.cycle_detail', cycle_id=cycle.id) }}"
+     class="btn btn-secondary">Cancel</a>
+</form>
+</div></div>
+{% endblock %}

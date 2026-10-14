@@ -137,11 +137,18 @@ def make_master_instrument():
     """
     The 48 master items, read from the real CSVs.
 
-    Reads the committed files rather than generating placeholder text, so a
-    test exercises the same path and the same wording the product ships.
+    Reads the committed files rather than generating placeholder text, AND
+    applies the same _interleaved() ordering seed_templates.py does.
+
+    That second half was missing at first, and it mattered: the fixture seeded
+    sort_order in file order, which is blocked by subdomain, while production
+    seeds it interleaved. Every DB-backed test was therefore exercising an
+    ordering the product never ships — and the anti-straight-lining test
+    passed only because it called _interleaved() directly rather than reading
+    what had been seeded.
     """
     from app.domains import MASTER_ORG_ID
-    from seed_templates import read_all_items
+    from seed_templates import _interleaved, read_all_items
 
     master = db.session.get(Org, MASTER_ORG_ID)
     if master is None:
@@ -151,7 +158,7 @@ def make_master_instrument():
         db.session.add(master)
         db.session.flush()
 
-    rows = read_all_items()
+    rows = _interleaved(read_all_items())
     for sort_order, row in enumerate(rows, start=1):
         db.session.add(SurveyItem(org_id=MASTER_ORG_ID, version=1,
                                   sort_order=sort_order, anchor_type='agreement',

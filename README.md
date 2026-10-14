@@ -34,8 +34,9 @@ pytest -q                        # DB-backed tests skip without TEST_DATABASE_UR
 | 2 | Identity, tenancy & live dashboards | ✅ done |
 | 3 | Taxonomy & instrument | ✅ done |
 | 4 | Cycles & segments | ✅ done |
-| 5 | Deployment & the anonymous form | next |
-| 6–11 | see `docs/jobsat build plan.md` §11 | |
+| 5 | Deployment & the anonymous form | ✅ done |
+| 6 | Scoring engine | next |
+| 7–11 | see `docs/jobsat build plan.md` §11 | |
 
 ## Seeding a fresh database
 

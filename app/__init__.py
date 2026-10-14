@@ -355,10 +355,25 @@ def _register_error_handlers(app):
     debugger instead of calling the 500 handler. It exists so that turning
     DEBUG off doesn't leave the app without diagnostics.
     """
-    from flask import render_template
+    from flask import render_template, request
+
+    def _is_respondent_facing():
+        """
+        True on any URL a survey respondent can reach.
+
+        THIS MATTERS MORE THAN IT LOOKS. errors/404.html extends base.html,
+        which carries the navbar and the leadTo wordmark — so without this, a
+        respondent whose draft had expired, or who mistyped a link, was shown a
+        fully leadTo-branded page. That is the one thing the survey templates
+        are careful never to do, undone by the error path, on exactly the
+        occasion nobody tests by hand.
+        """
+        return request.path.startswith('/survey')
 
     @app.errorhandler(404)
     def _not_found(_error):
+        if _is_respondent_facing():
+            return render_template('survey/error.html'), 404
         return render_template('errors/404.html'), 404
 
     @app.errorhandler(500)
@@ -385,4 +400,6 @@ def _register_error_handlers(app):
             app.logger.exception('Rollback failed during 500 handling')
 
         app.logger.exception('Unhandled exception: %s', error)
+        if _is_respondent_facing():
+            return render_template('survey/error.html', failed=True), 500
         return render_template('errors/500.html'), 500

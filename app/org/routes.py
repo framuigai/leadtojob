@@ -12,7 +12,9 @@ EVERY query in this module goes through _scoped() or is explicitly filtered by
 current_user.org_id. A query that forgets is a cross-tenant data leak, and on
 this product the data is employee feedback about an employer.
 """
+import hashlib
 import re
+import secrets
 from datetime import datetime, timezone
 
 from flask import abort, flash, redirect, render_template, request, url_for
@@ -20,22 +22,25 @@ from flask_login import current_user
 from sqlalchemy import func
 
 from app import db, domains
+from app import external_url
 from app.audit import (
     BRANCH_CREATE, BRANCH_DEACTIVATE, BRANCH_REACTIVATE, CYCLE_ARCHIVE,
-    CYCLE_CLOSE, CYCLE_CREATE, CYCLE_EDIT, CYCLE_OPEN, SEGMENT_CREATE,
-    SEGMENT_EDIT, USER_CREATE, branch_payload, cycle_payload, record_audit,
-    segment_payload, user_payload,
+    CYCLE_CLOSE, CYCLE_CREATE, CYCLE_EDIT, CYCLE_OPEN, DEPLOYMENT_CLOSE,
+    DEPLOYMENT_CREATE, SEGMENT_CREATE, SEGMENT_EDIT, TICKETS_ISSUE,
+    USER_CREATE, branch_payload, cycle_payload, deployment_payload,
+    record_audit, segment_payload, user_payload,
 )
 from app.auth.routes import require_capability, require_role_any
 from app.models import (
-    Branch, MeasurementCycle, Segment, SegmentOption, SurveyDeployment,
-    SurveyItem, User,
+    AccessTicket, Branch, MeasurementCycle, Segment, SegmentOption,
+    SurveyDeployment, SurveyItem, User,
 )
 from app.org import org_bp
 from app.permissions import (
-    BRANCH_ADMIN, MANAGE_BRANCH_ADMINS, MANAGE_BRANCHES, MANAGE_CYCLES,
-    MANAGE_SEGMENTS, ORG_ADMIN, VIEW_TEMPLATES, can, is_branch_scoped,
-    visible_branch_ids,
+    BRANCH_ADMIN, DEPLOY_ORG_WIDE, DEPLOY_SURVEYS, DEPLOY_TO_BRANCH,
+    EDIT_DEPLOYMENT, ISSUE_TICKETS, MANAGE_BRANCH_ADMINS, MANAGE_BRANCHES,
+    MANAGE_CYCLES, MANAGE_SEGMENTS, ORG_ADMIN, VIEW_TEMPLATES, can,
+    is_branch_scoped, visible_branch_ids,
 )
 
 _ORG_TIERS = (ORG_ADMIN, BRANCH_ADMIN)
@@ -698,15 +703,216 @@ def instrument():
 @org_bp.route('/deployments')
 @require_role_any(*_ORG_TIERS)
 def deployments_list():
-    return render_template(
-        'org/placeholder.html',
-        heading='Deployments',
-        phase='Phase 5',
-        detail='One wave, one anonymous link, all assessed domains. Open-link '
-               'or ticketed delivery, each with its own honest statement about '
-               'what can and cannot be guaranteed.',
-        branch_scoped=is_branch_scoped(current_user),
-    )
+    """Every wave this user may see, newest first."""
+    deployments = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
+        .filter(SurveyDeployment.archived_at.is_(None)) \
+        .order_by(SurveyDeployment.deployed_at.desc().nullslast()).all()
+    cycles = {c.id: c for c in
+              db.session.query(MeasurementCycle)
+              .filter_by(org_id=current_user.org_id).all()}
+    return render_template('org/deployments.html', deployments=deployments,
+                           cycles=cycles,
+                           branch_scoped=is_branch_scoped(current_user))
+
+
+@org_bp.route('/cycles/<cycle_id>/deploy', methods=['GET', 'POST'])
+@require_capability(DEPLOY_SURVEYS)
+def deploy(cycle_id):
+    """
+    Deploy a wave: ONE cycle, ONE audience, ONE anonymous link.
+
+    The link is minted here and is the only way a respondent ever reaches the
+    survey. `secrets.token_urlsafe(32)` gives ~256 bits — this is a bearer
+    credential for a whole workforce's feedback, and an enumerable slug would
+    let anyone walk the space and read (or stuff) any client's open wave.
+
+    WHO MAY TARGET WHAT is the one deliberately non-cumulative rule in
+    permissions.py: L2 deploys org-wide, L3 deploys to its own branch, and L2
+    does not originate a branch-targeted wave. Two tiers targeting one branch
+    produce two concurrent waves over one population, with no way to tell which
+    is authoritative and a response-rate denominator that means nothing.
+    """
+    cycle = _cycle_or_404(cycle_id)
+
+    if cycle.status != 'open':
+        flash(f'{cycle.cycle_name} is {cycle.status}. Open the wave before '
+              'deploying it — the link would otherwise be live before '
+              'respondents have been told anything.', 'error')
+        return redirect(url_for('org.cycle_detail', cycle_id=cycle.id))
+
+    branch_id = _my_branch_id()
+    if branch_id is None and not can(current_user, DEPLOY_ORG_WIDE):
+        abort(403)
+    if branch_id is not None and not can(current_user, DEPLOY_TO_BRANCH):
+        abort(403)
+
+    existing = (db.session.query(SurveyDeployment)
+                .filter_by(cycle_id=cycle.id, org_id=current_user.org_id,
+                           branch_id=branch_id, closed=False)
+                .filter(SurveyDeployment.archived_at.is_(None)).first())
+    if existing is not None:
+        # A nicer error than the database's. uq_open_deployment is the real
+        # guard — two admins pressing Deploy at once is a race this check
+        # cannot win.
+        flash('This wave is already deployed for that audience.', 'error')
+        return redirect(url_for('org.deployment_detail',
+                                deployment_id=existing.id))
+
+    if request.method == 'POST':
+        mode = (request.form.get('delivery_mode') or 'open_link').strip()
+        if mode not in ('open_link', 'ticketed'):
+            abort(400)
+        try:
+            expected = int((request.form.get('expected_respondents') or '').strip())
+        except ValueError:
+            expected = 0
+        if expected < 1:
+            flash('Enter the number of people invited. It is the denominator '
+                  'of the response rate, and a rate without one is a '
+                  'percentage of nothing.', 'error')
+            return render_template('org/deploy_form.html', cycle=cycle,
+                                   branch_id=branch_id)
+
+        deployment = SurveyDeployment(
+            org_id=current_user.org_id,
+            branch_id=branch_id,
+            cycle_id=cycle.id,
+            assessed_domains=list(cycle.assessed_domains or []),
+            public_slug=secrets.token_urlsafe(32),
+            delivery_mode=mode,
+            expected_respondents=expected,
+            deployed_at=datetime.now(timezone.utc),
+            closes_at=cycle.closes_at,
+            created_by=current_user.id,
+        )
+        db.session.add(deployment)
+        db.session.flush()
+        record_audit(DEPLOYMENT_CREATE, 'deployment', deployment.id,
+                     f'Deployed {cycle.cycle_name} '
+                     f'({mode}, {expected} invited)',
+                     org_id=current_user.org_id, branch_id=branch_id,
+                     payload=deployment_payload(deployment))
+        db.session.commit()
+        flash('The wave is live. Copy the link below — it is the only way in, '
+              'and it is not recoverable from anywhere else.', 'success')
+        return redirect(url_for('org.deployment_detail',
+                                deployment_id=deployment.id))
+
+    return render_template('org/deploy_form.html', cycle=cycle,
+                           branch_id=branch_id)
+
+
+@org_bp.route('/deployments/<uuid:deployment_id>')
+@require_role_any(*_ORG_TIERS)
+def deployment_detail(deployment_id):
+    deployment = _deployment_or_404(deployment_id)
+    cycle = db.session.get(MeasurementCycle, deployment.cycle_id)
+    tickets = unused = None
+    if deployment.delivery_mode == 'ticketed':
+        tickets = db.session.query(AccessTicket).filter_by(
+            deployment_id=deployment.id).count()
+        unused = db.session.query(AccessTicket).filter_by(
+            deployment_id=deployment.id, used_at=None).count()
+
+    # Built from SURVEY_BASE_URL, never from the request Host header. An admin
+    # on *.onrender.com must still copy a link that says jobs.leadto.co.ke —
+    # see external_url() for why that is more than cosmetic here.
+    link = external_url('survey.landing', slug=deployment.public_slug)
+
+    return render_template('org/deployment_detail.html', deployment=deployment,
+                           cycle=cycle, link=link, tickets=tickets,
+                           unused=unused)
+
+
+@org_bp.route('/deployments/<uuid:deployment_id>/tickets', methods=['POST'])
+@require_capability(ISSUE_TICKETS)
+def issue_tickets(deployment_id):
+    """
+    Mint N opaque tickets and show them ONCE.
+
+    The app stores only sha256(ticket) and never who received which — see
+    models.AccessTicket. The plaintext exists on this page and on the slips
+    handed out, and nowhere else: this screen cannot be reloaded to recover
+    them, by design.
+
+    Worth saying out loud to whoever distributes them: the mapping of ticket to
+    person can still be created OUTSIDE this system, in a spreadsheet. Nothing
+    in the code can prevent that, and employees know it. Hand them out shuffled,
+    in bulk, and do not write down who got which — otherwise the integrity
+    guarantee is bought with the candour the instrument depends on.
+    """
+    deployment = _deployment_or_404(deployment_id)
+    if deployment.delivery_mode != 'ticketed':
+        flash('This wave uses an open link; it has no tickets.', 'error')
+        return redirect(url_for('org.deployment_detail',
+                                deployment_id=deployment.id))
+    if deployment.closed:
+        flash('This wave is closed.', 'error')
+        return redirect(url_for('org.deployment_detail',
+                                deployment_id=deployment.id))
+
+    try:
+        count = int((request.form.get('count') or '').strip())
+    except ValueError:
+        count = 0
+    if not 1 <= count <= 2000:
+        flash('Issue between 1 and 2000 tickets at a time.', 'error')
+        return redirect(url_for('org.deployment_detail',
+                                deployment_id=deployment.id))
+
+    plaintext = []
+    for _ in range(count):
+        ticket = secrets.token_urlsafe(9)
+        plaintext.append(ticket)
+        db.session.add(AccessTicket(
+            deployment_id=deployment.id, org_id=deployment.org_id,
+            ticket_hash=hashlib.sha256(ticket.encode()).hexdigest(),
+        ))
+    record_audit(TICKETS_ISSUE, 'deployment', deployment.id,
+                 f'Issued {count} access tickets',
+                 org_id=deployment.org_id, branch_id=deployment.branch_id,
+                 payload={'count': count})
+    db.session.commit()
+
+    return render_template('org/tickets.html', deployment=deployment,
+                           tickets=plaintext)
+
+
+@org_bp.route('/deployments/<uuid:deployment_id>/close', methods=['POST'])
+@require_capability(EDIT_DEPLOYMENT)
+def deployment_close(deployment_id):
+    """
+    Close a wave. The link dies immediately.
+
+    Deliberately one-way, like the cycle status. A reopened wave accepts
+    responses after its figures have been reported, and the whole point of the
+    retention clock is that it starts somewhere definite.
+    """
+    deployment = _deployment_or_404(deployment_id)
+    if deployment.closed:
+        flash('Already closed.', 'error')
+        return redirect(url_for('org.deployment_detail',
+                                deployment_id=deployment.id))
+
+    deployment.closed = True
+    record_audit(DEPLOYMENT_CLOSE, 'deployment', deployment.id,
+                 f'Closed the wave ({deployment.responses_received} responses)',
+                 org_id=deployment.org_id, branch_id=deployment.branch_id,
+                 payload=deployment_payload(deployment))
+    db.session.commit()
+    flash('Closed. The survey link no longer works.', 'success')
+    return redirect(url_for('org.deployment_detail',
+                            deployment_id=deployment.id))
+
+
+def _deployment_or_404(deployment_id):
+    deployment = db.session.get(SurveyDeployment, deployment_id)
+    if deployment is None or deployment.org_id != current_user.org_id:
+        abort(404)
+    branch_ids = visible_branch_ids(current_user)
+    if branch_ids is not None and deployment.branch_id not in branch_ids:
+        abort(404)
+    return deployment
 
 
 @org_bp.route('/reports')

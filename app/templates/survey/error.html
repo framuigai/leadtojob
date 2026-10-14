@@ -1,0 +1,37 @@
+{% extends "survey/layout.html" %}
+{#
+  The error page for anything a RESPONDENT can reach.
+
+  It exists because errors/404.html extends base.html and would otherwise show
+  someone a leadTo-branded admin shell — the one thing every other template in
+  this folder is careful to avoid, undone by the error path.
+
+  It also says as little as possible. "No such wave", "that draft expired" and
+  "you are not the person who started this" are different facts, and
+  distinguishing them for a visitor would let a probe confirm which
+  organisations are running surveys. One page, one wording.
+#}
+{% block title %}{% if failed %}Something went wrong{% else %}Link not available{% endif %}{% endblock %}
+{% block content %}
+{% if failed %}
+<h1 class="sv-h1">Something went wrong</h1>
+<p class="sv-lede">
+  Sorry — that did not work. Any answers you had already saved are safe.
+</p>
+<p class="sv-muted">
+  Please go back and try again. If it keeps happening, let whoever sent you the
+  link know.
+</p>
+{% else %}
+<h1 class="sv-h1">This link is not available</h1>
+<p class="sv-lede">
+  That link does not work. It may have been mistyped, the survey may have
+  finished, or an unfinished response may no longer be saved in this browser.
+</p>
+<p class="sv-muted">
+  Because nothing in this survey identifies you, an unfinished response cannot
+  be recovered on another device or after clearing your browser data. If you
+  think the survey should still be open, contact whoever sent you the link.
+</p>
+{% endif %}
+{% endblock %}

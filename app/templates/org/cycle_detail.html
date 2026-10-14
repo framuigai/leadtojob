@@ -21,6 +21,10 @@
         <button type="submit" class="btn btn-primary">Open the wave</button>
       </form>
       {% elif cycle.status == 'open' %}
+      {% if not waves %}
+      <a href="{{ url_for('org.deploy', cycle_id=cycle.id) }}"
+         class="btn btn-primary">Deploy</a>
+      {% endif %}
       <form method="post" action="{{ url_for('org.cycle_status', cycle_id=cycle.id) }}"
             style="display:inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -98,8 +102,9 @@
       <tbody>
       {% for w in waves %}
         <tr>
-          <td>{% if w.branch_id %}branch{% else %}organisation-wide{% endif %}</td>
-          <td>{{ w.delivery_mode }}</td>
+          <td><a href="{{ url_for('org.deployment_detail', deployment_id=w.id) }}">
+            {% if w.branch_id %}branch{% else %}organisation-wide{% endif %}</a></td>
+          <td>{{ 'open link' if w.delivery_mode == 'open_link' else 'ticketed' }}</td>
           <td class="num">{{ w.responses_received }} / {{ w.expected_respondents }}</td>
           <td>{{ 'closed' if w.closed else 'open' }}</td>
         </tr>

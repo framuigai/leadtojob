@@ -1,0 +1,64 @@
+{% extends "survey/layout.html" %}
+{% block title %}Submit your response{% endblock %}
+{% block content %}
+<p class="sv-progress">Last step</p>
+<div class="sv-bar"><div class="sv-bar-fill" style="width:100%"></div></div>
+
+<h1 class="sv-h1">Ready to submit</h1>
+
+<p class="sv-lede">
+  You answered <strong>{{ answered }} of {{ total }}</strong> questions.
+  {% if answered < total %}
+  You can submit as you are - an unanswered question is left out of the
+  results rather than counted as a middle answer. Or go back and finish.
+  {% endif %}
+</p>
+
+{% if cycle and cycle.is_pilot %}
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {#
+    PILOT WAVES ONLY (specification 15): "whether respondents find any
+    questions repetitive, confusing or difficult to answer". The psychometrics
+    can tell us an item is a problem but not why.
+
+    This is the only free-text box in the product. It is read by the team that
+    built the instrument, never by your employer, and it is about the QUESTIONS
+    rather than about your job - which is a different thing from a comment box,
+    and why it is acceptable here and nowhere else.
+  #}
+  <div class="sv-card">
+    <label class="sv-label" for="pilot_comment">
+      Were any questions unclear, repetitive or difficult to answer?
+      (optional)</label>
+    <textarea class="sv-input" id="pilot_comment" name="pilot_comment"
+              rows="4"></textarea>
+    <p class="sv-muted">
+      This goes to the team that designed the survey, to improve the questions.
+      It is not shown to your organisation. Please write about the questions
+      rather than about your job, so that nothing here could identify you.
+    </p>
+  </div>
+  <div class="sv-actions">
+    <a class="sv-btn sv-btn-plain"
+       href="{{ url_for('survey.section', slug=deployment.public_slug, index=section_count) }}">Back</a>
+    <button class="sv-btn sv-btn-primary" type="submit">Submit my response</button>
+  </div>
+</form>
+{% else %}
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="sv-actions">
+    <a class="sv-btn sv-btn-plain"
+       href="{{ url_for('survey.section', slug=deployment.public_slug, index=section_count) }}">Back</a>
+    <button class="sv-btn sv-btn-primary" type="submit">Submit my response</button>
+  </div>
+</form>
+{% endif %}
+
+<p class="sv-muted">
+  Once submitted, your answers are pooled with everyone else's. Because nothing
+  links them to you, they cannot be withdrawn afterwards - there is no way for
+  us to find which ones were yours.
+</p>
+{% endblock %}

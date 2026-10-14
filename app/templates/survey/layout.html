@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+{#
+  THE RESPONDENT-FACING LAYOUT. It deliberately does NOT extend base.html.
+
+  No navbar, no leadTo wordmark, no admin shell, no product branding of any
+  kind. A respondent is answering their employer's survey, not touring a
+  vendor's product, and a branded shell around the form changes what people are
+  willing to say. There is also nothing to navigate TO: this is the only part
+  of the system they can reach.
+
+  No external scripts either - no Plotly, no analytics, no fonts from a CDN.
+  A third-party request from this page would hand the respondent's IP and the
+  wave's URL to someone outside the agreement, on the one page where that
+  matters most.
+#}
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Employee survey{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/survey.css') }}">
+</head>
+<body>
+  <main class="sv-wrap">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Access codes - leadTo{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">{{ role_label(current_user.role) }}</div>
+  <h1>{{ tickets|length }} access codes</h1>
+</div></div>
+
+<div class="flash flash-warning">
+  <strong>This page cannot be shown again.</strong> The system stores only a
+  one-way fingerprint of each code, so these exact values exist here and
+  nowhere else. Print or copy them now.
+</div>
+
+<div class="panel"><div class="panel-body">
+  <p class="panel-note">
+    Hand them out <strong>shuffled and in bulk</strong> - a stack given to a
+    line manager to distribute, rather than one code emailed to each named
+    person. The system refuses to record who received which code; writing that
+    mapping down outside the system would undo the anonymity, and respondents
+    who suspect it exists answer more cautiously, which costs you more than a
+    duplicate response ever would.
+  </p>
+  <div style="font-family:monospace;columns:4;column-gap:2rem;line-height:1.9">
+    {% for t in tickets %}<div>{{ t }}</div>{% endfor %}
+  </div>
+</div></div>
+
+<a href="{{ url_for('org.deployment_detail', deployment_id=deployment.id) }}"
+   class="btn btn-secondary">Done</a>
+{% endblock %}

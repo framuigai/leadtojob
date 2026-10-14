@@ -75,19 +75,25 @@ def test_every_admin_route_bounces_an_anonymous_visitor_to_login(client, path):
 
 # ── The anonymous survey ────────────────────────────────────────────────────
 
-def test_an_unknown_survey_slug_is_a_plain_404(client):
+def test_an_unknown_survey_slug_is_a_plain_404(db, client):
     """
-    Phase 1 serves 404 for every slug — deliberately the same response an
-    unknown, closed or expired wave will get in phase 5. A probe must never be
-    able to distinguish "no such wave" from "wave not open yet": the difference
-    confirms a wave exists, which is information about the employer's
-    activities that nobody outside needs.
+    An unknown slug, an archived wave and a wave whose cycle is not open all
+    return the SAME 404. A probe must never be able to distinguish "no such
+    wave" from "wave not open yet": the difference confirms that a particular
+    organisation is running a satisfaction survey, which is information about
+    that employer nobody outside needs.
+
+    (A wave that WAS open and has since closed is the one exception — see
+    tests/test_survey_form.py. There the visitor is probably a real employee
+    following a real link, and 404ing them is unkind for no gain.)
+
+    Takes `db` because the route now resolves the slug against the database.
     """
     res = client.get('/survey/does-not-exist')
     assert res.status_code == 404
 
 
-def test_the_survey_route_does_not_redirect_to_a_login(client):
+def test_the_survey_route_does_not_redirect_to_a_login(db, client):
     """
     A respondent is never asked who they are. If the survey blueprint ever
     acquires a login_required, this is what catches it.

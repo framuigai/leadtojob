@@ -1,0 +1,224 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   THE RESPONDENT-FACING STYLESHEET.
+
+   Deliberately separate from main.css and deliberately plain.
+
+   main.css carries the leadTo admin identity — the navy bar, the orange
+   wordmark, the product's visual language. None of it belongs here. A
+   respondent is answering their employer's survey, and a vendor-branded shell
+   around the form changes what people are willing to say. It also means a
+   later change to the admin theme cannot accidentally restyle the one page
+   where restraint matters.
+
+   No web fonts and no external requests of any kind: a font fetch from this
+   page would hand the respondent's IP and the wave's URL to a third party.
+
+   Everything here is prefixed .sv- so the two files can never collide.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+:root {
+    --sv-ink:        #1f2430;
+    --sv-ink-soft:   #596073;
+    --sv-line:       #dfe3ec;
+    --sv-bg:         #f7f8fb;
+    --sv-card:       #ffffff;
+    --sv-accent:     #2f5d8a;   /* a quiet, institutional blue */
+    --sv-accent-ink: #ffffff;
+    --sv-ok:         #1f6b45;
+    --sv-warn:       #8a4b1f;
+    --sv-radius:     10px;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--sv-bg);
+    color: var(--sv-ink);
+    /* A system stack: no download, and it looks native wherever it is read —
+       including on the phone a warehouse employee will actually use. */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    /* 17px, not 16. These are 48 questions of close reading, often on a phone,
+       sometimes by someone who has been on their feet all day. */
+    font-size: 17px;
+    line-height: 1.6;
+}
+
+.sv-wrap {
+    max-width: 44rem;        /* ~70 characters: comfortable for prose */
+    margin: 0 auto;
+    padding: 2rem 1.1rem 5rem;
+}
+
+.sv-h1 { font-size: 1.55rem; line-height: 1.25; margin: .2rem 0 1rem; }
+.sv-h2 { font-size: 1.05rem; margin: 0 0 .6rem; }
+
+.sv-lede   { font-size: 1.02rem; margin: 0 0 1.4rem; }
+.sv-muted  { color: var(--sv-ink-soft); font-size: .92rem; }
+.sv-purpose { white-space: pre-line; margin: 0; }
+
+.sv-card {
+    background: var(--sv-card);
+    border: 1px solid var(--sv-line);
+    border-radius: var(--sv-radius);
+    padding: 1.1rem 1.2rem;
+    margin: 0 0 1.1rem;
+}
+
+.sv-list { margin: 0; padding-left: 1.2rem; }
+.sv-list li { margin-bottom: .55rem; }
+.sv-list li:last-child { margin-bottom: 0; }
+
+.sv-note {
+    border-radius: var(--sv-radius);
+    padding: .85rem 1rem;
+    margin: 0 0 1.2rem;
+    border: 1px solid var(--sv-line);
+    background: var(--sv-card);
+}
+.sv-note-ok   { border-color: #b7dcc7; background: #f0f9f4; color: var(--sv-ok); }
+.sv-note-warn { border-color: #e8cfb0; background: #fdf6ee; color: var(--sv-warn); }
+
+/* ── Progress ─────────────────────────────────────────────────────────────
+   Shown on every section, and the honest time estimate is on the landing
+   page. Telling people how much is left measurably reduces abandonment;
+   hiding it does not make the form shorter. */
+.sv-progress {
+    font-size: .82rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--sv-ink-soft);
+    margin: 0 0 .5rem;
+}
+.sv-bar {
+    height: 5px;
+    background: var(--sv-line);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 0 0 1.4rem;
+}
+.sv-bar-fill { height: 100%; background: var(--sv-accent); }
+
+/* ── A question ───────────────────────────────────────────────────────────── */
+
+.sv-q {
+    background: var(--sv-card);
+    border: 1px solid var(--sv-line);
+    border-radius: var(--sv-radius);
+    padding: 1.1rem 1.2rem .9rem;
+    margin: 0 0 1rem;
+}
+
+.sv-q-text {
+    font-weight: 600;
+    padding: 0;
+    margin: 0 0 .9rem;
+    /* A legend is not a block by default in every engine, and a question that
+       wraps mid-word reads as carelessness on a form asking for candour. */
+    display: block;
+    width: 100%;
+}
+
+/* The 1-5 row. Vertical on a phone, horizontal once there is room: five
+   horizontal targets at phone width are too small to hit reliably, and a
+   mis-tap on a Likert item is a wrong answer rather than a visible error. */
+.sv-scale { display: flex; flex-direction: column; gap: .15rem; }
+
+.sv-opt {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .5rem .55rem;
+    border-radius: 7px;
+    cursor: pointer;
+}
+.sv-opt:hover { background: #f2f5fa; }
+.sv-opt input { width: 1.15rem; height: 1.15rem; margin: 0; flex: none; }
+.sv-opt-label { font-size: .98rem; }
+
+@media (min-width: 40rem) {
+    .sv-scale { flex-direction: row; gap: .4rem; }
+    .sv-opt {
+        flex: 1;
+        flex-direction: column;
+        text-align: center;
+        gap: .4rem;
+        border: 1px solid var(--sv-line);
+        padding: .7rem .4rem;
+        min-height: 5.2rem;
+        justify-content: center;
+    }
+    .sv-opt-label { font-size: .84rem; line-height: 1.25; }
+}
+
+/* ── "Not applicable" ─────────────────────────────────────────────────────
+   SEPARATED FROM THE ROW ON PURPOSE, with a rule above it.
+
+   Specification 9.1: it is not a neutral score, and it is excluded from the
+   result entirely rather than averaged in. Placing it beside "Neither agree
+   nor disagree" would make it the cheap answer to 48 questions — so it is
+   visually a second decision, in smaller, quieter type. Still one click, not
+   two: deterring it is legitimate, hiding it is not, because a respondent who
+   genuinely cannot answer must have somewhere to say so. */
+.sv-na {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    margin: .85rem -.3rem 0;
+    padding: .55rem .3rem 0;
+    border-top: 1px solid var(--sv-line);
+    color: var(--sv-ink-soft);
+    font-size: .88rem;
+    cursor: pointer;
+}
+.sv-na input { width: 1rem; height: 1rem; margin: 0; flex: none; }
+
+/* ── Controls ─────────────────────────────────────────────────────────────── */
+
+.sv-label { display: block; font-weight: 600; margin-bottom: .4rem; }
+
+.sv-input {
+    width: 100%;
+    padding: .6rem .7rem;
+    font-size: 1rem;
+    font-family: inherit;
+    color: var(--sv-ink);
+    background: #fff;
+    border: 1px solid var(--sv-line);
+    border-radius: 7px;
+}
+.sv-input:focus { outline: 2px solid var(--sv-accent); outline-offset: 1px; }
+
+.sv-btn {
+    display: inline-block;
+    padding: .7rem 1.4rem;
+    font-size: 1rem;
+    font-family: inherit;
+    font-weight: 600;
+    border-radius: 7px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+}
+.sv-btn-primary { background: var(--sv-accent); color: var(--sv-accent-ink); }
+.sv-btn-primary:hover { background: #26496c; }
+.sv-btn-plain {
+    background: #fff;
+    color: var(--sv-ink);
+    border-color: var(--sv-line);
+}
+
+.sv-actions {
+    display: flex;
+    gap: .7rem;
+    align-items: center;
+    margin: 1.4rem 0 .6rem;
+    flex-wrap: wrap;
+}
+
+/* Keyboard users must be able to see where they are on a 48-item form. */
+:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }

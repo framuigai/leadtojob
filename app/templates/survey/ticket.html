@@ -1,0 +1,18 @@
+{% extends "survey/layout.html" %}
+{% block title %}Enter your code{% endblock %}
+{% block content %}
+<h1 class="sv-h1">Enter your code</h1>
+{% if error %}<div class="sv-note sv-note-warn">{{ error }}</div>{% endif %}
+<form method="post" action="{{ url_for('survey.begin', slug=deployment.public_slug) }}"
+      class="sv-card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="sv-label" for="ticket">The code from your slip</label>
+  <input class="sv-input" type="text" id="ticket" name="ticket" required autofocus
+         autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button class="sv-btn sv-btn-primary" type="submit">Begin</button>
+</form>
+<p class="sv-muted">
+  We do not keep a record of who received which code, so we cannot look yours
+  up. If it will not work, ask for a replacement.
+</p>
+{% endblock %}
