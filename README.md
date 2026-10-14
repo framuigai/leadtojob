@@ -36,8 +36,21 @@ pytest -q                        # DB-backed tests skip without TEST_DATABASE_UR
 | 4 | Cycles & segments | ✅ done |
 | 5 | Deployment & the anonymous form | ✅ done |
 | 6 | Scoring engine | ✅ done |
-| 7 | Association engine & Reports screen | next |
-| 8–11 | see `docs/jobsat build plan.md` §11 | |
+| 7 | Association engine & Reports screen | ✅ done |
+| 8 | Reports 1 & 2 (Executive, HR & OD) | next |
+| 9–11 | see `docs/jobsat build plan.md` §11 | |
+
+## How associations are reported
+
+§10.4 is the only section specifying this, and it specifies **questions**, not
+a statistic. The words "correlation", "Pearson" and "coefficient" appear
+nowhere in the specification, and §10.5 asks for *"scores, response
+distributions, comparisons and limitations"* during early implementation.
+
+So the engine computes **tertile contrasts** (the least vs most satisfied
+third, per diagnostic domain) and **segment comparisons** — which answer
+§10.4's four bullets in its own words — and no correlation coefficient.
+`association.correlation()` exists only to raise and explain why.
 
 ## The reporting threshold
 

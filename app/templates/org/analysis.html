@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Analysis - {{ cycle.cycle_name }}{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">{{ role_label(current_user.role) }} / Analysis</div>
+    <h1>{{ cycle.cycle_name }}</h1>
+    <p class="muted">
+      {{ respondents }} responses &middot; threshold n &ge; {{ cycle.min_reporting_n }}
+      &middot;
+      {% if cycle.scoring_method == 'mean_of_subdomains' %}
+        domain scores are the mean of the three subdomain scores
+      {% else %}
+        domain scores are the mean of all valid domain items
+      {% endif %}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('org.reports') }}" class="btn btn-secondary">All reports</a>
+  </div>
+</div>
+
+{# §10.5: no bands while they are unvalidated. Stated once, at the top. #}
+<div class="flash flash-info">{{ BANDS_DEFERRED_NOTE }}</div>
+
+{# ── 1. The outcome, reported as three separate subdomains (§10.3) ────── #}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">{{ domain_label(OUTCOME_DOMAIN) }}</div>
+  </div>
+  <div class="panel-body">
+    <p class="panel-note">
+      Reported as three separate subdomains. They are related but not
+      interchangeable, and there is no single overall satisfaction score.
+    </p>
+    <table class="table">
+      <thead><tr><th>Subdomain</th><th class="num">Score</th><th class="num">n</th>
+        <th>Response distribution</th><th class="num">Not applicable</th></tr></thead>
+      <tbody>
+      {% for measure, result in outcome_results %}
+        <tr>
+          <td><strong>{{ subdomain_label(measure[0], measure[1]) }}</strong><br>
+            <span class="muted">{{ subdomain_definition(measure[0], measure[1]) }}</span></td>
+          {% if result is sameas false or not result %}
+          <td colspan="4"><span class="status-pill status-suppressed">
+            {{ result.label }}</span></td>
+          {% else %}
+          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+          <td class="num">{{ result.n }}</td>
+          <td>
+            {% for score in [1, 2, 3, 4, 5] %}
+            <span class="badge badge-outline">{{ score }}: {{ result.distribution.counts[score] }}</span>
+            {% endfor %}
+            <br><span class="muted">
+              {{ '%.0f'|format(result.distribution.favourable_pct or 0) }}% agree &middot;
+              {{ '%.0f'|format(result.distribution.neutral_pct or 0) }}% neither &middot;
+              {{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}% disagree
+            </span>
+          </td>
+          <td class="num">{{ result.distribution.not_applicable }}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── 2. The diagnostic domains ────────────────────────────────────────── #}
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Diagnostic domains</div></div>
+  <div class="panel-body">
+    <table class="table">
+      <thead><tr><th>Domain</th><th class="num">Score</th><th class="num">n</th>
+        <th class="num">Spread</th><th class="num">Not applicable</th></tr></thead>
+      <tbody>
+      {% for code, result in diagnostic_results %}
+        <tr>
+          <td><strong>{{ domain_label(code) }}</strong>
+            {% if domain_scope_note(code) %}<br>
+            <span class="muted">{{ domain_scope_note(code) }}</span>{% endif %}</td>
+          {% if not result %}
+          <td colspan="4"><span class="status-pill status-suppressed">
+            {{ result.label }}</span></td>
+          {% else %}
+          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+          <td class="num">{{ result.n }}</td>
+          <td class="num">{{ '%.2f'|format(result.dispersion.sd) }}</td>
+          <td class="num">{{ result.distribution.not_applicable }}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="panel-note">
+      A wide spread within a group is a finding in itself: it means the group
+      is not one place. It is a prompt to look further, not a problem with the
+      data.
+    </p>
+  </div>
+</div>
+
+{# ── 3. §10.4's first three bullets, one per diagnostic domain ────────── #}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">
+      Each diagnostic domain, in relation to
+      {{ subdomain_label('GEM', 'G') }}</div>
+  </div>
+  <div class="panel-body">
+    <p class="panel-note">
+      Comparing the third of respondents reporting the lowest
+      {{ subdomain_label('GEM', 'G') }} with the third reporting the highest.
+    </p>
+    {% for domain_code, contrast in contrasts %}
+    <div class="note-card" style="margin-bottom:1rem">
+      <strong>{{ domain_label(domain_code) }}</strong><br>
+      {% if contrast %}
+        {{ contrast.sentence() }}<br>
+        <span class="muted">Difference:
+          {{ '%+.2f'|format(contrast.difference) }}</span>
+      {% else %}
+        <span class="muted">{{ contrast.reason }}</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {# THE CAVEAT COMES FROM THE RESULT OBJECT, not from this template, so a
+       new view cannot omit it by forgetting it exists. #}
+    <p class="panel-note"><strong>{{ ASSOCIATION_CAVEAT }}</strong></p>
+  </div>
+</div>
+
+{# ── 4. Priority view, ordered by the size of the contrast ────────────── #}
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Where to look first</div></div>
+  <div class="panel-body">
+    {% if priority %}
+    <p class="panel-note">
+      The nine diagnostic subdomains, ordered by how much they differ between
+      the least and most satisfied thirds. Positions are relative to this
+      group's own median score ({{ '%.2f'|format(priority.score_median) }}),
+      not to any fixed scale.
+    </p>
+    <table class="table">
+      <thead><tr><th>Subdomain</th><th class="num">Score</th>
+        <th class="num">Difference</th><th>Reading order</th></tr></thead>
+      <tbody>
+      {% for entry in priority.entries %}
+        <tr>
+          <td><strong>{{ entry.label }}</strong></td>
+          <td class="num">{{ '%.2f'|format(entry.score) }}</td>
+          <td class="num">{{ '%+.2f'|format(entry.contrast.difference) }}</td>
+          <td><span class="badge badge-outline">{{ entry.quadrant_label }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="panel-note"><strong>{{ priority.caveat }}</strong></p>
+    <p class="muted">
+      &ldquo;Investigate first&rdquo; means a subdomain scoring below this
+      group's median that also differs most between the least and most
+      satisfied thirds. It is a suggested order for looking, not a judgement
+      and not a ranking of anyone.
+    </p>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">-</div>
+      <p>{{ priority.reason }}</p>
+      <p class="muted">A contrast needs at least {{ contrast_floor }}
+        respondents, because each third is reported like any other group.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── 5. §10.4's fourth bullet: differences across groups ──────────────── #}
+{% for comparison in comparisons %}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">{{ comparison.segment_label }}</div>
+    {% if comparison.spread is not none %}
+    <span class="badge badge-outline">spread
+      {{ '%.2f'|format(comparison.spread) }}</span>
+    {% endif %}
+  </div>
+  <div class="panel-body">
+    <p class="panel-note">
+      {{ subdomain_label('GEM', 'G') }} by {{ comparison.segment_label|lower }},
+      shown as each group's difference from the whole.
+      <strong>This is not a ranking.</strong> Groups appear in their defined
+      order, and the figure to read is the spread between them: a wide spread
+      means the organisation is not one place.
+    </p>
+    <table class="table">
+      <thead><tr><th>Group</th><th class="num">Score</th><th class="num">n</th>
+        <th class="num">vs whole</th></tr></thead>
+      <tbody>
+      {% for code, label, result, difference in comparison.cells %}
+        <tr>
+          <td>{{ label }}</td>
+          {% if not result %}
+          <td colspan="3"><span class="status-pill status-suppressed">
+            {{ result.label }}</span></td>
+          {% else %}
+          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+          <td class="num">{{ result.n }}</td>
+          <td class="num">{{ '%+.2f'|format(difference) if difference is not none else '-' }}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if comparison.suppressed_count %}
+    <p class="muted">
+      {{ comparison.suppressed_count }} group(s) suppressed. Where one group
+      falls below the threshold, the next smallest is suppressed with it, so
+      the hidden figure cannot be recovered by subtracting the rest from the
+      total.
+    </p>
+    {% endif %}
+    <p class="panel-note"><strong>{{ comparison.caveat }}</strong></p>
+  </div>
+</div>
+{% endfor %}
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">What this does not show</div></div>
+  <div class="panel-body">
+    <ul>
+      <li>No individual response, and nothing that identifies a respondent.</li>
+      <li>No causal claim. {{ ASSOCIATION_CAVEAT }}</li>
+      <li>No score band or label: {{ BANDS_DEFERRED_NOTE|lower }}</li>
+      <li>No single overall satisfaction figure. The three
+        {{ domain_label(OUTCOME_DOMAIN) }} subdomains are reported separately
+        because they measure related but different things.</li>
+      <li>{{ PERCEPTION_CAVEAT }}</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

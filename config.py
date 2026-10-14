@@ -59,10 +59,20 @@ class Config:
     # false statement to a respondent, which is worse than no promise at all.
     MIN_REPORTING_N = int(os.environ.get('MIN_REPORTING_N', 5))
 
-    # Below this many sessions an association coefficient is not reported
-    # (plan §5.2). The tertile contrast still is: it is robust at small n and
-    # readable by a non-statistical audience.
-    ASSOCIATION_MIN_N = int(os.environ.get('ASSOCIATION_MIN_N', 30))
+    # The floor for ANY association output (app/analytics/association.py).
+    #
+    # Originally 30, for a correlation coefficient. There is no coefficient:
+    # the specification never asks for one — "correlation", "Pearson" and
+    # "coefficient" appear nowhere in it — and §10.5 asks for "scores,
+    # response distributions, comparisons and limitations" during early
+    # implementation. The engine computes tertile contrasts and segment
+    # comparisons, which answer §10.4's four questions in its own words.
+    #
+    # 12 is the floor for a CONTRAST, which splits a group into thirds: below
+    # it, each third is too small to be a comparison. The binding floor is
+    # max(this, 3 x min_reporting_n), because every third is itself a reported
+    # group — see association.contrast_floor().
+    ASSOCIATION_MIN_N = int(os.environ.get('ASSOCIATION_MIN_N', 12))
 
 
 class DevelopmentConfig(Config):

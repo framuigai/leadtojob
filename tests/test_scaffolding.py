@@ -234,7 +234,7 @@ def test_the_reporting_threshold_is_set_PER_ENVIRONMENT(app):
     assert ProductionConfig.MIN_REPORTING_N == 5
 
     assert app.config['MIN_REPORTING_N'] == 1        # this app is 'testing'
-    assert app.config['ASSOCIATION_MIN_N'] == 30
+    assert app.config['ASSOCIATION_MIN_N'] == 12
 
 
 def test_a_low_production_threshold_is_logged_not_silently_accepted(

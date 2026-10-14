@@ -30,17 +30,19 @@ from app.audit import (
     USER_CREATE, branch_payload, cycle_payload, deployment_payload,
     record_audit, segment_payload, user_payload,
 )
+from app.analytics import association, scoring
 from app.auth.routes import require_capability, require_role_any
 from app.models import (
     AccessTicket, Branch, MeasurementCycle, Segment, SegmentOption,
     SurveyDeployment, SurveyItem, User,
 )
 from app.org import org_bp
+from app.provisioning import active_segments
 from app.permissions import (
     BRANCH_ADMIN, DEPLOY_ORG_WIDE, DEPLOY_SURVEYS, DEPLOY_TO_BRANCH,
     EDIT_DEPLOYMENT, ISSUE_TICKETS, MANAGE_BRANCH_ADMINS, MANAGE_BRANCHES,
-    MANAGE_CYCLES, MANAGE_SEGMENTS, ORG_ADMIN, VIEW_TEMPLATES, can,
-    is_branch_scoped, visible_branch_ids,
+    MANAGE_CYCLES, MANAGE_SEGMENTS, ORG_ADMIN, VIEW_REPORTS,
+    VIEW_TEMPLATES, can, is_branch_scoped, visible_branch_ids,
 )
 
 _ORG_TIERS = (ORG_ADMIN, BRANCH_ADMIN)
@@ -921,24 +923,119 @@ def reports():
     """
     Grouped by cycle, with a "needs: ..." line on anything not yet generatable.
 
-    Three states, not two — trainiq's compute_impact_missing pattern with one
+    THREE STATES, NOT TWO — trainiq's compute_impact_missing pattern with one
     addition:
 
         not deployed          -> deploy the wave
         awaiting responses    -> wait, or chase participation
-        suppressed            -> n is below the reporting threshold, and no
+        below the threshold   -> n is under the reporting threshold, and no
                                  amount of waiting fixes it
 
     They need different actions, which is why they are not collapsed into
-    "unavailable". The third is specific to this product and is not a failure:
-    it is the system working.
+    "unavailable". The third is specific to this product and is NOT A FAILURE:
+    it is the system working as designed, and the wording says so rather than
+    reading as an error the admin should try to clear.
     """
+    cycles = _scoped(db.session.query(MeasurementCycle), MeasurementCycle) \
+        .filter(MeasurementCycle.archived_at.is_(None)) \
+        .order_by(MeasurementCycle.created_at.desc()).all()
+
+    rows = []
+    for cycle in cycles:
+        waves = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
+            .filter(SurveyDeployment.cycle_id == cycle.id) \
+            .filter(SurveyDeployment.archived_at.is_(None)).all()
+        responses = sum(w.responses_received for w in waves)
+        rows.append({
+            'cycle': cycle,
+            'waves': waves,
+            'responses': responses,
+            'expected': sum(w.expected_respondents for w in waves),
+            'state': _report_state(cycle, waves, responses),
+        })
+
+    return render_template('org/reports.html', rows=rows,
+                           branch_scoped=is_branch_scoped(current_user))
+
+
+def _report_state(cycle, waves, responses):
+    """
+    What this cycle is waiting for, as a state and a sentence.
+
+    The sentence is the point. "Unavailable" tells an admin nothing; "needs 3
+    more responses" and "deploy the wave" are different jobs, and the third
+    state is not a job at all.
+    """
+    if not waves:
+        return {'key': 'not_deployed',
+                'needs': 'not deployed yet — deploy the wave to collect responses'}
+
+    if responses < cycle.min_reporting_n:
+        shortfall = cycle.min_reporting_n - responses
+        return {'key': 'below_threshold',
+                'needs': (f'{responses} of the {cycle.min_reporting_n} responses '
+                          f'needed before any result can be shown — '
+                          f'{shortfall} more')}
+
+    if any(not w.closed for w in waves):
+        # Reportable, but still collecting. Phase 8 generates reports from a
+        # CLOSED wave: two reports of the same group at different n give up
+        # the difference between them by subtraction, and no amount of
+        # in-report suppression prevents that.
+        return {'key': 'open',
+                'needs': ('still collecting — close the wave to generate a '
+                          'report, so the figures cannot shift underneath one '
+                          'that has already been read')}
+
+    return {'key': 'ready', 'needs': None}
+
+
+@org_bp.route('/cycles/<cycle_id>/analysis')
+@require_capability(VIEW_REPORTS)
+def analysis(cycle_id):
+    """
+    The on-screen diagnostic view: §10.4, before any PDF exists.
+
+    Everything here is computed deterministically in app/analytics/. Nothing is
+    narrated, nothing is banded, and every association output carries §10.4's
+    caveat from the result object itself rather than from this template.
+    """
+    cycle = _cycle_or_404(cycle_id)
+    waves = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
+        .filter(SurveyDeployment.cycle_id == cycle.id) \
+        .filter(SurveyDeployment.archived_at.is_(None)).all()
+
+    profiles = scoring.load_profiles(
+        db.session, [w.id for w in waves], method=cycle.scoring_method)
+
+    min_n = cycle.min_reporting_n
+    outcome_results = [
+        ((domains.GEM, sub), scoring.group_result(profiles, (domains.GEM, sub), min_n))
+        for sub in domains.SUBDOMAINS[domains.GEM]
+    ]
+    diagnostic_results = [
+        (code, scoring.group_result(profiles, code, min_n))
+        for code in domains.DIAGNOSTIC_DOMAINS
+    ]
+
+    contrasts = association.domain_contrasts(
+        profiles, outcome=association.DEFAULT_OUTCOME, min_reporting_n=min_n)
+    priority = association.priority_view(
+        profiles, outcome=association.DEFAULT_OUTCOME, min_reporting_n=min_n)
+
+    comparisons = []
+    for segment in active_segments(current_user.org_id):
+        comparisons.append(association.segment_comparison(
+            profiles, (domains.GEM, 'G'), segment, min_reporting_n=min_n))
+
     return render_template(
-        'org/placeholder.html',
-        heading='Reports',
-        phase='Phases 8-9',
-        detail='Executive, HR & OD, and Management reports, grouped by cycle. '
-               'A report whose group falls below the reporting threshold is '
-               'not generated, and says why.',
-        branch_scoped=is_branch_scoped(current_user),
+        'org/analysis.html', cycle=cycle, waves=waves,
+        respondents=len(profiles),
+        outcome_results=outcome_results,
+        diagnostic_results=diagnostic_results,
+        contrasts=contrasts, priority=priority, comparisons=comparisons,
+        contrast_floor=association.contrast_floor(min_n),
+        Suppressed=scoring.Suppressed,
+        GroupResult=scoring.GroupResult,
+        Contrast=association.Contrast,
     )
