@@ -1,0 +1,21 @@
+<p class="muted">
+  Ordered by how much each subdomain differs between the least and most
+  satisfied thirds. Positions are relative to this group's own median score
+  ({{ '%.2f'|format(priority.score_median) }}), not to any fixed scale.
+</p>
+<table class="data">
+  <thead><tr><th>Subdomain</th><th class="num">Score</th>
+    <th class="num">Difference between thirds</th><th>Reading order</th></tr></thead>
+  <tbody>
+  {% for entry in priority.entries %}
+    <tr><td>{{ entry.label }}</td>
+      <td class="num">{{ '%.2f'|format(entry.score) }}</td>
+      <td class="num">{{ '%+.2f'|format(entry.contrast.difference) }}</td>
+      <td>{{ entry.quadrant_label }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted">"Investigate first" means a subdomain scoring below this
+group's median that also differs most between the least and most satisfied
+thirds. It is a suggested order for looking, not a judgement.</p>
+<div class="callout caveat">{{ priority.caveat }}</div>

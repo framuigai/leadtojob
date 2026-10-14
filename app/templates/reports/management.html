@@ -1,0 +1,106 @@
+{% extends "reports/_base.html" %}
+{% block body %}
+
+{#
+  THE MOST PRIVACY-SENSITIVE OF THE THREE.
+
+  A manager reads this about their own team. It is generated only when the
+  group passes the reporting threshold — enforced in reports.require_reportable,
+  which raises rather than returning, so a caller that forgets to check cannot
+  render an empty report that looks finished.
+
+  It carries no item-level detail and no free text, because a team is small and
+  both are where a manager starts recognising individuals.
+#}
+
+<h2 class="sec">1. Your team at a glance</h2>
+{% if narrative.summary %}<p>{{ narrative.summary }}</p>{% endif %}
+<table class="data">
+  <tbody>
+    <tr><td>Responses from your group</td><td class="num">{{ n }}</td></tr>
+    <tr><td>Response rate</td><td class="num">
+      {% if response_rate is not none %}{{ '%.0f'|format(response_rate) }}%
+      {% else %}not available{% endif %}</td></tr>
+    <tr><td>Minimum reporting threshold</td>
+        <td class="num">n &ge; {{ min_reporting_n }}</td></tr>
+  </tbody>
+</table>
+<div class="callout">
+  You are seeing group figures only. No individual response is shown to you,
+  and none can be requested. Nothing in this report may be used in an
+  appraisal, a performance conversation about a particular person, or any other
+  decision about an individual.
+</div>
+
+<h2 class="sec">2. Where your team reports most positively</h2>
+{% if narrative.strengths %}<p>{{ narrative.strengths }}</p>{% endif %}
+{% include "reports/_domain_table.html" %}
+
+<h2 class="sec">3. Where your team reports least positively</h2>
+{% if narrative.attention %}<p>{{ narrative.attention }}</p>{% endif %}
+{% if priority %}{% include "reports/_priority.html" %}
+{% else %}<p class="suppressed">{{ priority.reason }}</p>{% endif %}
+
+{% if comparisons %}
+<h2 class="sec">4. How your group compares with the organisation</h2>
+<p class="muted">Shown as a difference from the organisation-wide figure, not as
+a position in a table. Other groups are not ranked here and your group is not
+ranked against them.</p>
+{% for comparison in comparisons %}
+<table class="data">
+  <thead><tr><th>Group</th><th class="num">Score</th>
+    <th class="num">Difference from the whole</th></tr></thead>
+  <tbody>
+  {% for code, label, result, difference in comparison.cells %}
+    <tr><td>{{ label }}</td>
+    {% if result.__class__.__name__ == 'GroupResult' %}
+      <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+      <td class="num">{{ '%+.2f'|format(difference) if difference is not none else '-' }}</td>
+    {% else %}
+      <td colspan="2" class="suppressed">{{ result.label }}</td>
+    {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+{% endif %}
+
+<h2 class="sec">{{ 5 if comparisons else 4 }}. Practical actions</h2>
+{% if narrative.practical_actions %}<p>{{ narrative.practical_actions }}</p>{% endif %}
+<p class="muted">
+  These are things within a manager's own control. Pay, grading and
+  organisational policy are not: where the results point to compensation, the
+  response is a pay-equity or market review by the organisation, and it is
+  listed for your information rather than as your action.
+</p>
+
+<h2 class="sec">{{ 6 if comparisons else 5 }}. Questions for a team conversation</h2>
+{% if narrative.discussion_questions %}
+<ul class="plain">
+  {% for question in narrative.discussion_questions.split(';') %}
+    {% if question.strip() %}<li>{{ question.strip() }}</li>{% endif %}
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Ask the team what would make the most difference, rather than
+asking who gave which answer. Nobody can tell you the second, and asking is
+what stops people answering honestly next time.</p>
+{% endif %}
+
+<h2 class="sec">{{ 7 if comparisons else 6 }}. Follow-up</h2>
+<p>Record what you commit to. A later wave will report any change alongside the
+actions completed, without claiming that one produced the other.</p>
+{% if actions %}
+<table class="data">
+  <thead><tr><th>Action</th><th>Owner</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for action in actions %}
+    <tr><td>{{ action.title }}</td><td>{{ action.owner_label or '-' }}</td>
+      <td>{{ action.status }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

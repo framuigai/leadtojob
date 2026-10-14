@@ -1,0 +1,98 @@
+{#
+  Shared skeleton for all three reports. The cover and styles are copied from
+  the sibling products deliberately: a client opens two leadTo reports side by
+  side, and the cover is where they either read as one brand or as two vendors.
+
+  EVERY PAGE FOOTER CARRIES n AND THE REPORTING THRESHOLD. A number without its
+  n is how a four-person finding becomes a board slide.
+#}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }} - {{ org.name }}</title>
+  {#
+    THESE TWO PARTIALS ARE RAW CSS, not HTML — they must sit INSIDE the <style>
+    block. Included outside it, WeasyPrint renders the stylesheet as body text
+    and the first page of every report opens with a CSS comment. The sibling
+    product includes them the same way for the same reason.
+  #}
+  <style>
+  {% include "reports/_cover_style.css.html" %}
+  {% include "reports/_report_style.css.html" %}
+    @page {
+      size: A4;
+      margin: 18mm 16mm 20mm 16mm;
+      @bottom-left {
+        content: "{{ org.name }} - {{ title }} - CONFIDENTIAL";
+        font-size: 7.5pt; color: #6b7280;
+      }
+      @bottom-right {
+        content: "n = {{ n }} - reported only for groups of {{ min_reporting_n }} or more - page " counter(page);
+        font-size: 7.5pt; color: #6b7280;
+      }
+    }
+    body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+           font-size: 9.5pt; color: #2B2F38; line-height: 1.5; }
+    h2.sec { font-size: 13pt; margin: 22pt 0 6pt; color: #1F3A52;
+             border-bottom: 1px solid #DDE1E7; padding-bottom: 4pt; }
+    h3.sub { font-size: 10.5pt; margin: 14pt 0 4pt; color: #1F3A52; }
+    table.data { width: 100%; border-collapse: collapse; margin: 8pt 0 10pt; }
+    table.data th { text-align: left; font-size: 8pt; text-transform: uppercase;
+                    letter-spacing: .04em; color: #6b7280; padding: 4pt 6pt;
+                    border-bottom: 1px solid #DDE1E7; }
+    table.data td { padding: 5pt 6pt; border-bottom: 1px solid #F0F2F5;
+                    vertical-align: top; }
+    td.num, th.num { text-align: right; }
+    .callout { border-left: 3px solid #1F3A52; background: #F7F9FB;
+               padding: 7pt 10pt; margin: 10pt 0; }
+    .callout.caveat { border-left-color: #8A8A8A; background: #FAFAFA;
+                      font-size: 8.5pt; color: #4b5563; }
+    .suppressed { color: #6b7280; font-style: italic; }
+    .muted { color: #6b7280; }
+    .chart { width: 100%; margin: 8pt 0 4pt; }
+    .sentence { margin: 6pt 0; }
+    ul.plain { margin: 6pt 0 6pt 14pt; padding: 0; }
+    ul.plain li { margin-bottom: 4pt; }
+    .pagebreak { page-break-before: always; }
+  </style>
+</head>
+<body>
+
+{% set cover_report = title %}
+{% set cover_desc = [audience, cycle.cycle_name] %}
+{% set cover_meta = [
+     ('Scope', scope_label),
+     ('Responses', n ~ (' of ' ~ expected if expected else '')),
+     ('Threshold', 'n >= ' ~ min_reporting_n),
+     ('Generated', generated_on),
+] %}
+{% set scope_line = scope_label %}
+{% include "reports/_cover.html" %}
+
+{% block body %}{% endblock %}
+
+<h2 class="sec">Limitations and what this does not show</h2>
+{% if narrative.limitations %}<p>{{ narrative.limitations }}</p>{% endif %}
+<ul class="plain">
+  <li><strong>Associations, not causes.</strong> {{ association_caveat }}</li>
+  <li><strong>No validated score bands.</strong> {{ bands_note }}</li>
+  <li><strong>No single satisfaction score.</strong> The three Overall
+      Satisfaction subdomains are reported separately because they measure
+      related but different things: an employee may consider the job a good fit
+      and still experience frequent frustration.</li>
+  <li><strong>Perception, not objective fact.</strong> {{ perception_caveat }}</li>
+  <li><strong>No individual is visible.</strong> Responses are anonymous and
+      pooled. Groups of fewer than {{ min_reporting_n }} are suppressed, and
+      where one group is suppressed another is suppressed with it so the hidden
+      figure cannot be recovered by subtracting the rest from the total.</li>
+  <li><strong>Not for decisions about individuals.</strong> Nothing in this
+      report may be used in an appraisal, a performance process, a promotion
+      decision or any other decision about a particular employee.</li>
+  <li><strong>Method.</strong> Domain scores are {{ scoring_method_label }}.
+      "Not applicable" answers are excluded from the score entirely and
+      reported separately as coverage; they are not counted as a middle
+      answer.</li>
+</ul>
+</body>
+</html>

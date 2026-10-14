@@ -1,0 +1,55 @@
+{#
+  Shared report cover. Used by all four reports.
+
+  The cover styling is `_cover_style.css.html`, copied from the TNA product
+  deliberately and kept byte-identical where it can be: the two products are
+  routinely opened side by side by the same client, and the cover is where they
+  either read as one brand or as two vendors.
+
+  Set before including:
+    cover_report  — the report name (required), from reports.report_title()
+    cover_desc    — list of qualifying strings; falsy entries are dropped
+    cover_meta    — list of (label, value) pairs for the metadata strip
+
+  `org` comes from the render context.
+
+  CONFIDENTIAL is not decoration. These documents name an individual, record
+  what named colleagues said about their capability, and will be read by a
+  panel. Every page carries it.
+#}
+<div class="cover-header">
+
+    <table class="cover-brand-row">
+        <tr>
+            <td>
+                <span class="cover-logo"><span class="cover-logo-lead">Lead</span><span class="cover-logo-to">TO</span></span><svg class="cover-chev" viewBox="0 0 46 58" width="14" height="18" xmlns="http://www.w3.org/2000/svg"><polyline points="6,15 21,29 6,43" fill="none" stroke="#F05A28" stroke-width="7" stroke-linejoin="miter"/><polyline points="26,15 41,29 26,43" fill="none" stroke="#F05A28" stroke-width="7" stroke-linejoin="miter"/></svg>
+            </td>
+            <td class="right"><span class="cover-tag">Confidential</span></td>
+        </tr>
+    </table>
+
+    <h1 class="cover-org">{{ org.name if org and org.name else 'Organisation' }}</h1>
+    <h2 class="cover-branch">{{ scope_line }}</h2>
+
+    <h2 class="cover-survey">{{ cover_report }}</h2>
+
+    {% set desc_parts = cover_desc | select | list %}
+    {% if desc_parts %}
+    <h3 class="cover-desc">
+        {%- for part in desc_parts %}{% if not loop.first %}<span class="sep">·</span>{% endif %}{{ part }}{% endfor -%}
+    </h3>
+    {% endif %}
+
+    <div class="cover-rule"></div>
+
+    <table class="cover-meta-table">
+        <tr>
+            {% for label, value in cover_meta %}
+            <td>
+                <h4 class="cover-meta-label">{{ label }}</h4>
+                <h3 class="cover-meta-value">{{ value }}</h3>
+            </td>
+            {% endfor %}
+        </tr>
+    </table>
+</div>

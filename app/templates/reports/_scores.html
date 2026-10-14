@@ -1,0 +1,38 @@
+{#
+  The score tables, shared by the Executive and HR reports so the two cannot
+  drift apart on how a figure is presented.
+
+  A SUPPRESSED CELL RENDERS ITS LABEL, never a blank. A blank is read as zero,
+  and zero on a satisfaction scale is a catastrophic finding rather than an
+  absent one.
+#}
+<table class="data">
+  <thead>
+    <tr>
+      <th>{{ heading }}</th>
+      <th class="num">Score</th>
+      <th class="num">n</th>
+      <th class="num">Agree</th>
+      <th class="num">Neither</th>
+      <th class="num">Disagree</th>
+      <th class="num">N/A</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for label, result in rows %}
+    <tr>
+      <td>{{ label }}</td>
+      {% if result.__class__.__name__ == 'GroupResult' %}
+      <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+      <td class="num">{{ result.n }}</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.favourable_pct or 0) }}%</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.neutral_pct or 0) }}%</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}%</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.na_pct or 0) }}%</td>
+      {% else %}
+      <td colspan="6" class="suppressed">{{ result.label }}</td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>

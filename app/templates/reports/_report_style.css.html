@@ -1,0 +1,112 @@
+/* ── Shared report body styling ─────────────────────────────────────────────
+   Every PDF report includes this. Edit here only: the four reports are opened
+   side by side, so a private copy in one template is how they drift apart —
+   exactly as the TNA product's covers nearly did before they were shared.
+
+   Table layout rather than flexbox throughout: WeasyPrint renders tables
+   predictably at print sizes, and a report must never reflow between runs. */
+
+.content { padding: 1.25cm 2.5cm; }
+.section { margin-bottom: 1.1cm; }
+
+.section-heading {
+    font-size: 12pt; font-weight: bold; color: #1a1a2e;
+    border-bottom: 1.5pt solid #e5e7eb;
+    padding-bottom: 4pt; margin-bottom: 10pt;
+}
+.section-number { color: #9ca3af; font-weight: normal; margin-right: 4pt; }
+
+p { margin-bottom: 7pt; }
+.lede { font-size: 10.5pt; }
+.muted { color: #6b7280; }
+.small { font-size: 8.5pt; }
+
+/* ── Composite banner — the headline figure for one domain or one report ──
+   The band colour is the left rule. It describes the level of capability
+   demonstrated and is never a verdict on the promotion. */
+.composite-banner {
+    border-left: 5pt solid; padding: 10pt 14pt;
+    background: #f9fafb; margin-bottom: 10pt;
+}
+.score-big   { font-size: 34pt; font-weight: bold; line-height: 1; }
+.score-denom { font-size: 11pt; color: #9ca3af; font-weight: normal; }
+.score-cls   { font-size: 11pt; font-weight: bold; margin-top: 2pt; }
+.score-note  { font-size: 8.5pt; color: #6b7280; margin-top: 3pt; }
+
+/* ── Tables ── */
+.data-table { width: 100%; border-collapse: collapse; margin-bottom: 9pt; }
+.data-table th {
+    background: #f3f4f6; color: #374151; font-size: 8pt; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    text-align: left; padding: 5pt 7pt; border-bottom: 1pt solid #e5e7eb;
+}
+.data-table td {
+    padding: 5pt 7pt; border-bottom: 0.5pt solid #f1f5f9;
+    font-size: 9pt; vertical-align: top;
+}
+.data-table td.num { text-align: right; white-space: nowrap; }
+/* Curriculum codes: the LMS's identifier for a course, so they are set
+   monospaced and never wrapped — a broken code is an unusable one. */
+.data-table td.code-cell {
+    font-family: monospace; font-size: 8pt; color: #4b5563; white-space: nowrap;
+}
+.data-table tr.total td { font-weight: bold; border-top: 1pt solid #e5e7eb; }
+
+/* ── Band chip ── */
+.band {
+    display: inline-block; font-size: 7.5pt; font-weight: bold;
+    padding: 1.5pt 6pt; border-radius: 8pt; white-space: nowrap;
+}
+
+/* ── Boxed call-outs ──
+   ANALYSIS is observation. PRIORITY GUIDANCE is about development, never about
+   the appointment decision. HOW TO READ THIS carries the interpretive notes the
+   product requires beneath a figure that is easy to misread. */
+.callout {
+    border-left: 3pt solid #2E75B6; background: #f8fafc;
+    padding: 8pt 11pt; margin: 8pt 0;
+}
+.callout-label {
+    font-size: 7pt; font-weight: bold; text-transform: uppercase;
+    letter-spacing: 0.1em; color: #2E75B6; margin-bottom: 3pt;
+}
+.callout-priority { border-left-color: #C55A11; background: #fffbf7; }
+.callout-priority .callout-label { color: #C55A11; }
+.callout-read { border-left-color: #9ca3af; background: #f9fafb; }
+.callout-read .callout-label { color: #6b7280; }
+.callout p:last-child { margin-bottom: 0; }
+
+/* ── Charts ── */
+.chart { margin: 8pt 0 10pt; }
+.chart img { width: 100%; height: auto; }
+.chart-caption { font-size: 8pt; color: #6b7280; margin-top: 2pt; }
+
+/* ── Priority stars ── */
+.stars { color: #C55A11; letter-spacing: 1pt; }
+
+/* ── Narrative section ──
+   Headed "Readiness Narrative". A report never mentions how it was produced. */
+.narrative-part { margin-bottom: 9pt; }
+.narrative-label {
+    font-size: 7.5pt; font-weight: bold; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 2pt;
+}
+
+/* ── Running footer ──
+   Confidentiality on every page, because a single page of this document
+   circulating on its own is the realistic failure mode. */
+@page {
+    @bottom-left {
+        content: "{{ footer_left }}";
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 7pt; color: #9ca3af; padding: 0 2.5cm 0.7cm;
+    }
+    @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 7pt; color: #9ca3af; padding: 0 2.5cm 0.7cm;
+    }
+}
+
+.page-break { page-break-before: always; }
+.avoid-break { page-break-inside: avoid; }

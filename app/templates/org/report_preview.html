@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ context.title }} - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">{{ role_label(current_user.role) }} / Report</div>
+    <h1>{{ context.title }}</h1>
+    <p class="muted">
+      {{ context.cycle.cycle_name }} &middot; {{ context.scope_label }}
+      &middot; n = {{ context.n }}
+      &middot; threshold n &ge; {{ context.min_reporting_n }}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary"
+       href="{{ url_for('org.report_download', cycle_id=context.cycle.id,
+                        report_type=report_type, fmt='pdf',
+                        branch=(branch.id if branch else None)) }}">Download PDF</a>
+    <a class="btn btn-secondary"
+       href="{{ url_for('org.report_download', cycle_id=context.cycle.id,
+                        report_type=report_type, fmt='xlsx',
+                        branch=(branch.id if branch else None)) }}">Download Excel</a>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Interpretation</div></div>
+  <div class="panel-body">
+    {% if context.narrative %}
+      {% for key, text in context.narrative.items() %}
+      <h3 style="font-size:1rem;margin-top:1rem">
+        {{ key.replace('_', ' ')|capitalize }}</h3>
+      <p>{{ text }}</p>
+      {% endfor %}
+      <p class="muted">Regenerating replaces this text. Every figure in the
+        report is computed independently and does not change.</p>
+    {% else %}
+      <p class="panel-note">
+        No interpretation has been written for this report yet. Every figure
+        stands on its own without one — the interpretation narrates them, it
+        does not produce them.
+      </p>
+    {% endif %}
+    {% if can_interpret and can(current_user, 'run_analysis') %}
+    <form method="post"
+          action="{{ url_for('org.report_interpret', cycle_id=context.cycle.id,
+                             report_type=report_type) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-secondary">
+        {{ 'Regenerate the interpretation' if context.narrative
+           else 'Write the interpretation' }}</button>
+    </form>
+    {% elif not can_interpret %}
+    <p class="muted">Interpretation is not configured on this installation.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Overall Satisfaction</div></div>
+  <div class="panel-body">
+    <table class="table">
+      <thead><tr><th>Subdomain</th><th class="num">Score</th><th class="num">n</th>
+        <th class="num">Agree</th><th class="num">Disagree</th></tr></thead>
+      <tbody>
+      {% for pair, result in context.outcome_rows %}
+        <tr><td>{{ subdomain_label(pair[0], pair[1]) }}</td>
+        {% if result %}
+          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+          <td class="num">{{ result.n }}</td>
+          <td class="num">{{ '%.0f'|format(result.distribution.favourable_pct or 0) }}%</td>
+          <td class="num">{{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}%</td>
+        {% else %}
+          <td colspan="4"><span class="status-pill status-suppressed">
+            {{ result.label }}</span></td>
+        {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if context.trend %}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">Change since {{ context.trend.previous_cycle_id }}</div>
+  </div>
+  <div class="panel-body">
+    <table class="table">
+      <thead><tr><th>Measure</th><th class="num">Previous</th>
+        <th class="num">Now</th><th class="num">Change</th></tr></thead>
+      <tbody>
+      {% for measure, change in context.trend.changes %}
+        <tr>
+        {% if change and change.comparable %}
+          <td>{{ change.measure_label }}</td>
+          <td class="num">{{ '%.2f'|format(change.previous.mean) }}</td>
+          <td class="num">{{ '%.2f'|format(change.current.mean) }}</td>
+          <td class="num">{{ '%+.2f'|format(change.difference) }}</td>
+        {% else %}
+          <td>{{ change.measure_label if change.measure_label is defined else measure }}</td>
+          <td colspan="3" class="muted">{{ change.reason }}</td>
+        {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if context.trend.composition_note %}
+    <div class="flash flash-info">{{ context.trend.composition_note }}</div>
+    {% endif %}
+    <p class="panel-note">{{ context.trend_caveat }}</p>
+  </div>
+</div>
+{% endif %}
+
+<p class="muted">
+  The PDF and the Excel file contain the same figures, the same wording and the
+  same caveats — both are built from one set of results.
+</p>
+{% endblock %}

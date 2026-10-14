@@ -1,0 +1,22 @@
+<table class="data">
+  <thead><tr><th>If this is low</th><th>Areas to investigate</th>
+    <th>Possible response categories</th></tr></thead>
+  <tbody>
+  {% for pair, entry in intervention_map.items() %}
+    {% if pair[0] in (cycle.assessed_domains or []) %}
+    <tr>
+      <td>{{ subdomain_label(pair[0], pair[1]) }}</td>
+      <td>{{ entry.areas }}</td>
+      <td>{{ entry.categories }}</td>
+    </tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted">
+  Training is one response category among several, and it appears above only
+  where the diagnostic evidence supports a capability or behaviour gap. It is
+  deliberately absent from every Reward Satisfaction row: a compensation
+  finding calls for a pay-equity review, market benchmarking or a compensation
+  review, and training is not a substitute for addressing one.
+</p>

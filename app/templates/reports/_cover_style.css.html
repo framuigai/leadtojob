@@ -1,0 +1,76 @@
+/* ── Report cover ──────────────────────────────────────────────────────────
+   Shared by the Gap, Impact and Cycle reports via reports/_cover.html.
+   Edit here only: the three reports are routinely opened side by side, so a
+   private copy in one template is how their covers drift apart.
+   Table layout throughout rather than flexbox — WeasyPrint renders tables
+   predictably at print sizes, and the cover must never reflow. */
+.cover-header {
+    background: #1a1a2e;
+    background-image: linear-gradient(160deg, #252550 0%, #1a1a2e 62%);
+    color: white;
+    padding: 1.7cm 2.5cm 1.4cm;
+}
+
+/* Brand row: LeadTO lockup left, confidentiality tag right. The wordmark is
+   HTML text + an inline SVG for the chevrons only — WeasyPrint's SVG text
+   rendering does not carry the webfont, so logo.svg cannot be embedded as-is
+   without the wordmark falling back to a different face. Colours and weight
+   match app/static/img/logo.svg exactly. */
+.cover-brand-row { width: 100%; border-collapse: collapse; margin-bottom: 1.15cm; }
+.cover-brand-row td { padding: 0; vertical-align: middle; }
+.cover-brand-row td.right { text-align: right; }
+.cover-logo {
+    font-size: 19pt; font-weight: bold; letter-spacing: -0.5pt; line-height: 1;
+}
+.cover-logo-lead { color: #ffffff; }
+.cover-logo-to   { color: #F05A28; }
+.cover-chev { margin-left: 3pt; }
+.cover-tag {
+    font-size: 7pt; font-weight: bold; text-transform: uppercase;
+    letter-spacing: 0.14em; color: rgba(255,255,255,0.55);
+    border: 0.75pt solid rgba(255,255,255,0.28);
+    border-radius: 9pt; padding: 3pt 9pt;
+}
+
+/* Identity block — who this report is for. The org name is the headline; the
+   branch line sits immediately under it so 'which part of the organisation'
+   is answered before the reader reaches the survey name. */
+.cover-org {
+    font-size: 28pt; font-weight: bold; color: #ffffff;
+    line-height: 1.1; letter-spacing: -0.6pt; margin: 0 0 6pt 0;
+}
+.cover-branch {
+    font-size: 11pt; font-weight: bold; color: rgba(255,255,255,0.88);
+    letter-spacing: 0.01em; margin: 0 0 16pt 0; line-height: 1.3;
+}
+
+/* Survey block — what this report is. Type first in brand orange, then the
+   description that qualifies it. */
+.cover-survey {
+    font-size: 16pt; font-weight: bold; color: #F05A28;
+    line-height: 1.25; letter-spacing: -0.2pt; margin: 0 0 4pt 0;
+}
+.cover-desc {
+    font-size: 11pt; font-weight: bold; color: rgba(255,255,255,0.82);
+    margin: 0; line-height: 1.35;
+}
+.cover-desc .sep { color: rgba(255,255,255,0.35); font-weight: normal; padding: 0 5pt; }
+
+.cover-rule {
+    border-top: 2pt solid #F05A28; width: 2.6cm; margin: 13pt 0 0 0;
+}
+
+/* H3/H4 — supporting facts. Deliberately quiet: they are reference detail,
+   not the headline. */
+.cover-meta-table { width: 100%; border-collapse: collapse; margin-top: 13pt; }
+.cover-meta-table td { padding: 0 18pt 0 0; vertical-align: top; }
+.cover-meta-table td:last-child { padding-right: 0; }
+.cover-meta-label {
+    color: rgba(255,255,255,0.5); text-transform: uppercase;
+    letter-spacing: 0.09em; font-size: 6.8pt; font-weight: bold;
+    display: block; margin-bottom: 2.5pt;
+}
+.cover-meta-value {
+    color: #ffffff; font-weight: bold; font-size: 9.5pt;
+    display: block; line-height: 1.3;
+}

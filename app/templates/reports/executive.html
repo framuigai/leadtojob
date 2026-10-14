@@ -1,0 +1,104 @@
+{% extends "reports/_base.html" %}
+{% block body %}
+
+<h2 class="sec">1. Executive summary</h2>
+{% if narrative.executive_summary %}
+<p>{{ narrative.executive_summary }}</p>
+{% else %}
+<p class="muted">No interpretation has been generated for this report. Every
+figure below stands on its own.</p>
+{% endif %}
+
+<h2 class="sec">2. Method and participation</h2>
+<table class="data">
+  <tbody>
+    <tr><td>Responses</td><td class="num">{{ n }}</td></tr>
+    <tr><td>Invited</td><td class="num">{{ expected or 'not recorded' }}</td></tr>
+    <tr><td>Response rate</td><td class="num">
+      {% if response_rate is not none %}{{ '%.0f'|format(response_rate) }}%
+      {% else %}not available{% endif %}</td></tr>
+    <tr><td>Minimum reporting threshold</td>
+        <td class="num">n &ge; {{ min_reporting_n }}</td></tr>
+    <tr><td>Domain scoring method</td><td>{{ scoring_method_label }}</td></tr>
+  </tbody>
+</table>
+<div class="callout">
+  Results are reported for groups only. A group smaller than
+  {{ min_reporting_n }} is suppressed, together with the next smallest, so a
+  suppressed figure cannot be recovered by subtraction. No individual response
+  appears anywhere in this report.
+</div>
+
+<h2 class="sec">3. Overall Satisfaction</h2>
+<p class="muted">Reported as three separate subdomains. There is no single
+overall satisfaction score: the three are related but not interchangeable.</p>
+{% with heading='Subdomain', rows=outcome_rows|map('list')|list %}{% endwith %}
+{% set outcome_labels = [] %}
+{% include "reports/_outcome_table.html" %}
+{% if chart_outcome %}<img class="chart" src="data:image/png;base64,{{ chart_outcome }}">{% endif %}
+{% if chart_legend %}<img class="chart" src="data:image/png;base64,{{ chart_legend }}">{% endif %}
+
+<h2 class="sec">4. Key findings across the diagnostic domains</h2>
+{% if narrative.key_findings %}<p>{{ narrative.key_findings }}</p>{% endif %}
+{% include "reports/_domain_table.html" %}
+{% if chart_domains %}<img class="chart" src="data:image/png;base64,{{ chart_domains }}">{% endif %}
+
+<h2 class="sec">5. The diagnostic domains in relation to Overall Satisfaction</h2>
+<p class="muted">Comparing the third of respondents reporting the lowest
+General Job Satisfaction with the third reporting the highest.</p>
+{% for code, contrast in contrasts %}
+<div class="sentence">
+  <strong>{{ domain_label(code) }}.</strong>
+  {% if contrast %}{{ contrast.sentence() }}
+  {% else %}<span class="suppressed">{{ contrast.reason }}</span>{% endif %}
+</div>
+{% endfor %}
+{% if chart_contrasts %}<img class="chart" src="data:image/png;base64,{{ chart_contrasts }}">{% endif %}
+<div class="callout caveat">{{ association_caveat }}</div>
+
+{% if comparisons %}
+<h2 class="sec">6. Differences across organisational groups</h2>
+{% for comparison in comparisons %}
+<h3 class="sub">{{ comparison.segment_label }}</h3>
+<p class="muted">Groups appear in their defined order. <strong>This is not a
+ranking.</strong> The figure worth reading is the spread between groups: a wide
+spread means the organisation is not one place.</p>
+<table class="data">
+  <thead><tr><th>Group</th><th class="num">Score</th><th class="num">n</th>
+    <th class="num">vs whole</th></tr></thead>
+  <tbody>
+  {% for code, label, result, difference in comparison.cells %}
+    <tr><td>{{ label }}</td>
+    {% if result.__class__.__name__ == 'GroupResult' %}
+      <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+      <td class="num">{{ result.n }}</td>
+      <td class="num">{{ '%+.2f'|format(difference) if difference is not none else '-' }}</td>
+    {% else %}
+      <td colspan="3" class="suppressed">{{ result.label }}</td>
+    {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<div class="callout caveat">{{ comparison.caveat }}</div>
+{% endfor %}
+{% endif %}
+
+{% if trend %}
+<h2 class="sec">7. Change since the previous wave</h2>
+{% include "reports/_trend.html" %}
+{% endif %}
+
+<h2 class="sec">{{ 8 if trend else 7 }}. Where to look first</h2>
+{% if priority %}
+{% if narrative.areas_to_investigate %}<p>{{ narrative.areas_to_investigate }}</p>{% endif %}
+{% include "reports/_priority.html" %}
+{% else %}
+<p class="suppressed">{{ priority.reason }}</p>
+{% endif %}
+
+<h2 class="sec">{{ 9 if trend else 8 }}. Possible response categories</h2>
+<p class="muted">{{ intervention_note }}</p>
+{% include "reports/_interventions.html" %}
+
+{% endblock %}

@@ -1,0 +1,32 @@
+<p class="muted">Compared with
+  <strong>{{ trend.previous_cycle_id }}</strong>.</p>
+<table class="data">
+  <thead><tr><th>Measure</th><th class="num">Previous</th><th class="num">This wave</th>
+    <th class="num">Change</th><th class="num">n then / now</th></tr></thead>
+  <tbody>
+  {% for measure, change in trend.changes %}
+    <tr>
+      {% if change and change.comparable %}
+      <td>{{ change.measure_label }}</td>
+      <td class="num">{{ '%.2f'|format(change.previous.mean) }}</td>
+      <td class="num">{{ '%.2f'|format(change.current.mean) }}</td>
+      <td class="num">{{ '%+.2f'|format(change.difference) }}</td>
+      <td class="num">{{ change.previous_n }} / {{ change.current_n }}</td>
+      {% else %}
+      <td>{{ change.measure_label if change.measure_label is defined else measure }}</td>
+      <td colspan="4" class="suppressed">{{ change.reason }}</td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if chart_trend %}<img class="chart" src="data:image/png;base64,{{ chart_trend }}">{% endif %}
+{% if trend.composition_note %}
+<div class="callout">{{ trend.composition_note }}</div>
+{% endif %}
+{% if action_counts.total %}
+<p class="muted">Over this period, {{ action_counts.completed }} of
+  {{ action_counts.total }} agreed improvement actions were recorded as
+  completed. This is reported alongside the change, not as its explanation.</p>
+{% endif %}
+<div class="callout caveat">{{ trend_caveat }}</div>

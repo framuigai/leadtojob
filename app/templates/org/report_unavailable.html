@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - leadTo{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">{{ role_label(current_user.role) }} / Report</div>
+  <h1>{{ title }}</h1>
+  <p class="muted">{{ cycle.cycle_name }}</p>
+</div></div>
+
+<div class="panel"><div class="panel-body">
+  <div class="flash flash-warning">{{ reason }}</div>
+  <a href="{{ url_for('org.reports') }}" class="btn btn-secondary">All reports</a>
+  <a href="{{ url_for('org.cycle_detail', cycle_id=cycle.id) }}"
+     class="btn btn-secondary">Cycle</a>
+</div></div>
+{% endblock %}

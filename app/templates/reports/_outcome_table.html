@@ -1,0 +1,23 @@
+<table class="data">
+  <thead><tr><th>Subdomain</th><th class="num">Score</th><th class="num">n</th>
+    <th class="num">Agree</th><th class="num">Neither</th>
+    <th class="num">Disagree</th><th class="num">N/A</th></tr></thead>
+  <tbody>
+  {% for pair, result in outcome_rows %}
+    <tr>
+      <td><strong>{{ subdomain_label(pair[0], pair[1]) }}</strong><br>
+        <span class="muted">{{ subdomain_definition(pair[0], pair[1]) }}</span></td>
+      {% if result.__class__.__name__ == 'GroupResult' %}
+      <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+      <td class="num">{{ result.n }}</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.favourable_pct or 0) }}%</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.neutral_pct or 0) }}%</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}%</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.na_pct or 0) }}%</td>
+      {% else %}
+      <td colspan="6" class="suppressed">{{ result.label }}</td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>

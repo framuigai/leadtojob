@@ -17,7 +17,11 @@ import re
 import secrets
 from datetime import datetime, timezone
 
-from flask import abort, flash, redirect, render_template, request, url_for
+import io
+
+from flask import (
+    abort, flash, redirect, render_template, request, send_file, url_for,
+)
 from flask_login import current_user
 from sqlalchemy import func
 
@@ -27,13 +31,24 @@ from app.audit import (
     BRANCH_CREATE, BRANCH_DEACTIVATE, BRANCH_REACTIVATE, CYCLE_ARCHIVE,
     CYCLE_CLOSE, CYCLE_CREATE, CYCLE_EDIT, CYCLE_OPEN, DEPLOYMENT_CLOSE,
     DEPLOYMENT_CREATE, SEGMENT_CREATE, SEGMENT_EDIT, TICKETS_ISSUE,
-    USER_CREATE, branch_payload, cycle_payload, deployment_payload,
-    record_audit, segment_payload, user_payload,
+    USER_CREATE, ANALYSIS_RUN, REPORT_DOWNLOAD, branch_payload,
+    cycle_payload, deployment_payload, record_audit, segment_payload,
+    user_payload,
 )
+from app import ai_service
+# IMPORTED AS report_builder, NOT reports.
+#
+# This module defines a view called reports(), which shadows the module at
+# import time — `report_builder.REPORT_TYPES` then resolves to an attribute of the
+# view function and raises. The sibling product hit this exact shadowing and
+# it is written down in CLAUDE.md; it was still walked into here, which is a
+# fair measure of how invisible it is at the call site.
 from app.analytics import association, scoring
+from app.analytics import reports as report_builder
 from app.auth.routes import require_capability, require_role_any
 from app.models import (
-    AccessTicket, Branch, MeasurementCycle, Segment, SegmentOption,
+    AccessTicket, AiCostEvent, Analysis, Branch, ImprovementActions,
+    MeasurementCycle, Org, ReportEvent, Segment, SegmentOption,
     SurveyDeployment, SurveyItem, User,
 )
 from app.org import org_bp
@@ -41,7 +56,7 @@ from app.provisioning import active_segments
 from app.permissions import (
     BRANCH_ADMIN, DEPLOY_ORG_WIDE, DEPLOY_SURVEYS, DEPLOY_TO_BRANCH,
     EDIT_DEPLOYMENT, ISSUE_TICKETS, MANAGE_BRANCH_ADMINS, MANAGE_BRANCHES,
-    MANAGE_CYCLES, MANAGE_SEGMENTS, ORG_ADMIN, VIEW_REPORTS,
+    MANAGE_CYCLES, MANAGE_SEGMENTS, ORG_ADMIN, RUN_ANALYSIS, VIEW_REPORTS,
     VIEW_TEMPLATES, can, is_branch_scoped, visible_branch_ids,
 )
 
@@ -1039,3 +1054,236 @@ def analysis(cycle_id):
         GroupResult=scoring.GroupResult,
         Contrast=association.Contrast,
     )
+
+# ── Report generation (phases 8-9) ─────────────────────────────────────────
+
+def _report_inputs(cycle, scope_branch=None):
+    """
+    Everything a report needs, assembled once.
+
+    `scope_branch` narrows to one branch for a Management Report. The profiles
+    are filtered on the SESSION's branch_id — the branch recorded when the
+    response was given — not on anything declared later.
+    """
+    waves = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
+        .filter(SurveyDeployment.cycle_id == cycle.id) \
+        .filter(SurveyDeployment.archived_at.is_(None)).all()
+    if scope_branch is not None:
+        waves = [w for w in waves if w.branch_id == scope_branch.id]
+
+    profiles = scoring.load_profiles(
+        db.session, [w.id for w in waves], method=cycle.scoring_method)
+
+    previous = None
+    if cycle.previous_cycle_id:
+        earlier = db.session.get(MeasurementCycle, cycle.previous_cycle_id)
+        if earlier is not None and earlier.org_id == cycle.org_id:
+            earlier_waves = (db.session.query(SurveyDeployment)
+                             .filter_by(cycle_id=earlier.id, org_id=cycle.org_id)
+                             .filter(SurveyDeployment.archived_at.is_(None)).all())
+            if scope_branch is not None:
+                earlier_waves = [w for w in earlier_waves
+                                 if w.branch_id == scope_branch.id]
+            earlier_profiles = scoring.load_profiles(
+                db.session, [w.id for w in earlier_waves],
+                method=earlier.scoring_method)
+            if earlier_profiles:
+                previous = (earlier_profiles,
+                            earlier.assessed_domains or domains.DOMAINS,
+                            earlier.id)
+
+    actions = (db.session.query(ImprovementActions)
+               .filter_by(org_id=cycle.org_id, cycle_id=cycle.id).all())
+
+    return waves, profiles, previous, actions
+
+
+def _build_report(cycle, report_type, scope_branch=None, with_charts=True):
+    """Gate, then build the shared context. Raises ReportNotAvailable."""
+    waves, profiles, previous, actions = _report_inputs(cycle, scope_branch)
+    scope_label = scope_branch.name if scope_branch else 'Whole organisation'
+
+    report_builder.require_reportable(report_type, cycle, waves, profiles, scope_label)
+
+    analysis_row = (db.session.query(Analysis)
+                    .filter_by(org_id=cycle.org_id, cycle_id=cycle.id,
+                               report_type=report_type,
+                               scope_key=(str(scope_branch.id)
+                                          if scope_branch else None))
+                    .order_by(Analysis.generated_at.desc()).first())
+
+    context = report_builder.build_context(
+        report_type=report_type,
+        org=db.session.get(Org, cycle.org_id),
+        cycle=cycle, deployments=waves, profiles=profiles,
+        branch=scope_branch, scope_label=scope_label,
+        segments=active_segments(cycle.org_id),
+        previous=previous, improvement_actions=actions,
+        narrative=(analysis_row.payload if analysis_row else None),
+    )
+    if with_charts:
+        report_builder.add_charts(context)
+    return context
+
+
+def _scope_branch_or_none(cycle):
+    """
+    The branch a Management Report covers.
+
+    A branch admin always gets their own branch — they have no other. An org
+    admin picks one by query parameter.
+    """
+    if is_branch_scoped(current_user):
+        return current_user.branch
+    branch_id = (request.args.get('branch') or '').strip()
+    if not branch_id:
+        return None
+    branch = db.session.get(Branch, branch_id)
+    if branch is None or branch.org_id != cycle.org_id:
+        abort(404)
+    return branch
+
+
+@org_bp.route('/cycles/<cycle_id>/report/<report_type>')
+@require_capability(VIEW_REPORTS)
+def report_preview(cycle_id, report_type):
+    """On-screen preview, and the page the download buttons live on."""
+    if report_type not in report_builder.REPORT_TYPES:
+        abort(404)
+    cycle = _cycle_or_404(cycle_id)
+    scope_branch = (_scope_branch_or_none(cycle)
+                    if report_type == report_builder.MANAGEMENT else None)
+
+    try:
+        context = _build_report(cycle, report_type, scope_branch,
+                                with_charts=False)
+    except report_builder.ReportNotAvailable as exc:
+        return render_template('org/report_unavailable.html', cycle=cycle,
+                               report_type=report_type,
+                               title=report_builder.report_title(report_type),
+                               reason=str(exc)), 200
+
+    return render_template('org/report_preview.html', cycle=cycle,
+                           context=context, report_type=report_type,
+                           branch=scope_branch,
+                           can_interpret=ai_service.api_key_present())
+
+
+@org_bp.route('/cycles/<cycle_id>/report/<report_type>/<fmt>')
+@require_capability(VIEW_REPORTS)
+def report_download(cycle_id, report_type, fmt):
+    """
+    PDF or XLSX. Both built from the same context, so they cannot disagree.
+
+    Every download writes a ReportEvent: §13.4 requires role-based access to
+    results, and this is the evidence that it held.
+    """
+    if report_type not in report_builder.REPORT_TYPES or fmt not in ('pdf', 'xlsx'):
+        abort(404)
+    cycle = _cycle_or_404(cycle_id)
+    scope_branch = (_scope_branch_or_none(cycle)
+                    if report_type == report_builder.MANAGEMENT else None)
+
+    try:
+        context = _build_report(cycle, report_type, scope_branch,
+                                with_charts=(fmt == 'pdf'))
+    except report_builder.ReportNotAvailable as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('org.report_preview', cycle_id=cycle.id,
+                                report_type=report_type))
+
+    org = context['org']
+    if fmt == 'pdf':
+        payload = report_builder.build_pdf(context)
+        mimetype = 'application/pdf'
+    else:
+        payload = report_builder.build_xlsx(context)
+        mimetype = ('application/vnd.openxmlformats-officedocument'
+                    '.spreadsheetml.sheet')
+
+    db.session.add(ReportEvent(
+        org_id=cycle.org_id, cycle_id=cycle.id,
+        report_type=report_type, export_format=fmt,
+        scope_key=(str(scope_branch.id) if scope_branch else None),
+        generated_by=current_user.id,
+    ))
+    record_audit(REPORT_DOWNLOAD, 'cycle', cycle.id,
+                 f'Downloaded the {report_builder.report_title(report_type)} '
+                 f'({fmt.upper()}) for {context["scope_label"]}, n={context["n"]}',
+                 org_id=cycle.org_id,
+                 branch_id=(scope_branch.id if scope_branch else None),
+                 payload={'report_type': report_type, 'format': fmt,
+                          'n': context['n'],
+                          'min_reporting_n': context['min_reporting_n']})
+    db.session.commit()
+
+    filename = report_builder.report_filename(report_type, org.name, cycle.id, fmt)
+    return send_file(io.BytesIO(payload), mimetype=mimetype,
+                     as_attachment=True, download_name=filename)
+
+
+@org_bp.route('/cycles/<cycle_id>/report/<report_type>/interpret',
+              methods=['POST'])
+@require_capability(RUN_ANALYSIS)
+def report_interpret(cycle_id, report_type):
+    """
+    MANUAL TRIGGER ONLY. One human, one button, one report.
+
+    Never auto-dispatched when a response threshold is crossed: a wave that
+    fills up overnight must not spend money, or write a characterisation of a
+    workforce's morale, while nobody is watching.
+    """
+    if report_type not in report_builder.REPORT_TYPES:
+        abort(404)
+    cycle = _cycle_or_404(cycle_id)
+    scope_branch = (_scope_branch_or_none(cycle)
+                    if report_type == report_builder.MANAGEMENT else None)
+
+    try:
+        context = _build_report(cycle, report_type, scope_branch,
+                                with_charts=False)
+    except report_builder.ReportNotAvailable as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('org.report_preview', cycle_id=cycle.id,
+                                report_type=report_type))
+
+    try:
+        payload, usage = ai_service.generate(
+            report_builder.narrative_payload(context),
+            report_builder.NARRATIVE_SECTIONS[report_type],
+            context_note=(
+                f'This is the {report_builder.report_title(report_type)}. '
+                f'Audience: {report_builder.report_audience(report_type)}.'),
+        )
+    except ai_service.NarrativeError as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('org.report_preview', cycle_id=cycle.id,
+                                report_type=report_type))
+
+    scope_key = str(scope_branch.id) if scope_branch else None
+    db.session.add(Analysis(
+        org_id=cycle.org_id, cycle_id=cycle.id,
+        report_type=report_type, scope_key=scope_key,
+        payload=payload, model=ai_service.MODEL,
+        generated_by=current_user.id,
+    ))
+    db.session.add(AiCostEvent(
+        org_id=cycle.org_id, cycle_id=cycle.id, report_type=report_type,
+        model=ai_service.MODEL,
+        input_tokens=usage['input_tokens'],
+        output_tokens=usage['output_tokens'],
+        cost_usd=ai_service.cost_usd(usage['input_tokens'],
+                                     usage['output_tokens']),
+    ))
+    record_audit(ANALYSIS_RUN, 'cycle', cycle.id,
+                 f'Generated the interpretation for the '
+                 f'{report_builder.report_title(report_type)}',
+                 org_id=cycle.org_id,
+                 branch_id=(scope_branch.id if scope_branch else None),
+                 payload={'report_type': report_type,
+                          'sections': sorted(payload.keys())})
+    db.session.commit()
+
+    flash('Interpretation generated.', 'success')
+    return redirect(url_for('org.report_preview', cycle_id=cycle.id,
+                            report_type=report_type))

@@ -37,8 +37,10 @@ pytest -q                        # DB-backed tests skip without TEST_DATABASE_UR
 | 5 | Deployment & the anonymous form | ✅ done |
 | 6 | Scoring engine | ✅ done |
 | 7 | Association engine & Reports screen | ✅ done |
-| 8 | Reports 1 & 2 (Executive, HR & OD) | next |
-| 9–11 | see `docs/jobsat build plan.md` §11 | |
+| 8 | Reports 1 & 2 (Executive, HR & OD) | ✅ done |
+| 9 | Report 3 & trend | ✅ done |
+| 10 | Validation, catalogue, Supabase & Render | next |
+| 11 | Pilot & validation wave | |
 
 ## How associations are reported
 
