@@ -498,15 +498,47 @@ def intervention_entry(domain_code: str, subdomain_code: str) -> dict:
     return INTERVENTION_MAP.get((domain_code, subdomain_code), {})
 
 
-def allows_training(domain_code: str, subdomain_code: str) -> bool:
-    """
-    Whether §11's response categories for this cell include capability
-    development at all.
+# ── Where training may NEVER be recommended ─────────────────────────────────
+#
+# §8.5 is the one EXPLICIT prohibition in the specification:
+#
+#     "Training should not be treated as a substitute for addressing
+#      substantiated compensation inequities or structural reward problems."
+#
+# It names one domain. Nothing else in the specification excludes training
+# anywhere else — §11 closes with "Training is one intervention category among
+# several. The system should recommend training only where a capability or
+# behaviour gap is supported by the diagnostic evidence", which is a rule about
+# EVIDENCE, not a whitelist of cells.
+#
+# AN EARLIER VERSION OF THIS MODULE GOT THAT WRONG. It derived permission from
+# the `types` list below — our reading of §11's prose — and so treated §11's
+# example categories as exhaustive. When the real curriculum arrived, that
+# filter would have silently discarded 14 of the 26 supplied courses, including
+# every course for Trust, Purpose and Impact, and Emotional Experience. The
+# curriculum author's professional judgement about which of their courses serve
+# which finding is not ours to overrule; the specification's one prohibition is.
+#
+# So `types` stays, as the §11 categories a report DISPLAYS alongside any
+# course, and permission is this list and nothing else.
+TRAINING_EXCLUDED_DOMAINS = [PIE]
 
-    app/catalogue.py consults this BEFORE a catalogue row is offered to a
-    report or to the model. False for all three PIE subdomains — see §8.5.
+
+def allows_training(domain_code: str, subdomain_code: str = None) -> bool:
     """
-    return TRAINING in intervention_entry(domain_code, subdomain_code).get('types', [])
+    Whether a capability-development recommendation may be offered for this
+    cell.
+
+    False for every Reward Satisfaction subdomain (§8.5), true elsewhere.
+    app/catalogue.py consults this BEFORE a catalogue row reaches a report or
+    the model, so the prohibition is structural rather than a line in a prompt.
+
+    The supplied curriculum reached the same conclusion independently: it maps
+    no course at all to the three Reward subdomains, offering instead a note
+    that each is addressed by a pay-equity review, market benchmarking or a
+    compensation review.
+    """
+    return domain_code not in TRAINING_EXCLUDED_DOMAINS
 
 
 # ── Segment dimensions (spec §3.2.4) ────────────────────────────────────────

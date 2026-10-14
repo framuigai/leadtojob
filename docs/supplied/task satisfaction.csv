@@ -1,0 +1,13 @@
+Domain Code,Domain Name,Framework Component,Subdomain Code,Subdomain Name,Question Code,Question Wording
+TS,Task Satisfaction,T,TS-T,Thrilling: Autonomy and Control,TS-T01,I have sufficient freedom to decide how I carry out my assigned responsibilities.
+TS,Task Satisfaction,T,TS-T,Thrilling: Autonomy and Control,TS-T02,I can use my judgment when determining the best way to complete my work.
+TS,Task Satisfaction,T,TS-T,Thrilling: Autonomy and Control,TS-T03,I have an appropriate level of control over the sequence or approach I use to perform my tasks.
+TS,Task Satisfaction,T,TS-T,Thrilling: Autonomy and Control,TS-T04,"Within the requirements of my role, I can make decisions without unnecessary interference."
+TS,Task Satisfaction,I,TS-I,Important: Purpose and Impact,TS-I01,I understand how my work contributes to the objectives of my team or organization.
+TS,Task Satisfaction,I,TS-I,Important: Purpose and Impact,TS-I02,I can see the value that my work creates for the people who depend on it.
+TS,Task Satisfaction,I,TS-I,Important: Purpose and Impact,TS-I03,My responsibilities give me a sense that my contribution matters.
+TS,Task Satisfaction,I,TS-I,Important: Purpose and Impact,TS-I04,I understand why the work I do is important to the organization.
+TS,Task Satisfaction,D,TS-D,Daunting: Appropriate Challenge and Development,TS-D01,My work provides a suitable level of challenge for my current capabilities.
+TS,Task Satisfaction,D,TS-D,Daunting: Appropriate Challenge and Development,TS-D02,My responsibilities give me opportunities to develop and strengthen my skills.
+TS,Task Satisfaction,D,TS-D,Daunting: Appropriate Challenge and Development,TS-D03,I can take on challenging tasks without routinely feeling overwhelmed by their demands.
+TS,Task Satisfaction,D,TS-D,Daunting: Appropriate Challenge and Development,TS-D04,My work helps me build the competence I need to perform effectively.

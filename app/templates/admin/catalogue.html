@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Intervention Catalogue - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin</div>
+  <h1>Intervention Catalogue</h1>
+  <p class="muted">
+    {{ total }} topics across
+    {{ programmes|length }} programmes. One catalogue shared by every client:
+    an edit here changes what every organisation's report offers, which is why
+    it is seeded from <code>docs/intervention_catalogue.json</code> rather than
+    edited row by row.
+  </p>
+</div></div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-val">{{ total }}</div>
+    <div class="stat-label">Topics</div></div>
+  <div class="stat-card"><div class="stat-val">{{ programmes|length }}</div>
+    <div class="stat-label">Programmes</div></div>
+  <div class="stat-card"><div class="stat-val">
+    {{ rows|selectattr('covered')|list|length }} / {{ rows|length }}</div>
+    <div class="stat-label">Cells covered</div></div>
+  <div class="stat-card"><div class="stat-val">{{ gaps|length }}</div>
+    <div class="stat-label">Cells with nothing</div></div>
+</div>
+
+{% if gaps %}
+<div class="flash flash-warning">
+  <strong>{{ gaps|length }} cell(s) have no course and are not deliberately
+  course-free.</strong> A finding there produces no recommendation, and the
+  report names the gap rather than printing an empty list &mdash; an empty
+  development section reads exactly like &ldquo;no development needed&rdquo;,
+  which is the worst available reading of a real finding.
+  <ul>{% for gap in gaps %}<li>{{ gap.label }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">By subdomain</div></div>
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Subdomain</th><th>Response categories</th>
+        <th>What a finding here produces</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><strong>{{ row.label }}</strong><br>
+            <span class="muted">{{ domain_label(row.domain_code) }}</span></td>
+          <td class="muted">
+            {{ intervention_map_entry(row.domain_code, row.subdomain_code) }}</td>
+          <td>
+            {% if not row.training_permitted %}
+              <span class="badge badge-outline">no course, by design</span><br>
+              <span class="muted">{{ row.guidance }}</span><br>
+              <span class="muted">Specification &sect;8.5: training is not a
+                substitute for addressing a compensation problem. The supplied
+                curriculum maps no course here either.</span>
+            {% elif row.courses %}
+              <ul style="margin:0;padding-left:1.1rem">
+              {% for course in row.courses %}
+                <li>{{ course.title }}
+                  <span class="muted">&middot; <code>{{ course.intervention_code }}</code>
+                  &middot; {{ course.source_programme }}</span></li>
+              {% endfor %}
+              </ul>
+            {% else %}
+              <span class="status-pill status-amber">no course mapped</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel"><div class="panel-body">
+  <p class="panel-note">
+    <strong>Training is one category among several.</strong> Every report shows
+    the specification's own response categories alongside any course, so a
+    reader is never left with courses as the only visible option. The three
+    Reward Satisfaction subdomains carry no course at all and never will.
+  </p>
+</div></div>
+{% endblock %}

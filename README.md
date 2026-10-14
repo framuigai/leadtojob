@@ -69,7 +69,18 @@ alone. See `reporting_promise()` in `app/survey/routes.py`.
 ```bash
 alembic upgrade head
 python seed_templates.py     # the 48 master items
+python seed_catalogue.py     # the 25 intervention topics
 python seed_admin.py         # the L1 master admin, from SEED_ADMIN_* in .env
 ```
+
+To wipe client data and start a clean test run (development only):
+
+```bash
+python clear_demo_data.py --confirm
+```
+
+It keeps the master template, the catalogue and the L1 account, and refuses to
+run outside development: anonymous responses cannot be collected again, because
+the system does not know who gave them.
 
 Both are idempotent: re-running reports what exists rather than duplicating it.

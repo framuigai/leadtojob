@@ -150,6 +150,8 @@ def _register_template_globals(app):
         TREND_CAVEAT=domains.TREND_CAVEAT,
         DAUNTING_CAVEAT=domains.DAUNTING_CAVEAT,
         INTERVENTION_MAP_NOTE=domains.INTERVENTION_MAP_NOTE,
+        intervention_map_entry=lambda d, s: domains.intervention_entry(
+            d, s).get('categories', ''),
     )
 
 

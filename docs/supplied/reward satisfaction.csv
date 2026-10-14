@@ -1,0 +1,13 @@
+Domain Code,Domain Name,Framework Component,Subdomain Code,Subdomain Name,Question Code,Question Wording
+RW,Reward Satisfaction,P,RW-P,Peer Comparison,RW-P01,I am satisfied with my financial compensation relative to people performing comparable work.
+RW,Reward Satisfaction,P,RW-P,Peer Comparison,RW-P02,My compensation seems reasonable in comparison with employees who have similar responsibilities.
+RW,Reward Satisfaction,P,RW-P,Peer Comparison,RW-P03,I consider my financial compensation appropriate relative to my contribution compared with that of my peers.
+RW,Reward Satisfaction,P,RW-P,Peer Comparison,RW-P04,I am generally satisfied with how my compensation compares with that of people in similar roles.
+RW,Reward Satisfaction,I,RW-I,Industry Comparison,RW-I01,I am satisfied with my financial compensation relative to what I understand comparable roles in my industry to pay.
+RW,Reward Satisfaction,I,RW-I,Industry Comparison,RW-I02,My compensation appears reasonable for the type of work I perform in my industry.
+RW,Reward Satisfaction,I,RW-I,Industry Comparison,RW-I03,I believe my financial compensation is broadly consistent with industry expectations for comparable responsibilities.
+RW,Reward Satisfaction,I,RW-I,Industry Comparison,RW-I04,I am satisfied with my compensation when I consider what similar roles may offer elsewhere in my industry.
+RW,Reward Satisfaction,E,RW-E,Expectations,RW-E01,My financial compensation meets my expectations for the role I perform.
+RW,Reward Satisfaction,E,RW-E,Expectations,RW-E02,I am satisfied with the level of compensation I receive for my responsibilities.
+RW,Reward Satisfaction,E,RW-E,Expectations,RW-E03,My compensation is consistent with the financial expectations I have for my current role.
+RW,Reward Satisfaction,E,RW-E,Expectations,RW-E04,"Considering what I expected to earn in this position, I am satisfied with my current compensation."

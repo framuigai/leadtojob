@@ -1,3 +1,45 @@
+{#
+  WHAT A FINDING MIGHT LEAD TO.
+
+  Two things are rendered together, deliberately:
+
+    - the specification's OWN response categories for the subdomain, and
+    - any catalogue course mapped to it.
+
+  Courses alone would make training the answer, which §11 closes by warning
+  against: "Training is one intervention category among several." Categories
+  alone would make the catalogue pointless. Both, every time.
+
+  The three Reward Satisfaction subdomains carry no course and say so in
+  words, rather than appearing as an empty row that reads like "nothing to do".
+#}
+{% if recommendations %}
+<p class="muted">
+  Shown for the subdomains the reading order puts first. These are possible
+  directions, not instructions.
+</p>
+{% for rec in recommendations %}
+<div class="callout">
+  <strong>{{ rec.subdomain }}</strong><br>
+  <span class="muted">Areas to investigate:</span> {{ rec.areas_to_investigate }}<br>
+  <span class="muted">Possible response categories:</span> {{ rec.response_categories }}
+  {% if rec.courses %}
+  <br><span class="muted">Related capability development:</span>
+  <ul class="plain" style="margin-top:4pt">
+    {% for course in rec.courses %}
+    <li>{{ course.title }} <span class="muted">({{ course.source_programme }})</span></li>
+    {% endfor %}
+  </ul>
+  {% elif not rec.training_permitted %}
+  <br><span class="muted">{{ rec.guidance }}</span>
+  {% else %}
+  <br><span class="muted">No capability development is currently mapped to this
+    subdomain. The response categories above still apply.</span>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
 <table class="data">
   <thead><tr><th>If this is low</th><th>Areas to investigate</th>
     <th>Possible response categories</th></tr></thead>
@@ -14,9 +56,8 @@
   </tbody>
 </table>
 <p class="muted">
-  Training is one response category among several, and it appears above only
-  where the diagnostic evidence supports a capability or behaviour gap. It is
-  deliberately absent from every Reward Satisfaction row: a compensation
-  finding calls for a pay-equity review, market benchmarking or a compensation
-  review, and training is not a substitute for addressing one.
+  Training is one response category among several. It is deliberately absent
+  from every Reward Satisfaction row: a compensation finding calls for a
+  pay-equity review, market benchmarking or a compensation review, and training
+  is not a substitute for addressing one.
 </p>

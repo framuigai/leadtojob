@@ -1,0 +1,13 @@
+Domain Code,Domain Name,Framework Component,Subdomain Code,Subdomain Name,Question Code,Question Wording
+RL,Relationships Satisfaction,B,RL-B,Belonging,RL-B01,I feel that I belong in my team or work group.
+RL,Relationships Satisfaction,B,RL-B,Belonging,RL-B02,I feel accepted by the people with whom I work.
+RL,Relationships Satisfaction,B,RL-B,Belonging,RL-B03,I can participate in team activities without feeling excluded.
+RL,Relationships Satisfaction,B,RL-B,Belonging,RL-B04,I feel that my contribution is recognized as part of the team’s collective effort.
+RL,Relationships Satisfaction,I,RL-I,Positive Interactions,RL-I01,My day-to-day interactions with colleagues are generally constructive.
+RL,Relationships Satisfaction,I,RL-I,Positive Interactions,RL-I02,People I work with communicate with me respectfully.
+RL,Relationships Satisfaction,I,RL-I,Positive Interactions,RL-I03,Workplace disagreements are generally handled in a professional manner.
+RL,Relationships Satisfaction,I,RL-I,Positive Interactions,RL-I04,My interactions with colleagues help me carry out my responsibilities effectively.
+RL,Relationships Satisfaction,T,RL-T,Trust,RL-T01,I can generally rely on the people I work with to fulfil their commitments.
+RL,Relationships Satisfaction,T,RL-T,Trust,RL-T02,People in my team communicate honestly about matters that affect our work.
+RL,Relationships Satisfaction,T,RL-T,Trust,RL-T03,I can raise reasonable concerns without undue fear of negative consequences.
+RL,Relationships Satisfaction,T,RL-T,Trust,RL-T04,I have confidence that workplace concerns will be handled fairly.

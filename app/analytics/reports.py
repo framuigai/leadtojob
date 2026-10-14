@@ -560,6 +560,28 @@ def narrative_payload(context):
         },
     }
 
+    # COURSES THE MODEL MAY NAME, filtered before it sees them.
+    #
+    # The three Reward subdomains carry no course and are absent here entirely,
+    # carrying their §8.5 guidance instead. A model cannot recommend a course
+    # it was never shown, which is a stronger guarantee than instructing it not
+    # to — and the instruction is in the prompt as well.
+    if context.get('recommendations'):
+        payload['available_courses'] = {
+            rec['subdomain']: [
+                {'code': course.intervention_code, 'title': course.title,
+                 'programme': course.source_programme}
+                for course in rec['courses']
+            ] or None
+            for rec in context['recommendations']
+        }
+        payload['reward_findings_are_not_addressed_by_training'] = {
+            domains.subdomain_label(d, s): guidance
+            for (d, s), guidance in __import__(
+                'app.catalogue', fromlist=['REWARD_GUIDANCE']
+            ).REWARD_GUIDANCE.items()
+        }
+
     if context.get('trend'):
         payload['change_since_previous_wave'] = {
             (change.measure_label if hasattr(change, 'measure_label')
@@ -712,6 +734,21 @@ def assemble(db_session, org, cycle, report_type, deployments,
         profiles=profiles, branch=scope_branch, scope_label=scope_label,
         segments=segments, previous=previous, improvement_actions=actions,
         narrative=narrative)
+
+    # Catalogue recommendations are attached HERE rather than in
+    # build_context(), which takes no database session — keeping the context
+    # builder usable from a test with hand-made profiles and no catalogue.
+    #
+    # for_priority() follows the order the engine produced. Two places deciding
+    # what matters most is two places to disagree.
+    from app import catalogue as catalogue_module
+    context['recommendations'] = catalogue_module.for_priority(
+        db_session, context.get('priority'))
+    context['catalogue_by_cell'] = {
+        (c['domain_code'], c['subdomain_code']): c
+        for c in catalogue_module.coverage(db_session)
+    }
+
     if with_charts:
         add_charts(context)
     return context

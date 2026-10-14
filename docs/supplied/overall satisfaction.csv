@@ -1,0 +1,13 @@
+Domain Code,Domain Name,Framework Component,Subdomain Code,Subdomain Name,Question Code,Question Wording
+OS,Overall Satisfaction,G,OS-G,General Job Satisfaction,OS-G01,"Overall, I am satisfied with my current job."
+OS,Overall Satisfaction,G,OS-G,General Job Satisfaction,OS-G02,"Taking everything into account, I consider my current job a good job for me."
+OS,Overall Satisfaction,G,OS-G,General Job Satisfaction,OS-G03,I am generally pleased with the job I currently hold.
+OS,Overall Satisfaction,G,OS-G,General Job Satisfaction,OS-G04,"On balance, I regard my current job as a satisfactory working arrangement for me."
+OS,Overall Satisfaction,E,OS-E,Emotional Experience,OS-E01,My working experience generally leaves me feeling positive.
+OS,Overall Satisfaction,E,OS-E,Emotional Experience,OS-E02,I usually feel content while engaging in my work.
+OS,Overall Satisfaction,E,OS-E,Emotional Experience,OS-E03,My experience of work generally leaves me feeling fulfilled rather than emotionally drained.
+OS,Overall Satisfaction,E,OS-E,Emotional Experience,OS-E04,"When I anticipate a typical working day, I generally experience a positive emotional response."
+OS,Overall Satisfaction,M,OS-M,Match with Overall Expectations,OS-M01,My overall experience of this job is consistent with what I expected when I took it on.
+OS,Overall Satisfaction,M,OS-M,Match with Overall Expectations,OS-M02,This job has met my broader expectations of what a satisfying working experience should be.
+OS,Overall Satisfaction,M,OS-M,Match with Overall Expectations,OS-M03,The overall experience of my current job has lived up to my expectations over time.
+OS,Overall Satisfaction,M,OS-M,Match with Overall Expectations,OS-M04,"Considering what I expected from this job, I am satisfied with what the experience has delivered."

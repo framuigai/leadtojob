@@ -1,0 +1,30 @@
+Domain Code,Domain Name,Subdomain Code,Subdomain Name,Recommended Topic Code,Recommended Topic Name
+OS,Overall Satisfaction,OS-G,General Job Satisfaction,PO-PEX-T01,Translating Goals into Daily Actions
+OS,Overall Satisfaction,OS-G,General Job Satisfaction,PO-PEX-T02,Establishing Productivity Routines
+OS,Overall Satisfaction,OS-E,Emotional Experience,WWO-WCD-T01,Understanding Workplace Well-being as a Performance Driver
+OS,Overall Satisfaction,OS-E,Emotional Experience,WWO-WMP-T05,Managing Stress Through Positive Workplace Behaviors
+OS,Overall Satisfaction,OS-E,Emotional Experience,CO-MPB-T04,Empathy and Emotional Intelligence
+OS,Overall Satisfaction,OS-M,Match with Overall Expectations,PO-EPS-T01,Goal Clarity and Alignment
+OS,Overall Satisfaction,OS-M,Match with Overall Expectations,LD-LCD-LST-T03,Goal Setting and Alignment
+TS,Task Satisfaction,TS-T,Thrilling: Autonomy and Control,PO-PCD-T03,Decision-Making Skills
+TS,Task Satisfaction,TS-T,Thrilling: Autonomy and Control,PO-EPS-T06,Delegation Strategies
+TS,Task Satisfaction,TS-T,Thrilling: Autonomy and Control,LD-LCD-LST-T04,Delegation and Empowerment
+TS,Task Satisfaction,TS-I,Important: Purpose and Impact,PO-EPS-T01,Goal Clarity and Alignment
+TS,Task Satisfaction,TS-I,Important: Purpose and Impact,LD-LCD-LST-T01,Creating Vision and Direction
+TS,Task Satisfaction,TS-I,Important: Purpose and Impact,LD-LCD-LST-T02,Strategic Thinking for Leaders
+TS,Task Satisfaction,TS-D,Daunting: Appropriate Challenge and Development,PO-EPS-T03,Workflow Optimization
+TS,Task Satisfaction,TS-D,Daunting: Appropriate Challenge and Development,PO-EPS-T09,Workload Management
+TS,Task Satisfaction,TS-D,Daunting: Appropriate Challenge and Development,PO-PCD-T05,Problem-Solving Skills
+RL,Relationships Satisfaction,RL-B,Belonging,CO-CCD-T08,Collaboration and Inclusion
+RL,Relationships Satisfaction,RL-B,Belonging,CO-ECS-T05,Creating Collaborative Work Environments
+RL,Relationships Satisfaction,RL-B,Belonging,CO-MPB-T02,Respect in the Workplace
+RL,Relationships Satisfaction,RL-I,Positive Interactions,CO-MPB-T05,Constructive Communication
+RL,Relationships Satisfaction,RL-I,Positive Interactions,CO-MPB-T06,Giving and Receiving Feedback
+RL,Relationships Satisfaction,RL-I,Positive Interactions,CO-MPB-T07,Conflict as a Growth Opportunity
+RL,Relationships Satisfaction,RL-T,Trust,CO-CCD-T05,Psychological Safety Fundamentals
+RL,Relationships Satisfaction,RL-T,Trust,CO-CCD-T06,Trust as the Foundation of Culture
+RL,Relationships Satisfaction,RL-T,Trust,LD-LCD-LFD-T06,Building Trust and Credibility
+RL,Relationships Satisfaction,RL-T,Trust,LD-LCD-LFD-T07,Psychological Safety in Leadership
+RW,Reward Satisfaction,RW-P,Peer Comparison,,"[System Note: Address via internal pay-equity review, not LMS training]"
+RW,Reward Satisfaction,RW-I,Industry Comparison,,"[System Note: Address via market benchmarking, not LMS training]"
+RW,Reward Satisfaction,RW-E,Expectations,,"[System Note: Address via compensation review and communication, not LMS training]"

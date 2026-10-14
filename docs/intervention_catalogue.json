@@ -1,0 +1,381 @@
+{
+  "_source": "docs/supplied/jobs curriculum.csv",
+  "_note": "Generated once from the supplied CSV and reviewed by hand; the CSV is the record of what was supplied, this file is the record of what is seeded, and a JSON file diffs in a pull request where a spreadsheet does not. The three Reward Satisfaction subdomains carry NO COURSE: they appear under \"reward_guidance\" instead, because specification §8.5 is explicit that training is not a substitute for addressing a compensation problem, and the curriculum author reached the same conclusion independently.",
+  "topics": [
+    {
+      "intervention_code": "PO-PEX-T01",
+      "title": "Translating Goals into Daily Actions",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Productivity Optimization",
+      "cells": [
+        {
+          "domain_code": "GEM",
+          "subdomain_code": "G",
+          "subdomain": "General Job Satisfaction"
+        }
+      ]
+    },
+    {
+      "intervention_code": "PO-PEX-T02",
+      "title": "Establishing Productivity Routines",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Productivity Optimization",
+      "cells": [
+        {
+          "domain_code": "GEM",
+          "subdomain_code": "G",
+          "subdomain": "General Job Satisfaction"
+        }
+      ]
+    },
+    {
+      "intervention_code": "WWO-WCD-T01",
+      "title": "Understanding Workplace Well-being as a Performance Driver",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Workplace Well-being Optimization",
+      "cells": [
+        {
+          "domain_code": "GEM",
+          "subdomain_code": "E",
+          "subdomain": "Emotional Experience"
+        }
+      ]
+    },
+    {
+      "intervention_code": "WWO-WMP-T05",
+      "title": "Managing Stress Through Positive Workplace Behaviors",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Workplace Well-being Optimization",
+      "cells": [
+        {
+          "domain_code": "GEM",
+          "subdomain_code": "E",
+          "subdomain": "Emotional Experience"
+        }
+      ]
+    },
+    {
+      "intervention_code": "CO-MPB-T04",
+      "title": "Empathy and Emotional Intelligence",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Culture Optimization",
+      "cells": [
+        {
+          "domain_code": "GEM",
+          "subdomain_code": "E",
+          "subdomain": "Emotional Experience"
+        }
+      ]
+    },
+    {
+      "intervention_code": "PO-EPS-T01",
+      "title": "Goal Clarity and Alignment",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Productivity Optimization",
+      "cells": [
+        {
+          "domain_code": "GEM",
+          "subdomain_code": "M",
+          "subdomain": "Match with Overall Expectations"
+        },
+        {
+          "domain_code": "TID",
+          "subdomain_code": "I",
+          "subdomain": "Purpose and Impact"
+        }
+      ]
+    },
+    {
+      "intervention_code": "LD-LCD-LST-T03",
+      "title": "Goal Setting and Alignment",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Leadership Development",
+      "cells": [
+        {
+          "domain_code": "GEM",
+          "subdomain_code": "M",
+          "subdomain": "Match with Overall Expectations"
+        }
+      ]
+    },
+    {
+      "intervention_code": "PO-PCD-T03",
+      "title": "Decision-Making Skills",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Productivity Optimization",
+      "cells": [
+        {
+          "domain_code": "TID",
+          "subdomain_code": "T",
+          "subdomain": "Autonomy and Control"
+        }
+      ]
+    },
+    {
+      "intervention_code": "PO-EPS-T06",
+      "title": "Delegation Strategies",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Productivity Optimization",
+      "cells": [
+        {
+          "domain_code": "TID",
+          "subdomain_code": "T",
+          "subdomain": "Autonomy and Control"
+        }
+      ]
+    },
+    {
+      "intervention_code": "LD-LCD-LST-T04",
+      "title": "Delegation and Empowerment",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Leadership Development",
+      "cells": [
+        {
+          "domain_code": "TID",
+          "subdomain_code": "T",
+          "subdomain": "Autonomy and Control"
+        }
+      ]
+    },
+    {
+      "intervention_code": "LD-LCD-LST-T01",
+      "title": "Creating Vision and Direction",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Leadership Development",
+      "cells": [
+        {
+          "domain_code": "TID",
+          "subdomain_code": "I",
+          "subdomain": "Purpose and Impact"
+        }
+      ]
+    },
+    {
+      "intervention_code": "LD-LCD-LST-T02",
+      "title": "Strategic Thinking for Leaders",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Leadership Development",
+      "cells": [
+        {
+          "domain_code": "TID",
+          "subdomain_code": "I",
+          "subdomain": "Purpose and Impact"
+        }
+      ]
+    },
+    {
+      "intervention_code": "PO-EPS-T03",
+      "title": "Workflow Optimization",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Productivity Optimization",
+      "cells": [
+        {
+          "domain_code": "TID",
+          "subdomain_code": "D",
+          "subdomain": "Appropriate Challenge and Development"
+        }
+      ]
+    },
+    {
+      "intervention_code": "PO-EPS-T09",
+      "title": "Workload Management",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Productivity Optimization",
+      "cells": [
+        {
+          "domain_code": "TID",
+          "subdomain_code": "D",
+          "subdomain": "Appropriate Challenge and Development"
+        }
+      ]
+    },
+    {
+      "intervention_code": "PO-PCD-T05",
+      "title": "Problem-Solving Skills",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Productivity Optimization",
+      "cells": [
+        {
+          "domain_code": "TID",
+          "subdomain_code": "D",
+          "subdomain": "Appropriate Challenge and Development"
+        }
+      ]
+    },
+    {
+      "intervention_code": "CO-CCD-T08",
+      "title": "Collaboration and Inclusion",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Culture Optimization",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "B",
+          "subdomain": "Belonging"
+        }
+      ]
+    },
+    {
+      "intervention_code": "CO-ECS-T05",
+      "title": "Creating Collaborative Work Environments",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Culture Optimization",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "B",
+          "subdomain": "Belonging"
+        }
+      ]
+    },
+    {
+      "intervention_code": "CO-MPB-T02",
+      "title": "Respect in the Workplace",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Culture Optimization",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "B",
+          "subdomain": "Belonging"
+        }
+      ]
+    },
+    {
+      "intervention_code": "CO-MPB-T05",
+      "title": "Constructive Communication",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Culture Optimization",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "I",
+          "subdomain": "Positive Interactions"
+        }
+      ]
+    },
+    {
+      "intervention_code": "CO-MPB-T06",
+      "title": "Giving and Receiving Feedback",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Culture Optimization",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "I",
+          "subdomain": "Positive Interactions"
+        }
+      ]
+    },
+    {
+      "intervention_code": "CO-MPB-T07",
+      "title": "Conflict as a Growth Opportunity",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Culture Optimization",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "I",
+          "subdomain": "Positive Interactions"
+        }
+      ]
+    },
+    {
+      "intervention_code": "CO-CCD-T05",
+      "title": "Psychological Safety Fundamentals",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Culture Optimization",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "T",
+          "subdomain": "Trust"
+        }
+      ]
+    },
+    {
+      "intervention_code": "CO-CCD-T06",
+      "title": "Trust as the Foundation of Culture",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Culture Optimization",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "T",
+          "subdomain": "Trust"
+        }
+      ]
+    },
+    {
+      "intervention_code": "LD-LCD-LFD-T06",
+      "title": "Building Trust and Credibility",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Leadership Development",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "T",
+          "subdomain": "Trust"
+        }
+      ]
+    },
+    {
+      "intervention_code": "LD-LCD-LFD-T07",
+      "title": "Psychological Safety in Leadership",
+      "intervention_type": "training",
+      "actionable_by": "org",
+      "source_programme": "Leadership Development",
+      "cells": [
+        {
+          "domain_code": "BIT",
+          "subdomain_code": "T",
+          "subdomain": "Trust"
+        }
+      ]
+    }
+  ],
+  "reward_guidance": [
+    {
+      "domain_code": "PIE",
+      "subdomain_code": "P",
+      "subdomain": "Peer Comparison",
+      "guidance": "Address via internal pay-equity review, not LMS training"
+    },
+    {
+      "domain_code": "PIE",
+      "subdomain_code": "I",
+      "subdomain": "Industry Comparison",
+      "guidance": "Address via market benchmarking, not LMS training"
+    },
+    {
+      "domain_code": "PIE",
+      "subdomain_code": "E",
+      "subdomain": "Expectations",
+      "guidance": "Address via compensation review and communication, not LMS training"
+    }
+  ]
+}

@@ -26,6 +26,7 @@ from app.admin import admin_bp
 # called reports() and the two blueprints are read side by side. Keeping one
 # name for the module everywhere is cheaper than remembering which file is
 # safe.
+from app import catalogue as catalogue_module
 from app.analytics import reports as report_builder
 from app.audit import (
     ORG_CREATE, ORG_EDIT, REPORT_DOWNLOAD, USER_CREATE, USER_DEACTIVATE,
@@ -34,8 +35,8 @@ from app.audit import (
 from app.auth.routes import require_capability
 from app.domains import DOMAINS, MASTER_ORG_ID, SUBDOMAINS, subdomain_label
 from app.models import (
-    AiCostEvent, Analysis, AuditEvent, Branch, MeasurementCycle, Org,
-    ReportEvent, SurveyDeployment, SurveyItem, User,
+    AiCostEvent, Analysis, AuditEvent, Branch, InterventionCatalogue,
+    MeasurementCycle, Org, ReportEvent, SurveyDeployment, SurveyItem, User,
 )
 from app.permissions import (
     CREATABLE_ROLES, EDIT_TEMPLATES, MANAGE_CATALOGUE, MANAGE_ORGS, ORG_ADMIN,
@@ -424,15 +425,27 @@ def audit_log():
 @admin_bp.route('/catalogue')
 @require_capability(MANAGE_CATALOGUE)
 def catalogue():
-    return render_template(
-        'admin/placeholder.html',
-        heading='Intervention Catalogue',
-        phase='Phase 10',
-        detail='One catalogue shared by every tenant, joined on '
-               '(domain, subdomain) and filtered by intervention type. '
-               'A draft mapping is already supplied; see '
-               'docs/workbook_reconciliation.md.',
-    )
+    """
+    One catalogue, shared by every tenant.
+
+    `intervention_catalogue` has no org_id, so a single edit here changes what
+    every client's report offers. That is why it is L1-only and why it is
+    seeded from a reviewable JSON file rather than edited row by row.
+
+    The screen is organised by CELL rather than by course, because the question
+    an operator actually has is "what would a finding here produce?" — and the
+    answer "nothing" is the one worth seeing.
+    """
+    rows = catalogue_module.coverage(db.session)
+    total = db.session.query(InterventionCatalogue).filter_by(is_active=True).count()
+    programmes = sorted({
+        r.source_programme for r in
+        db.session.query(InterventionCatalogue).filter_by(is_active=True).all()
+        if r.source_programme})
+    gaps = [r for r in rows if not r['covered']]
+    return render_template('admin/catalogue.html', rows=rows, total=total,
+                           programmes=programmes, gaps=gaps,
+                           reward_guidance=catalogue_module.REWARD_GUIDANCE)
 
 
 @admin_bp.route('/usage')
