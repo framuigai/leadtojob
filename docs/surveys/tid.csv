@@ -1,0 +1,13 @@
+domain_code,subdomain_code,ordinal,item_code,item_text
+TID,T,1,TID-T-01,I have sufficient freedom to decide how I carry out my assigned responsibilities.
+TID,T,2,TID-T-02,I can use my judgment when determining the best way to complete my work.
+TID,T,3,TID-T-03,I have an appropriate level of control over the sequence or approach I use to perform my tasks.
+TID,T,4,TID-T-04,"Within the requirements of my role, I can make decisions without unnecessary interference."
+TID,I,1,TID-I-01,I understand how my work contributes to the objectives of my team or organization.
+TID,I,2,TID-I-02,I can see the value that my work creates for the people who depend on it.
+TID,I,3,TID-I-03,My responsibilities give me a sense that my contribution matters.
+TID,I,4,TID-I-04,I understand why the work I do is important to the organization.
+TID,D,1,TID-D-01,My work provides a suitable level of challenge for my current capabilities.
+TID,D,2,TID-D-02,My responsibilities give me opportunities to develop and strengthen my skills.
+TID,D,3,TID-D-03,I can take on challenging tasks without routinely feeling overwhelmed by their demands.
+TID,D,4,TID-D-04,My work helps me build the competence I need to perform effectively.

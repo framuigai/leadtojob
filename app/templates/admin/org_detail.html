@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ org.name }} - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">Master Admin</div>
+    <h1>{{ org.name }}</h1>
+    <p class="muted">{{ org.industry or 'No industry recorded' }}</p>
+  </div>
+  <div class="page-actions">
+    {% if not org.setup_complete %}
+    <form method="post" action="{{ url_for('admin.org_complete', org_id=org.id) }}"
+          style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary">Complete setup</button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">All organisations</a>
+  </div>
+</div>
+
+{% if not org.setup_complete %}
+<div class="flash flash-warning">
+  Setup is incomplete. This organisation needs at least one administrator before
+  anyone at the client can sign in.
+</div>
+{% endif %}
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-val">{{ item_count }}</div>
+    <div class="stat-label">Instrument items</div></div>
+  <div class="stat-card"><div class="stat-val">{{ admins|length }}</div>
+    <div class="stat-label">Administrators</div></div>
+  <div class="stat-card"><div class="stat-val">{{ branches|length }}</div>
+    <div class="stat-label">Branches</div></div>
+  <div class="stat-card"><div class="stat-val">{{ cycles|length }}</div>
+    <div class="stat-label">Cycles</div></div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">Administrators</div>
+    <a href="{{ url_for('admin.org_admin_new', org_id=org.id) }}"
+       class="btn btn-sm btn-primary">+ Organisation admin</a>
+  </div>
+  <div class="panel-body">
+  {% if admins %}
+    <table class="table">
+      <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for u in admins %}
+        <tr>
+          <td>{{ u.email }}</td>
+          <td>{{ u.full_name or '-' }}</td>
+          <td>{{ role_label(u.role) }}</td>
+          <td>{% if u.is_active %}Active{% else %}
+              <span class="badge badge-outline">Deactivated</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No administrators yet.</p>
+  {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Measurement cycles</div></div>
+  <div class="panel-body">
+  {% if cycles %}
+    <table class="table">
+      <thead><tr><th>Reference</th><th>Name</th><th>Status</th><th>Threshold</th></tr></thead>
+      <tbody>
+      {% for c in cycles %}
+        <tr><td><code>{{ c.id }}</code></td><td>{{ c.cycle_name }}</td>
+            <td>{{ c.status }}</td><td>n &ge; {{ c.min_reporting_n }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No cycles yet. The client creates these themselves.</p>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}

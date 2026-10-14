@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{{ cycle.cycle_name }} - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">{{ role_label(current_user.role) }} / Cycle</div>
+    <h1>{{ cycle.cycle_name }}</h1>
+    <p class="muted"><code>{{ cycle.id }}</code> &middot; {{ cycle.status }}
+      {% if cycle.is_pilot %} &middot; pilot wave{% endif %}</p>
+  </div>
+  <div class="page-actions">
+    {% if can(current_user, 'manage_cycles') %}
+      <a href="{{ url_for('org.cycle_edit', cycle_id=cycle.id) }}"
+         class="btn btn-secondary">Edit</a>
+      {% if cycle.status == 'draft' %}
+      <form method="post" action="{{ url_for('org.cycle_status', cycle_id=cycle.id) }}"
+            style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="status" value="open">
+        <button type="submit" class="btn btn-primary">Open the wave</button>
+      </form>
+      {% elif cycle.status == 'open' %}
+      <form method="post" action="{{ url_for('org.cycle_status', cycle_id=cycle.id) }}"
+            style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="status" value="closed">
+        <button type="submit" class="btn btn-secondary">Close the wave</button>
+      </form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-val">{{ waves|length }}</div>
+    <div class="stat-label">Deployments</div></div>
+  <div class="stat-card"><div class="stat-val">{{ responses }}</div>
+    <div class="stat-label">Responses</div></div>
+  <div class="stat-card"><div class="stat-val">{{ cycle.min_reporting_n }}</div>
+    <div class="stat-label">Reporting threshold</div></div>
+  <div class="stat-card"><div class="stat-val">{{ cycle.retention_months }}</div>
+    <div class="stat-label">Retention (months)</div></div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">What respondents are told</div></div>
+  <div class="panel-body">
+    <p class="panel-note">
+      This is rendered on the survey landing page, before the first question.
+      The specification requires respondents be told the purpose, how results
+      will be used, and that honest answers carry no consequence.
+    </p>
+    <blockquote style="border-left:3px solid var(--border);padding-left:1rem;
+                       margin:0;color:var(--text)">
+      {{ cycle.purpose_statement }}
+    </blockquote>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Scope and method</div></div>
+  <div class="panel-body">
+    <table class="table">
+      <tbody>
+      <tr><th style="width:16rem">Domains measured</th><td>
+        {% for d in cycle.assessed_domains or [] %}{{ domain_label(d) }}{% if not loop.last %}, {% endif %}{% endfor %}
+      </td></tr>
+      <tr><th>Domain scoring method</th><td>
+        {% if cycle.scoring_method == 'mean_of_subdomains' %}
+          Mean of the three subdomain scores
+        {% else %}Mean of all valid domain items{% endif %}
+        <br><span class="muted">Frozen for this wave. Printed in every report
+        generated from it.</span>
+      </td></tr>
+      <tr><th>Minimum reporting threshold</th><td>
+        n &ge; {{ cycle.min_reporting_n }}
+        <br><span class="muted">Any group below this is suppressed, and its
+        next-smallest sibling with it, so the suppressed figure cannot be
+        recovered by subtraction.</span>
+      </td></tr>
+      <tr><th>Previous wave</th><td>
+        {% if cycle.previous_cycle_id %}<code>{{ cycle.previous_cycle_id }}</code>
+        {% else %}<span class="muted">none - this is a baseline</span>{% endif %}
+      </td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Deployments</div></div>
+  <div class="panel-body">
+  {% if waves %}
+    <table class="table">
+      <thead><tr><th>Scope</th><th>Mode</th><th class="num">Responses</th>
+        <th>Status</th></tr></thead>
+      <tbody>
+      {% for w in waves %}
+        <tr>
+          <td>{% if w.branch_id %}branch{% else %}organisation-wide{% endif %}</td>
+          <td>{{ w.delivery_mode }}</td>
+          <td class="num">{{ w.responses_received }} / {{ w.expected_respondents }}</td>
+          <td>{{ 'closed' if w.closed else 'open' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Not deployed yet. Deployment arrives in phase 5.</p>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}

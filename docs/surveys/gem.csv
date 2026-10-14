@@ -1,0 +1,13 @@
+domain_code,subdomain_code,ordinal,item_code,item_text
+GEM,G,1,GEM-G-01,"Overall, I am satisfied with my current job."
+GEM,G,2,GEM-G-02,"Taking everything into account, I consider my current job a good job for me."
+GEM,G,3,GEM-G-03,I am generally pleased with the job I currently hold.
+GEM,G,4,GEM-G-04,"On balance, I regard my current job as a satisfactory working arrangement for me."
+GEM,E,1,GEM-E-01,My working experience generally leaves me feeling positive.
+GEM,E,2,GEM-E-02,I usually feel content while engaging in my work.
+GEM,E,3,GEM-E-03,My experience of work generally leaves me feeling fulfilled rather than emotionally drained.
+GEM,E,4,GEM-E-04,"When I anticipate a typical working day, I generally experience a positive emotional response."
+GEM,M,1,GEM-M-01,My overall experience of this job is consistent with what I expected when I took it on.
+GEM,M,2,GEM-M-02,This job has met my broader expectations of what a satisfying working experience should be.
+GEM,M,3,GEM-M-03,The overall experience of my current job has lived up to my expectations over time.
+GEM,M,4,GEM-M-04,"Considering what I expected from this job, I am satisfied with what the experience has delivered."

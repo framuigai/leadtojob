@@ -1,0 +1,13 @@
+domain_code,subdomain_code,ordinal,item_code,item_text
+BIT,B,1,BIT-B-01,I feel that I belong in my team or work group.
+BIT,B,2,BIT-B-02,I feel accepted by the people with whom I work.
+BIT,B,3,BIT-B-03,I can participate in team activities without feeling excluded.
+BIT,B,4,BIT-B-04,I feel that my contribution is recognized as part of the team’s collective effort.
+BIT,I,1,BIT-I-01,My day-to-day interactions with colleagues are generally constructive.
+BIT,I,2,BIT-I-02,People I work with communicate with me respectfully.
+BIT,I,3,BIT-I-03,Workplace disagreements are generally handled in a professional manner.
+BIT,I,4,BIT-I-04,My interactions with colleagues help me carry out my responsibilities effectively.
+BIT,T,1,BIT-T-01,I can generally rely on the people I work with to fulfil their commitments.
+BIT,T,2,BIT-T-02,People in my team communicate honestly about matters that affect our work.
+BIT,T,3,BIT-T-03,I can raise reasonable concerns without undue fear of negative consequences.
+BIT,T,4,BIT-T-04,I have confidence that workplace concerns will be handled fairly.

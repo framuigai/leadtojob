@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ segment.label }} - leadTo{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">{{ role_label(current_user.role) }} / Segment</div>
+    <h1>{{ segment.label }}</h1>
+    <p class="muted"><code>{{ segment.segment_key }}</code></p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('org.segments_list') }}" class="btn btn-secondary">All segments</a>
+  </div>
+</div>
+
+{% if segment.frozen_at %}
+<div class="flash flash-warning">
+  Frozen on {{ segment.frozen_at.strftime('%d %b %Y') }}, when the first
+  response arrived. Options are read-only from here: renaming one now would
+  re-group answers that were given under the old meaning, and nothing in the
+  data would reveal it had happened.
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">Options</div>
+    {% if not segment.frozen_at %}
+    <form method="post" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="toggle_active">
+      <button type="submit" class="btn btn-sm btn-secondary">
+        {{ 'Deactivate segment' if segment.is_active else 'Activate segment' }}</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="panel-body">
+    <table class="table">
+      <thead><tr><th>Code</th><th>Label</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for o in segment.options|sort(attribute='sort_order') %}
+        <tr><td><code>{{ o.option_code }}</code></td><td>{{ o.option_label }}</td>
+            <td>{{ 'active' if o.is_active else 'inactive' }}</td></tr>
+      {% else %}
+        <tr><td colspan="3" class="muted">No options yet. A segment with no
+          options cannot be activated - it would render an empty dropdown on
+          the survey form.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    {% if not segment.frozen_at %}
+    <form method="post" novalidate style="margin-top:1.5rem">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="add_option">
+      <div class="form-group"><label for="option_code">Code</label>
+        <input type="text" id="option_code" name="option_code" required
+               placeholder="FIN" maxlength="50">
+        <small class="muted">Stored on every response. Short and stable - the
+          label can change until the segment freezes, the code should not.</small>
+      </div>
+      <div class="form-group"><label for="option_label">Label</label>
+        <input type="text" id="option_label" name="option_label" required
+               placeholder="Finance"></div>
+      <button type="submit" class="btn btn-primary">Add option</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

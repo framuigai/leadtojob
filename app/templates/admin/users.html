@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Users - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin</div>
+  <h1>Users</h1>
+  <p class="muted">Administrators only. Survey respondents are never users -
+    they reach the system through an anonymous link and the platform holds no
+    record of who they are.</p>
+</div></div>
+<div class="panel"><div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>Email</th><th>Role</th><th>Organisation</th><th>Branch</th>
+      <th>Last signed in</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td>{{ u.email }}</td>
+        <td>{{ role_label(u.role) }}</td>
+        <td>{% if u.org_id and u.org_id in orgs %}{{ orgs[u.org_id].name }}
+            {% else %}<span class="muted">platform</span>{% endif %}</td>
+        <td>{% if u.branch_id and u.branch_id in branches %}{{ branches[u.branch_id].name }}
+            {% else %}-{% endif %}</td>
+        <td>{{ u.last_login_at.strftime('%d %b %Y') if u.last_login_at else 'Never' }}</td>
+        <td>{% if u.is_active %}Active{% else %}
+            <span class="badge badge-outline">Deactivated</span>{% endif %}</td>
+        <td class="row-actions">
+          {% if u.id != current_user.id %}
+          <form method="post" action="{{ url_for('admin.user_toggle', user_id=u.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-secondary">
+              {{ 'Deactivate' if u.is_active else 'Reactivate' }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

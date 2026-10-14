@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Audit Log - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin</div>
+  <h1>Audit Log</h1>
+  <p class="muted">Append-only. Showing the most recent 500 actions.</p>
+</div></div>
+
+<form method="get" class="filter-bar">
+  <div class="filter-field">
+    <label for="action">Action</label>
+    <select id="action" name="action" onchange="this.form.submit()">
+      <option value="">All actions</option>
+      {% for a in actions %}
+      <option value="{{ a }}" {% if a == selected %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+
+<div class="panel"><div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th>
+      <th>Summary</th><th>Organisation</th></tr></thead>
+    <tbody>
+    {% for e in events %}
+      <tr>
+        <td>{{ e.created_at.strftime('%d %b %Y %H:%M') if e.created_at else '-' }}</td>
+        <td>{{ e.actor_email }}<br><span class="muted">{{ role_label(e.actor_role) }}</span></td>
+        <td><code>{{ e.action }}</code></td>
+        <td>{{ e.target_type }}</td>
+        <td>{{ e.summary }}</td>
+        <td>{% if e.org_id and e.org_id in orgs %}{{ orgs[e.org_id].name }}
+            {% else %}-{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">Nothing logged yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

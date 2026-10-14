@@ -1,0 +1,13 @@
+domain_code,subdomain_code,ordinal,item_code,item_text
+PIE,P,1,PIE-P-01,I am satisfied with my financial compensation relative to people performing comparable work.
+PIE,P,2,PIE-P-02,My compensation seems reasonable in comparison with employees who have similar responsibilities.
+PIE,P,3,PIE-P-03,I consider my financial compensation appropriate relative to my contribution compared with that of my peers.
+PIE,P,4,PIE-P-04,I am generally satisfied with how my compensation compares with that of people in similar roles.
+PIE,I,1,PIE-I-01,I am satisfied with my financial compensation relative to what I understand comparable roles in my industry to pay.
+PIE,I,2,PIE-I-02,My compensation appears reasonable for the type of work I perform in my industry.
+PIE,I,3,PIE-I-03,I believe my financial compensation is broadly consistent with industry expectations for comparable responsibilities.
+PIE,I,4,PIE-I-04,I am satisfied with my compensation when I consider what similar roles may offer elsewhere in my industry.
+PIE,E,1,PIE-E-01,My financial compensation meets my expectations for the role I perform.
+PIE,E,2,PIE-E-02,I am satisfied with the level of compensation I receive for my responsibilities.
+PIE,E,3,PIE-E-03,My compensation is consistent with the financial expectations I have for my current role.
+PIE,E,4,PIE-E-04,"Considering what I expected to earn in this position, I am satisfied with my current compensation."

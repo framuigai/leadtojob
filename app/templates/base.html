@@ -53,15 +53,20 @@
                 <a href="{{ url_for('org.segments_list') }}"     class="nav-link">Segments</a>
                 <a href="{{ url_for('org.deployments_list') }}"  class="nav-link">Deployments</a>
                 <a href="{{ url_for('org.branches_list') }}"     class="nav-link">Branches</a>
+                <a href="{{ url_for('org.instrument') }}"        class="nav-link">Instrument</a>
                 <a href="{{ url_for('org.reports') }}"           class="nav-link">Reports</a>
             {% elif current_user.role == 'branch_admin' %}
-                {# L3: no Branches tab — they manage none — and no Segments tab:
-                   the reporting vocabulary is the org's, frozen before a wave
-                   opens, or two spellings of one department become two groups
-                   and neither reaches the reporting threshold. #}
+                {# L3: no Branches tab — they manage none. Segments IS shown,
+                   but read-only: a branch admin needs to know which groups
+                   their results will be broken down by, while the vocabulary
+                   itself stays the organisation's. If two branches could each
+                   add options, two spellings of one department become two
+                   groups and neither reaches the reporting threshold. #}
                 <a href="{{ url_for('org.dashboard') }}"         class="nav-link">Dashboard</a>
                 <a href="{{ url_for('org.cycles_list') }}"       class="nav-link">Cycles</a>
+                <a href="{{ url_for('org.segments_list') }}"     class="nav-link">Segments</a>
                 <a href="{{ url_for('org.deployments_list') }}"  class="nav-link">Deployments</a>
+                <a href="{{ url_for('org.instrument') }}"        class="nav-link">Instrument</a>
                 <a href="{{ url_for('org.reports') }}"           class="nav-link">Reports</a>
             {% elif current_user.role == 'master_admin' %}
                 <a href="{{ url_for('admin.dashboard') }}"       class="nav-link">All Orgs</a>

@@ -441,6 +441,27 @@ body {
     font-weight: 600;
 }
 
+/* Status-pill colours.
+   NOTE these describe an OPERATIONAL state — a wave open / a cycle closed / an
+   organisation overdue for a measurement. They NEVER encode a satisfaction
+   score. Score bands are not validated for this instrument (specification
+   §10.5), so no result is ever coloured green-is-good / red-is-bad. Scores are
+   drawn with the response-anchor ramp instead; see app/analytics/charts.py. */
+.status-green  { background: #dcfce7; color: #166534; }
+.status-amber  { background: #fef3c7; color: #92400e; }
+.status-red    { background: #fee2e2; color: #991b1b; }
+
+/* Suppressed: a group below the minimum reporting threshold. Deliberately
+   NEUTRAL, not red — suppression is the system working as designed, not a
+   fault, and a red pill invites a reader to treat it as a problem to get
+   around. */
+.status-suppressed { background: var(--surface-2, #f1f5f9); color: #475569;
+                     border: 1px solid var(--border, #e2e8f0); }
+
+.muted { color: var(--text-muted); }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+blockquote { font-style: normal; }
+
 /* ── Class dots ──────────────────────────────────────────────────────── */
 .class-dot {
     width: 10px;

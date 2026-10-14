@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ domain_label(domain_code) }} - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">Master Admin / Instrument</div>
+    <h1>{{ domain_label(domain_code) }}</h1>
+    <p class="muted">{{ domain_definition(domain_code) }}</p>
+    {% if domain_scope_note(domain_code) %}
+    <p class="muted"><strong>Scope:</strong> {{ domain_scope_note(domain_code) }}</p>
+    {% endif %}
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('admin.templates_list') }}" class="btn btn-secondary">All domains</a>
+  </div>
+</div>
+
+{% for code, label, items in grouped %}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">{{ label }}</div>
+    <span class="badge badge-outline">{{ items|length }} items</span>
+  </div>
+  <div class="panel-body">
+    <p class="panel-note">{{ subdomain_definition(domain_code, code) }}</p>
+    {% if domain_code == 'TID' and code == 'D' %}
+    <div class="flash flash-info">{{ DAUNTING_CAVEAT }}</div>
+    {% endif %}
+    <table class="table">
+      <thead><tr><th style="width:8rem">Code</th><th>Question</th></tr></thead>
+      <tbody>
+      {% for i in items %}
+        <tr><td><code>{{ i.item_code }}</code></td><td>{{ i.item_text }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+
+<p class="muted">
+  Item codes and subdomain names appear on this screen because it belongs to the
+  people who own the instrument. None of them is ever rendered on the survey
+  form a respondent sees.
+</p>
+{% endblock %}

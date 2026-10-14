@@ -44,22 +44,46 @@
 
 <div class="stats-row">
     <div class="stat-card">
-        <div class="stat-val">—</div>
+        <div class="stat-val">{{ stats.responses }}</div>
         <div class="stat-label">Responses</div>
     </div>
     <div class="stat-card">
-        <div class="stat-val">—</div>
+        <div class="stat-val">{% if stats.rate is not none %}{{ stats.rate }}%{% else %}—{% endif %}</div>
         <div class="stat-label">Response rate</div>
     </div>
     <div class="stat-card">
-        <div class="stat-val">—</div>
+        <div class="stat-val">{{ stats.open_waves }}</div>
         <div class="stat-label">Open waves</div>
     </div>
     <div class="stat-card">
-        <div class="stat-val">—</div>
+        <div class="stat-val">n &ge; {{ stats.min_n }}</div>
         <div class="stat-label">Reporting threshold</div>
     </div>
 </div>
+
+{% if cycles %}
+<div class="panel">
+    <div class="panel-head">
+        <div class="panel-title">Recent cycles</div>
+        <a href="{{ url_for('org.cycles_list') }}" class="btn btn-sm btn-secondary">All cycles</a>
+    </div>
+    <div class="panel-body">
+        <table class="table">
+            <thead><tr><th>Reference</th><th>Name</th><th>Status</th><th>Threshold</th></tr></thead>
+            <tbody>
+            {% for c in cycles %}
+            <tr>
+                <td><code>{{ c.id }}</code></td>
+                <td><a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">{{ c.cycle_name }}</a></td>
+                <td><span class="status-pill status-{{ 'green' if c.status == 'open' else 'amber' if c.status == 'draft' else 'red' }}">{{ c.status }}</span></td>
+                <td>n &ge; {{ c.min_reporting_n }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 
 <div class="panel">
     <div class="panel-head">

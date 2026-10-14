@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Measurement Cycles - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">{{ role_label(current_user.role) }}</div>
+    <h1>Measurement Cycles</h1>
+    <p class="muted">A cycle is a measurement wave - "Employee Satisfaction
+      Survey 2026 H1" - not a person and not a position.</p>
+  </div>
+  <div class="page-actions">
+    {% if can(current_user, 'manage_cycles') %}
+    <a href="{{ url_for('org.cycle_new') }}" class="btn btn-primary">+ New cycle</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel"><div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>Reference</th><th>Name</th><th>Domains</th><th>Status</th>
+      <th class="num">Waves</th><th>Threshold</th><th>Retention</th><th></th></tr></thead>
+    <tbody>
+    {% for c in cycles %}
+      <tr>
+        <td><code>{{ c.id }}</code>{% if c.is_pilot %}
+            <span class="badge badge-outline">pilot</span>{% endif %}</td>
+        <td><strong>{{ c.cycle_name }}</strong>
+            {% if c.previous_cycle_id %}<br>
+            <span class="muted">follows {{ c.previous_cycle_id }}</span>{% endif %}</td>
+        <td>{{ (c.assessed_domains or [])|length }} of 4</td>
+        <td><span class="status-pill status-{{ 'green' if c.status == 'open'
+             else 'amber' if c.status == 'draft' else 'red' }}">{{ c.status }}</span></td>
+        <td class="num">{{ waves.get(c.id, 0) }}</td>
+        <td>n &ge; {{ c.min_reporting_n }}</td>
+        <td>{{ c.retention_months }} months</td>
+        <td class="row-actions">
+          <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}"
+             class="btn btn-sm btn-secondary">Open</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="muted">No cycles yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

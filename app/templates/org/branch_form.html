@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}New branch - leadTo{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">{{ role_label(current_user.role) }}</div>
+  <h1>New branch</h1>
+</div></div>
+<div class="panel"><div class="panel-body">
+  <form method="post" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label for="name">Branch name</label>
+      <input type="text" id="name" name="name" required autofocus
+             value="{{ request.form.get('name', '') }}"></div>
+    <button type="submit" class="btn btn-primary">Create branch</button>
+    <a href="{{ url_for('org.branches_list') }}" class="btn btn-secondary">Cancel</a>
+  </form>
+</div></div>
+{% endblock %}

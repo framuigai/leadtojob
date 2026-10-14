@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}New Organisation - leadTo{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin</div>
+  <h1>New Organisation</h1>
+</div></div>
+
+<div class="panel"><div class="panel-body">
+  <p class="panel-note">
+    The organisation is created immediately as a <strong>resumable draft</strong>
+    and gets its own frozen copy of the 48-item instrument. You can close this
+    tab after saving and finish setup later.
+  </p>
+  <form method="post" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label for="name">Organisation name</label>
+      <input type="text" id="name" name="name" required autofocus
+             value="{{ request.form.get('name', '') }}">
+    </div>
+    <div class="form-group">
+      <label for="industry">Industry (optional)</label>
+      <input type="text" id="industry" name="industry"
+             value="{{ request.form.get('industry', '') }}">
+    </div>
+    <button type="submit" class="btn btn-primary">Create organisation</button>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">Cancel</a>
+  </form>
+</div></div>
+{% endblock %}

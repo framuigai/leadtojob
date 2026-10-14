@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Reporting Segments - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">{{ role_label(current_user.role) }}</div>
+    <h1>Reporting Segments</h1>
+    <p class="muted">The dimensions results can be broken down by. Respondents
+      declare these themselves at the start of the survey - no staff list is
+      ever imported.</p>
+  </div>
+  <div class="page-actions">
+    {% if can_manage %}
+    <a href="{{ url_for('org.segment_new') }}" class="btn btn-primary">+ New segment</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel"><div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>Segment</th><th>Key</th><th class="num">Options</th>
+      <th>On the form</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for s in segments %}
+      <tr>
+        <td><strong>{{ s.label }}</strong></td>
+        <td><code>{{ s.segment_key }}</code></td>
+        <td class="num">{{ s.options|selectattr('is_active')|list|length }}</td>
+        <td>{{ 'yes' if s.collect_at_survey else 'no' }}</td>
+        <td>
+          {% if s.frozen_at %}<span class="badge badge-outline">frozen</span>
+          {% elif s.is_active %}Active{% else %}
+          <span class="muted">inactive</span>{% endif %}
+        </td>
+        <td class="row-actions">
+          {% if can_manage %}
+          <a href="{{ url_for('org.segment_detail', segment_id=s.id) }}"
+             class="btn btn-sm btn-secondary">Open</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">No segments.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+
+<div class="panel"><div class="panel-body">
+  <p class="panel-note">
+    <strong>Two rules, both about protecting respondents.</strong>
+    Results are reported <strong>one segment at a time</strong>: crossing two of
+    them (department by length of service) narrows groups to a handful of people
+    very fast. And options are a fixed list rather than free text - otherwise
+    three spellings of one department become three groups, none of which reaches
+    the reporting threshold, and the data is not wrong so much as gone.
+  </p>
+  <p class="panel-note">
+    Segments <strong>freeze on the first response</strong> of the first wave
+    that uses them. After that, renaming an option would silently re-group
+    answers given under the old meaning.
+  </p>
+</div></div>
+{% endblock %}

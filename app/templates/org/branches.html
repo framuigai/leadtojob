@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Branches - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">{{ role_label(current_user.role) }}</div>
+    <h1>Branches</h1>
+    <p class="muted">Departments, divisions or sites. One flat level,
+      deliberately not nestable - cross-cutting views are what reporting
+      segments are for.</p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('org.branch_new') }}" class="btn btn-primary">+ New branch</a>
+  </div>
+</div>
+
+<div class="panel"><div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>Branch</th><th class="num">Admins</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for b in branches %}
+      <tr>
+        <td><strong>{{ b.name }}</strong></td>
+        <td class="num">{{ admins.get(b.id, 0) }}</td>
+        <td>{% if b.is_active %}Active{% else %}
+            <span class="badge badge-outline">Inactive</span>{% endif %}</td>
+        <td class="row-actions">
+          <a href="{{ url_for('org.branch_admin_new', branch_id=b.id) }}"
+             class="btn btn-sm btn-secondary">+ Branch admin</a>
+          <form method="post" action="{{ url_for('org.branch_toggle', branch_id=b.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-secondary">
+              {{ 'Deactivate' if b.is_active else 'Reactivate' }}</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">No branches. Branches are optional -
+        a wave with no branch is organisation-wide.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+<p class="muted">Branches are deactivated, never deleted: historical cycles and
+  anonymous responses point at them, and those responses cannot be collected
+  again to repair the link.</p>
+{% endblock %}
