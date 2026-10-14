@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Reports - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin</div>
+  <h1>Reports</h1>
+  <p class="muted">
+    Every client's measurement waves, grouped by organisation. Read-only:
+    reports are opened and downloaded here, never written. Each download is
+    recorded in the audit log.
+  </p>
+</div></div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-val">{{ totals.organisations }}</div>
+    <div class="stat-label">Organisations</div></div>
+  <div class="stat-card"><div class="stat-val">{{ totals.cycles }}</div>
+    <div class="stat-label">Cycles</div></div>
+  <div class="stat-card"><div class="stat-val">{{ totals.ready }}</div>
+    <div class="stat-label">Ready to report</div></div>
+  <div class="stat-card"><div class="stat-val">{{ totals.responses }}</div>
+    <div class="stat-label">Responses</div></div>
+</div>
+
+{% for row in rows %}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">{{ row.org.name }}</div>
+    <a href="{{ url_for('admin.org_detail', org_id=row.org.id) }}"
+       class="btn btn-sm btn-secondary">Organisation</a>
+  </div>
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Cycle</th><th class="num">Responses</th>
+        <th>Threshold</th><th>Status</th><th>Reports</th></tr></thead>
+      <tbody>
+      {% for entry in row.cycles %}
+        <tr>
+          <td><strong>{{ entry.cycle.cycle_name }}</strong><br>
+            <code class="muted">{{ entry.cycle.id }}</code>
+            {% if entry.cycle.is_pilot %}
+            <span class="badge badge-outline">pilot</span>{% endif %}</td>
+          <td class="num">{{ entry.responses }}
+            {%- if entry.expected %} / {{ entry.expected }}{% endif %}</td>
+          <td>n &ge; {{ entry.cycle.min_reporting_n }}</td>
+          <td>
+            <span class="status-pill status-{{ 'green' if entry.state.key == 'ready'
+                else 'suppressed' if entry.state.key == 'below_threshold'
+                else 'amber' }}">
+              {% if entry.state.key == 'ready' %}ready
+              {% elif entry.state.key == 'below_threshold' %}below threshold
+              {% elif entry.state.key == 'open' %}collecting
+              {% else %}not deployed{% endif %}
+            </span>
+            {% if entry.state.needs %}<br>
+            <span class="muted">{{ entry.state.needs }}</span>{% endif %}
+          </td>
+          <td class="row-actions">
+            {% if entry.state.key == 'ready' %}
+              {% for report_type in report_types %}
+              <a href="{{ url_for('admin.org_report', org_id=row.org.id,
+                                  cycle_id=entry.cycle.id,
+                                  report_type=report_type) }}"
+                 class="btn btn-sm btn-secondary">
+                {{ report_title(report_type).replace(' Report', '')
+                                            .replace('HR and Organisational Development',
+                                                     'HR &amp; OD') | safe }}
+                {%- if report_type in entry.narrated %} &middot;
+                <span class="muted">interpreted</span>{% endif %}
+              </a>
+              {% endfor %}
+            {% else %}
+              <span class="muted">&mdash;</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">&mdash;</div>
+  <h2>No client organisations yet</h2>
+  <p>Reports appear here once a client has run a measurement wave.</p>
+</div>
+{% endfor %}
+
+<p class="muted">
+  A wave below its reporting threshold produces no report at all, and no amount
+  of waiting changes that &mdash; it is the threshold working as designed, not a
+  fault to clear.
+</p>
+{% endblock %}

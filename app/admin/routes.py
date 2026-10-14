@@ -28,6 +28,8 @@ from app.admin import admin_bp
 # safe.
 from app import catalogue as catalogue_module
 from app.analytics import reports as report_builder
+from app.analytics import scoring
+from app.analytics import validation as validation_module
 from app.audit import (
     ORG_CREATE, ORG_EDIT, REPORT_DOWNLOAD, USER_CREATE, USER_DEACTIVATE,
     USER_REACTIVATE, record_audit, user_payload,
@@ -507,16 +509,47 @@ def usage():
 @admin_bp.route('/validation')
 @require_capability(VIEW_VALIDATION_REPORT)
 def validation():
-    return render_template(
-        'admin/placeholder.html',
-        heading='Validation Report',
-        phase='Phase 10',
-        detail='Internal psychometrics: internal consistency per subdomain, '
-               'the General Job Satisfaction / Emotional Experience '
-               'discriminant check the specification singles out, item-total '
-               'correlations, and straight-lining rates. Evidence about the '
-               'instrument, not a finding about any client.',
-    )
+    """
+    §15 and §18. Evidence about the INSTRUMENT, not about any client.
+
+    POOLED ACROSS EVERY ORGANISATION BY DEFAULT, and that is the point: the
+    question is whether these 48 questions work, and the answer does not depend
+    on whose staff answered them. Item codes are stable across every cloned
+    copy, so pooling joins like with like.
+
+    It is also why this is L1-only. Handing a client these figures invites the
+    instrument's weaknesses to be read as their organisation's — "our Trust
+    scale is unreliable" is a sentence about our questions, not about their
+    workplace, and it will not be heard that way.
+
+    `?org=<id>` narrows to one client, for checking whether a result holds in a
+    particular setting — §15's "whether the survey works appropriately across
+    different roles and organizational settings".
+    """
+    org_id = (request.args.get('org') or '').strip()
+    scope_org = None
+    if org_id:
+        scope_org = db.session.get(Org, org_id)
+        if scope_org is None or scope_org.id == MASTER_ORG_ID:
+            abort(404)
+
+    waves = (db.session.query(SurveyDeployment)
+             .filter(SurveyDeployment.archived_at.is_(None)))
+    if scope_org is not None:
+        waves = waves.filter(SurveyDeployment.org_id == scope_org.id)
+    wave_ids = [w.id for w in waves.all()]
+
+    profiles = (scoring.load_profiles(db.session, wave_ids)
+                if wave_ids else [])
+    report = validation_module.build(profiles)
+
+    orgs = (db.session.query(Org).filter(Org.id != MASTER_ORG_ID)
+            .order_by(Org.name).all())
+
+    return render_template('admin/validation.html', report=report,
+                           orgs=orgs, scope_org=scope_org,
+                           min_n=validation_module.VALIDATION_MIN_N,
+                           waves=len(wave_ids))
 
 # ── L1 report access — READ ONLY ───────────────────────────────────────────
 #
@@ -653,3 +686,92 @@ def org_report_download(org_id, cycle_id, report_type, fmt):
         io.BytesIO(payload), mimetype=mimetype, as_attachment=True,
         download_name=report_builder.report_filename(
             report_type, org.name, cycle.id, fmt))
+
+@admin_bp.route('/reports')
+@require_capability(MANAGE_ORGS)
+def reports_board():
+    """
+    Every client's reports, on one screen.
+
+    Both sibling products bury this inside the organisation detail page, which
+    is fine when an operator is looking at one client and wrong when they are
+    supporting twelve: the question "which waves are ready to report on" cannot
+    be answered without opening every org in turn.
+
+    Same three states as the client-facing screen — not deployed / still
+    collecting / below the threshold — because they are three different jobs
+    and the third is not a job at all.
+
+    Read-only, like every L1 report path. No interpret action: a narrative
+    about a client's workforce is written by that client's own administrator.
+    """
+    orgs = (db.session.query(Org).filter(Org.id != MASTER_ORG_ID)
+            .order_by(Org.name).all())
+    org_by_id = {o.id: o for o in orgs}
+
+    cycles = (db.session.query(MeasurementCycle)
+              .filter(MeasurementCycle.org_id.in_(list(org_by_id)))
+              .filter(MeasurementCycle.archived_at.is_(None))
+              .order_by(MeasurementCycle.created_at.desc()).all()
+              if org_by_id else [])
+
+    waves_by_cycle = {}
+    for wave in (db.session.query(SurveyDeployment)
+                 .filter(SurveyDeployment.archived_at.is_(None)).all()):
+        waves_by_cycle.setdefault(wave.cycle_id, []).append(wave)
+
+    # One grouped query rather than one per cycle: a platform with forty
+    # clients would otherwise issue forty queries to draw one table.
+    narrated = {
+        (row[0], row[1])
+        for row in db.session.query(Analysis.cycle_id, Analysis.report_type).all()
+    }
+
+    groups = {}
+    for cycle in cycles:
+        waves = waves_by_cycle.get(cycle.id, [])
+        responses = sum(w.responses_received for w in waves)
+        groups.setdefault(cycle.org_id, []).append({
+            'cycle': cycle,
+            'waves': waves,
+            'responses': responses,
+            'expected': sum(w.expected_respondents for w in waves),
+            'state': _report_state(cycle, waves, responses),
+            'narrated': {t for (c, t) in narrated if c == cycle.id},
+        })
+
+    rows = [{'org': org_by_id[org_id], 'cycles': entries}
+            for org_id, entries in groups.items()]
+    rows.sort(key=lambda r: r['org'].name)
+
+    totals = {
+        'organisations': len(rows),
+        'cycles': len(cycles),
+        'ready': sum(1 for r in rows for c in r['cycles']
+                     if c['state']['key'] == 'ready'),
+        'responses': sum(c['responses'] for r in rows for c in r['cycles']),
+    }
+    return render_template('admin/reports_board.html', rows=rows,
+                           totals=totals,
+                           report_types=report_builder.REPORT_TYPES,
+                           report_title=report_builder.report_title)
+
+
+def _report_state(cycle, waves, responses):
+    """
+    Shared with the client-facing screen in app/org/routes.py, deliberately
+    duplicated rather than imported: that module defines a view called
+    reports() and importing from it across blueprints is how the shadowing bug
+    this project already paid for gets a second home. Three states, one
+    meaning, two short functions.
+    """
+    if not waves:
+        return {'key': 'not_deployed', 'needs': 'not deployed yet'}
+    if responses < cycle.min_reporting_n:
+        short = cycle.min_reporting_n - responses
+        return {'key': 'below_threshold',
+                'needs': (f'{responses} of {cycle.min_reporting_n} responses '
+                          f'needed \u2014 {short} more')}
+    if any(not w.closed for w in waves):
+        return {'key': 'open', 'needs': 'still collecting \u2014 close the wave'}
+    return {'key': 'ready', 'needs': None}

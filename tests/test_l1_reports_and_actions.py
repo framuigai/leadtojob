@@ -19,8 +19,8 @@ import pytest
 from app import db, domains
 from app.analytics import reports
 from app.models import (
-    AiCostEvent, ImprovementActions, ReportEvent, ResponseSession,
-    SurveyItem, SurveyResponse,
+    AiCostEvent, Analysis, ImprovementActions, ReportEvent,
+    ResponseSession, SurveyItem, SurveyResponse,
 )
 from app.provisioning import clone_instrument_to_org
 from tests.conftest import login
@@ -394,3 +394,110 @@ def test_a_branch_admin_cannot_touch_another_branchs_action(client, db, world):
     assert res.status_code == 404
     db.session.expire_all()
     assert db.session.query(ImprovementActions).one().status == 'proposed'
+
+
+# ── The L1 Reports board ───────────────────────────────────────────────────
+#
+# Both sibling products bury reports inside the organisation detail page, which
+# is fine for one client and wrong for twelve: "which waves are ready to report
+# on" cannot be answered without opening every org in turn.
+
+def test_the_reports_board_lists_every_client(client, db, world):
+    cycle, _ = _closed_wave(world)
+    globex = make_org('Globex Inc')
+    clone_instrument_to_org(globex.id)
+    make_cycle(globex, 'GBX-1', status='open', min_reporting_n=1)
+    db.session.commit()
+
+    login(client, world['l1'])
+    body = client.get('/admin/reports').get_data(as_text=True)
+    assert 'Kilimo Dairies' in body
+    assert 'Globex Inc' in body
+    assert cycle.cycle_name in body
+
+
+def test_the_reports_board_shows_the_three_states(client, db, world):
+    """Same three states as the client screen, because they are three
+    different jobs and the third is not a job at all."""
+    import re
+
+    ready, _ = _closed_wave(world, 'KD-READY', n=18)
+
+    collecting, open_wave = _closed_wave(world, 'KD-OPEN', n=18)
+    open_wave.closed = False
+
+    small = make_cycle(world['org'], 'KD-SMALL', status='open', min_reporting_n=5)
+    small_wave = make_deployment(world['org'], small, expected_respondents=10,
+                                 public_slug='slug-small')
+    small_wave.responses_received = 2
+    small_wave.closed = True
+
+    make_cycle(world['org'], 'KD-NONE', status='draft', min_reporting_n=1)
+    db.session.commit()
+
+    login(client, world['l1'])
+    body = re.sub(r'\s+', ' ', client.get('/admin/reports').get_data(as_text=True))
+
+    assert 'ready' in body
+    assert 'collecting' in body
+    assert 'below threshold' in body
+    assert 'not deployed' in body
+    assert '2 of 5 responses needed' in body
+
+
+def test_the_reports_board_links_only_to_ready_cycles(client, db, world):
+    ready, _ = _closed_wave(world, 'KD-READY', n=18)
+    small = make_cycle(world['org'], 'KD-SMALL', status='open', min_reporting_n=5)
+    make_deployment(world['org'], small, expected_respondents=10,
+                    public_slug='slug-small2')
+    db.session.commit()
+
+    login(client, world['l1'])
+    body = client.get('/admin/reports').get_data(as_text=True)
+    assert f'/reports/{ready.id}/executive' in body
+    assert f'/reports/KD-SMALL/executive' not in body
+
+
+def test_the_reports_board_marks_which_reports_were_interpreted(client, db,
+                                                                world):
+    cycle, _ = _closed_wave(world)
+    db.session.add(Analysis(
+        org_id=world['org'].id, cycle_id=cycle.id,
+        report_type='executive', scope_key=None,
+        payload={'executive_summary': 'x'}, model='test',
+        generated_by=world['l1'].id))
+    db.session.commit()
+
+    login(client, world['l1'])
+    body = client.get('/admin/reports').get_data(as_text=True)
+    assert 'interpreted' in body
+
+
+def test_the_reports_board_offers_no_interpret_action(client, world):
+    """Read-only, like every L1 report path."""
+    _closed_wave(world)
+    login(client, world['l1'])
+    body = client.get('/admin/reports').get_data(as_text=True)
+    assert 'Write the interpretation' not in body
+    assert 'Read-only' in body
+
+
+def test_the_reports_board_excludes_the_master_template_org(client, world):
+    _closed_wave(world)
+    login(client, world['l1'])
+    body = client.get('/admin/reports').get_data(as_text=True)
+    assert 'Master Template' not in body
+
+
+def test_the_reports_board_is_l1_only(client, world):
+    login(client, world['admin'])
+    res = client.get('/admin/reports')
+    assert res.status_code == 302
+    assert '/org/' in res.headers['Location']
+
+
+def test_the_reports_board_is_in_the_l1_navigation(client, world):
+    """It was reachable by URL before it was reachable by clicking."""
+    login(client, world['l1'])
+    body = client.get('/admin/').get_data(as_text=True)
+    assert '/admin/reports' in body
