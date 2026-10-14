@@ -695,16 +695,31 @@ class InterventionCatalogue(db.Model):
 
     Seeded from a reviewable docs/intervention_catalogue.json via
     seed_catalogue.py. A JSON file diffs in git; a spreadsheet does not.
+
+    ────────────────────────────────────────────────────────────────────────
+    ONE TOPIC CAN SERVE SEVERAL CELLS, WHICH IS WHY THE CELLS ARE A SEPARATE
+    TABLE.
+
+    The supplied draft curriculum already contains an instance: topic
+    `PO-EPS-T01` ("Goal Clarity and Alignment") is mapped to BOTH
+    (GEM, 'M') Match with Overall Expectations AND (TID, 'I') Purpose and
+    Impact. That is correct content, not a data error — the same intervention
+    legitimately answers two findings.
+
+    Folding `domain_code`/`subdomain_code` onto this row would force a choice
+    between two bad options: duplicate the topic under two codes (and then
+    deduplicate it in every report, by title, forever), or drop one mapping
+    and silently lose a recommendation. Promo hit the same shape and resolved
+    it the same way — the code names the TOPIC, the mapping names the CELL IT
+    SERVES, and they are different things.
+    ────────────────────────────────────────────────────────────────────────
     """
     __tablename__ = 'intervention_catalogue'
     __table_args__ = (
-        Index('ix_catalogue_cell', 'domain_code', 'subdomain_code', 'is_active'),
         UniqueConstraint('intervention_code', name='uq_intervention_code'),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    domain_code = Column(String(3), nullable=False)
-    subdomain_code = Column(String(1), nullable=False)
 
     intervention_code = Column(String(50), nullable=False)
     title = Column(String(255), nullable=False)
@@ -717,10 +732,45 @@ class InterventionCatalogue(db.Model):
     # can change: a manager cannot fix a pay structure, and offering it as
     # "your action" is worse than silence.
     actionable_by = Column(String(30), nullable=False, default='org')  # org|manager|both
+    # 'PO' | 'CO' | 'WWO' | 'LD' — the leadTo programme a topic comes from,
+    # parsed from the code prefix and stored so a report can say where a
+    # recommendation originates.
     source_programme = Column(String(255))
     sort_order = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    cells = relationship('InterventionCell', back_populates='intervention')
+
+
+class InterventionCell(db.Model):
+    """
+    Which (domain, subdomain) cells a catalogue topic serves.
+
+    THE JOIN KEY IS THE PAIR, never a label — immune to a rename, and
+    explicitly not trainiq's free-text `sub_module` join, where a renamed
+    display string silently killed every recommendation that depended on it.
+
+    A topic with no row here reaches no report. That is the safe default: an
+    unmapped topic is invisible rather than universally recommended.
+    """
+    __tablename__ = 'intervention_cells'
+    __table_args__ = (
+        UniqueConstraint('intervention_id', 'domain_code', 'subdomain_code',
+                         name='uq_intervention_cell'),
+        Index('ix_cell_lookup', 'domain_code', 'subdomain_code'),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    intervention_id = Column(
+        UUID(as_uuid=True), ForeignKey('intervention_catalogue.id'),
+        nullable=False, index=True,
+    )
+    domain_code = Column(String(3), nullable=False)
+    subdomain_code = Column(String(1), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    intervention = relationship('InterventionCatalogue', back_populates='cells')
 
 
 # ---------------------------------------------------------------------------
