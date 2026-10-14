@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ context.title }} - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">Master Admin / {{ org.name }}</div>
+    <h1>{{ context.title }}</h1>
+    <p class="muted">
+      {{ cycle.cycle_name }} &middot; {{ context.scope_label }}
+      &middot; n = {{ context.n }}
+      &middot; threshold n &ge; {{ context.min_reporting_n }}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary"
+       href="{{ url_for('admin.org_report_download', org_id=org.id,
+                        cycle_id=cycle.id, report_type=report_type, fmt='pdf',
+                        branch=(branch.id if branch else None)) }}">Download PDF</a>
+    <a class="btn btn-secondary"
+       href="{{ url_for('admin.org_report_download', org_id=org.id,
+                        cycle_id=cycle.id, report_type=report_type, fmt='xlsx',
+                        branch=(branch.id if branch else None)) }}">Download Excel</a>
+  </div>
+</div>
+
+<div class="flash flash-info">
+  <strong>Read-only.</strong> You are seeing a client's results as the platform
+  operator. There is no interpretation action here: a narrative about a
+  client's workforce is written by that client's own administrator, who is
+  accountable for it. Every download you make is recorded in the audit log.
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Overall Satisfaction</div></div>
+  <div class="panel-body">
+    <table class="table">
+      <thead><tr><th>Subdomain</th><th class="num">Score</th><th class="num">n</th>
+        <th class="num">Agree</th><th class="num">Disagree</th></tr></thead>
+      <tbody>
+      {% for pair, result in context.outcome_rows %}
+        <tr><td>{{ subdomain_label(pair[0], pair[1]) }}</td>
+        {% if result %}
+          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+          <td class="num">{{ result.n }}</td>
+          <td class="num">{{ '%.0f'|format(result.distribution.favourable_pct or 0) }}%</td>
+          <td class="num">{{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}%</td>
+        {% else %}
+          <td colspan="4"><span class="status-pill status-suppressed">
+            {{ result.label }}</span></td>
+        {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="panel-note">{{ context.bands_note }}</p>
+  </div>
+</div>
+
+{% if context.narrative %}
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Interpretation</div>
+    <span class="badge badge-outline">written by the client</span></div>
+  <div class="panel-body">
+    {% for key, text in context.narrative.items() %}
+    <h3 style="font-size:1rem;margin-top:1rem">{{ key.replace('_', ' ')|capitalize }}</h3>
+    <p>{{ text }}</p>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

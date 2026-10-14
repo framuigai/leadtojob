@@ -654,3 +654,64 @@ NARRATIVE_SECTIONS = {
             'about an individual.',
     },
 }
+
+# ── Assembly: shared by BOTH blueprints ────────────────────────────────────
+#
+# Takes explicit arguments and reads no request context, so the L1 blueprint can
+# call it too. L1 HAS NO org_id — every query in app/org/ is scoped by
+# current_user.org_id, which L1 can never satisfy — so a report path that lives
+# only in the org blueprint is a report path L1 cannot reach, however the
+# permission table reads. That is the mistake the sibling product made with its
+# candidate purge.
+
+def assemble(db_session, org, cycle, report_type, deployments,
+             scope_branch=None, segments=(), narrative=None, with_charts=False):
+    """
+    Gate, then build the context. Returns the context dict.
+
+    Raises ReportNotAvailable with a client-readable reason — the caller shows
+    it. Raising rather than returning a flag is deliberate: a caller that
+    forgets to check a return value renders an empty report, and an empty
+    report looks finished.
+    """
+    from app.analytics import scoring as scoring_module
+    from app.models import ImprovementActions, MeasurementCycle, SurveyDeployment
+
+    if scope_branch is not None:
+        deployments = [d for d in deployments if d.branch_id == scope_branch.id]
+
+    profiles = scoring_module.load_profiles(
+        db_session, [d.id for d in deployments], method=cycle.scoring_method)
+
+    scope_label = scope_branch.name if scope_branch else 'Whole organisation'
+    require_reportable(report_type, cycle, deployments, profiles, scope_label)
+
+    previous = None
+    if cycle.previous_cycle_id:
+        earlier = db_session.get(MeasurementCycle, cycle.previous_cycle_id)
+        if earlier is not None and earlier.org_id == cycle.org_id:
+            earlier_waves = (db_session.query(SurveyDeployment)
+                             .filter_by(cycle_id=earlier.id, org_id=cycle.org_id)
+                             .filter(SurveyDeployment.archived_at.is_(None)).all())
+            if scope_branch is not None:
+                earlier_waves = [w for w in earlier_waves
+                                 if w.branch_id == scope_branch.id]
+            earlier_profiles = scoring_module.load_profiles(
+                db_session, [w.id for w in earlier_waves],
+                method=earlier.scoring_method)
+            if earlier_profiles:
+                previous = (earlier_profiles,
+                            earlier.assessed_domains or domains.DOMAINS,
+                            earlier.id)
+
+    actions = (db_session.query(ImprovementActions)
+               .filter_by(org_id=cycle.org_id, cycle_id=cycle.id).all())
+
+    context = build_context(
+        report_type=report_type, org=org, cycle=cycle, deployments=deployments,
+        profiles=profiles, branch=scope_branch, scope_label=scope_label,
+        segments=segments, previous=previous, improvement_actions=actions,
+        narrative=narrative)
+    if with_charts:
+        add_charts(context)
+    return context

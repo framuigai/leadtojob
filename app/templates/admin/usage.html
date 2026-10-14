@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Usage & Costs - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin</div>
+  <h1>Usage &amp; Costs</h1>
+  <p class="muted">
+    What report interpretation has cost, by organisation. Model:
+    <code>{{ model }}</code>.
+    {% if not configured %}<strong>Not configured on this installation.</strong>{% endif %}
+  </p>
+</div></div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-val">{{ totals.runs }}</div>
+    <div class="stat-label">Interpretations</div></div>
+  <div class="stat-card"><div class="stat-val">${{ '%.2f'|format(totals.cost) }}</div>
+    <div class="stat-label">Total cost</div></div>
+  <div class="stat-card"><div class="stat-val">{{ '{:,}'.format(totals.input_tokens) }}</div>
+    <div class="stat-label">Input tokens</div></div>
+  <div class="stat-card"><div class="stat-val">{{ '{:,}'.format(totals.output_tokens) }}</div>
+    <div class="stat-label">Output tokens</div></div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">By organisation</div></div>
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Organisation</th><th class="num">Runs</th>
+        <th class="num">Input</th><th class="num">Output</th>
+        <th class="num">Cost</th><th>Last run</th></tr></thead>
+      <tbody>
+      {% for row in per_org %}
+        <tr>
+          <td>{{ row.org.name if row.org else 'unknown' }}</td>
+          <td class="num">{{ row.runs }}</td>
+          <td class="num">{{ '{:,}'.format(row.input_tokens) }}</td>
+          <td class="num">{{ '{:,}'.format(row.output_tokens) }}</td>
+          <td class="num">${{ '%.4f'|format(row.cost) }}</td>
+          <td>{{ row.last.strftime('%d %b %Y %H:%M') if row.last else '-' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">No interpretations generated yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">By report type</div></div>
+  <div class="panel-body">
+    <table class="table">
+      <thead><tr><th>Report</th><th class="num">Runs</th><th class="num">Cost</th></tr></thead>
+      <tbody>
+      {% for report_type, runs, cost in by_type %}
+        <tr><td>{{ report_type.replace('_', ' ')|capitalize }}</td>
+          <td class="num">{{ runs }}</td>
+          <td class="num">${{ '%.4f'|format(cost or 0) }}</td></tr>
+      {% else %}
+        <tr><td colspan="3" class="muted">Nothing yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Recent runs</div></div>
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>When</th><th>Organisation</th><th>Report</th>
+        <th class="num">In</th><th class="num">Out</th><th class="num">Cost</th></tr></thead>
+      <tbody>
+      {% for event in recent %}
+        <tr>
+          <td>{{ event.created_at.strftime('%d %b %H:%M') if event.created_at else '-' }}</td>
+          <td>{{ orgs[event.org_id].name if event.org_id in orgs else '-' }}</td>
+          <td>{{ event.report_type.replace('_', ' ') }}</td>
+          <td class="num">{{ '{:,}'.format(event.input_tokens) }}</td>
+          <td class="num">{{ '{:,}'.format(event.output_tokens) }}</td>
+          <td class="num">${{ '%.4f'|format(event.cost_usd) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">Nothing yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<p class="muted">
+  This is operational cost data and is deliberately separate from the report
+  access log, which records who opened which client's results and is a
+  compliance record. Merging the two means a cost cleanup deletes an access
+  record.
+</p>
+{% endblock %}

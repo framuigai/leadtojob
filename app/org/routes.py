@@ -31,9 +31,9 @@ from app.audit import (
     BRANCH_CREATE, BRANCH_DEACTIVATE, BRANCH_REACTIVATE, CYCLE_ARCHIVE,
     CYCLE_CLOSE, CYCLE_CREATE, CYCLE_EDIT, CYCLE_OPEN, DEPLOYMENT_CLOSE,
     DEPLOYMENT_CREATE, SEGMENT_CREATE, SEGMENT_EDIT, TICKETS_ISSUE,
-    USER_CREATE, ANALYSIS_RUN, REPORT_DOWNLOAD, branch_payload,
-    cycle_payload, deployment_payload, record_audit, segment_payload,
-    user_payload,
+    USER_CREATE, ACTION_COMPLETE, ACTION_CREATE, ACTION_EDIT, ANALYSIS_RUN,
+    REPORT_DOWNLOAD, action_payload, branch_payload, cycle_payload,
+    deployment_payload, record_audit, segment_payload, user_payload,
 )
 from app import ai_service
 # IMPORTED AS report_builder, NOT reports.
@@ -43,7 +43,7 @@ from app import ai_service
 # view function and raises. The sibling product hit this exact shadowing and
 # it is written down in CLAUDE.md; it was still walked into here, which is a
 # fair measure of how invisible it is at the call site.
-from app.analytics import association, scoring
+from app.analytics import association, scoring, trend
 from app.analytics import reports as report_builder
 from app.auth.routes import require_capability, require_role_any
 from app.models import (
@@ -56,7 +56,8 @@ from app.provisioning import active_segments
 from app.permissions import (
     BRANCH_ADMIN, DEPLOY_ORG_WIDE, DEPLOY_SURVEYS, DEPLOY_TO_BRANCH,
     EDIT_DEPLOYMENT, ISSUE_TICKETS, MANAGE_BRANCH_ADMINS, MANAGE_BRANCHES,
-    MANAGE_CYCLES, MANAGE_SEGMENTS, ORG_ADMIN, RUN_ANALYSIS, VIEW_REPORTS,
+    MANAGE_ACTIONS, MANAGE_CYCLES, MANAGE_SEGMENTS, ORG_ADMIN, RUN_ANALYSIS,
+    VIEW_REPORTS,
     VIEW_TEMPLATES, can, is_branch_scoped, visible_branch_ids,
 )
 
@@ -1287,3 +1288,160 @@ def report_interpret(cycle_id, report_type):
     flash('Interpretation generated.', 'success')
     return redirect(url_for('org.report_preview', cycle_id=cycle.id,
                             report_type=report_type))
+
+# ── Improvement actions — §16's follow-up loop ─────────────────────────────
+#
+# §16 asks the system to measure organisational value, including "completion of
+# agreed improvement actions", and §12.3 ends the Management Report with
+# "follow-up commitments and progress monitoring". Neither can be rendered from
+# survey rows: both need state that persists BETWEEN waves.
+#
+# Without this the product is a score generator, which §16's closing sentence
+# says it is not: "The system's value lies in enabling a more disciplined
+# process of diagnosis, decision-making and follow-up — not merely generating
+# scores."
+
+@org_bp.route('/cycles/<cycle_id>/actions')
+@require_capability(MANAGE_ACTIONS)
+def actions_list(cycle_id):
+    cycle = _cycle_or_404(cycle_id)
+    actions = (db.session.query(ImprovementActions)
+               .filter_by(org_id=current_user.org_id, cycle_id=cycle.id)
+               .order_by(ImprovementActions.created_at.desc()).all())
+    return render_template(
+        'org/actions.html', cycle=cycle, actions=actions,
+        subdomain_pairs=domains.subdomain_pairs(),
+        intervention_types=domains.INTERVENTION_TYPES,
+        type_labels=domains.INTERVENTION_TYPE_LABELS,
+        intervention_map=domains.INTERVENTION_MAP,
+        counts=trend.actions_alongside(actions))
+
+
+@org_bp.route('/cycles/<cycle_id>/actions/new', methods=['POST'])
+@require_capability(MANAGE_ACTIONS)
+def action_create(cycle_id):
+    """
+    An action is ENTERED BY A HUMAN, never generated.
+
+    §11 and §17.1 are diagnose-before-prescribing: the system proposes RESPONSE
+    CATEGORIES and a person commits to an action. There is deliberately no
+    button that turns a finding into a commitment automatically.
+    """
+    cycle = _cycle_or_404(cycle_id)
+
+    title = (request.form.get('title') or '').strip()
+    owner = (request.form.get('owner_label') or '').strip()
+    # The form posts one field ("GEM|G") rather than two, so a half-filled
+    # pair — a domain with no subdomain, or worse a subdomain with no domain —
+    # cannot be constructed. Subdomain letters repeat across domains, so a
+    # subdomain without its domain names three different constructs.
+    pair = (request.form.get('subdomain_pair') or '').strip()
+    domain_code = subdomain_code = None
+    if pair:
+        parts = pair.split('|')
+        if len(parts) != 2 or (parts[0], parts[1]) not in domains.INTERVENTION_MAP:
+            abort(400)
+        domain_code, subdomain_code = parts
+    intervention_type = (request.form.get('intervention_type') or '').strip() or None
+
+    if not title:
+        flash('An action needs a title.', 'error')
+        return redirect(url_for('org.actions_list', cycle_id=cycle.id))
+
+    # AN ACTION IS OWNED BY A ROLE OR A TEAM, NEVER BY A RESPONDENT.
+    #
+    # owner_label is free text by design — "Head of Finance", "OD team" — and
+    # that is exactly why it is checked. "Follow up with whoever scored Trust a
+    # 1" is the natural thing for a well-meaning manager to type, and it is the
+    # re-identification §13.5-§13.6 exists to prevent. Caught here rather than
+    # only by the privacy test, because the person typing it should be told.
+    for field_name, value in (('title', title), ('owner', owner)):
+        lowered = value.lower()
+        if any(phrase in lowered for phrase in (
+                'who scored', 'who rated', 'who said', 'who answered',
+                'the person who', 'respondent', 'whoever gave')):
+            flash(
+                f'That {field_name} points at an individual respondent. '
+                'Responses are anonymous and cannot be traced to anyone — an '
+                'action is owned by a role or a team, such as "Head of '
+                'Finance" or "the OD team".', 'error')
+            return redirect(url_for('org.actions_list', cycle_id=cycle.id))
+
+    if intervention_type and intervention_type not in domains.INTERVENTION_TYPES:
+        abort(400)
+    if domain_code and domain_code not in domains.DOMAINS:
+        abort(400)
+
+    # §8.5, enforced at the point of entry as well as in the catalogue filter:
+    # training is not a response to a compensation finding.
+    if (domain_code == domains.PIE and subdomain_code
+            and intervention_type == domains.TRAINING):
+        flash(
+            'Training is not recorded as the response to a Reward '
+            'Satisfaction finding. The specification is explicit that it is '
+            'not a substitute for addressing a substantiated compensation '
+            'problem — a pay-equity review, market benchmarking or a '
+            'compensation review is the response category here.', 'error')
+        return redirect(url_for('org.actions_list', cycle_id=cycle.id))
+
+    action = ImprovementActions(
+        org_id=current_user.org_id,
+        branch_id=_my_branch_id(),
+        cycle_id=cycle.id,
+        domain_code=domain_code,
+        subdomain_code=subdomain_code,
+        title=title,
+        description=(request.form.get('description') or '').strip() or None,
+        intervention_type=intervention_type,
+        owner_label=owner or None,
+        status='proposed',
+        created_by=current_user.id,
+    )
+    db.session.add(action)
+    db.session.flush()
+    record_audit(ACTION_CREATE, 'action', action.id,
+                 f'Recorded improvement action: {title}',
+                 org_id=current_user.org_id, branch_id=action.branch_id,
+                 payload=action_payload(action))
+    db.session.commit()
+    flash('Action recorded.', 'success')
+    return redirect(url_for('org.actions_list', cycle_id=cycle.id))
+
+
+@org_bp.route('/actions/<uuid:action_id>/status', methods=['POST'])
+@require_capability(MANAGE_ACTIONS)
+def action_status(action_id):
+    """
+    Move an action along. `evidence_note` is what changed, in the owner's own
+    words — §16's "employee perceptions of changes implemented" needs something
+    to point at besides a status flag.
+    """
+    action = db.session.get(ImprovementActions, action_id)
+    if action is None or action.org_id != current_user.org_id:
+        abort(404)
+    branch_ids = visible_branch_ids(current_user)
+    if branch_ids is not None and action.branch_id not in branch_ids:
+        abort(404)
+
+    status = (request.form.get('status') or '').strip()
+    if status not in ('proposed', 'agreed', 'in_progress', 'completed', 'dropped'):
+        abort(400)
+
+    now = datetime.now(timezone.utc)
+    action.status = status
+    if status == 'agreed' and action.agreed_at is None:
+        action.agreed_at = now
+    if status == 'completed':
+        action.completed_at = now
+        note = (request.form.get('evidence_note') or '').strip()
+        if note:
+            action.evidence_note = note
+
+    record_audit(ACTION_COMPLETE if status == 'completed' else ACTION_EDIT,
+                 'action', action.id,
+                 f'Improvement action moved to {status}: {action.title}',
+                 org_id=current_user.org_id, branch_id=action.branch_id,
+                 payload=action_payload(action))
+    db.session.commit()
+    flash('Saved.', 'success')
+    return redirect(url_for('org.actions_list', cycle_id=action.cycle_id))

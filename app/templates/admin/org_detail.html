@@ -71,11 +71,22 @@
   <div class="panel-body">
   {% if cycles %}
     <table class="table">
-      <thead><tr><th>Reference</th><th>Name</th><th>Status</th><th>Threshold</th></tr></thead>
+      <thead><tr><th>Reference</th><th>Name</th><th>Status</th><th>Threshold</th><th>Reports</th></tr></thead>
       <tbody>
       {% for c in cycles %}
         <tr><td><code>{{ c.id }}</code></td><td>{{ c.cycle_name }}</td>
-            <td>{{ c.status }}</td><td>n &ge; {{ c.min_reporting_n }}</td></tr>
+            <td>{{ c.status }}</td><td>n &ge; {{ c.min_reporting_n }}</td>
+            <td class="row-actions">
+              {# READ-ONLY. L1 oversees and supports; it does not run a
+                 client's measurement programme, and there is no interpret
+                 action here. Every download is audited. #}
+              <a href="{{ url_for('admin.org_report', org_id=org.id,
+                                  cycle_id=c.id, report_type='executive') }}"
+                 class="btn btn-sm btn-secondary">Executive</a>
+              <a href="{{ url_for('admin.org_report', org_id=org.id,
+                                  cycle_id=c.id, report_type='hr_od') }}"
+                 class="btn btn-sm btn-secondary">HR &amp; OD</a>
+            </td></tr>
       {% endfor %}
       </tbody>
     </table>

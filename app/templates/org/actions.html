@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Improvement actions - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">{{ role_label(current_user.role) }} / Follow-up</div>
+  <h1>Improvement actions</h1>
+  <p class="muted">{{ cycle.cycle_name }}</p>
+</div></div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-val">{{ counts.total }}</div>
+    <div class="stat-label">Recorded</div></div>
+  <div class="stat-card"><div class="stat-val">{{ counts.agreed + counts.in_progress }}</div>
+    <div class="stat-label">Agreed or under way</div></div>
+  <div class="stat-card"><div class="stat-val">{{ counts.completed }}</div>
+    <div class="stat-label">Completed</div></div>
+  <div class="stat-card"><div class="stat-val">{{ counts.dropped }}</div>
+    <div class="stat-label">Dropped</div></div>
+</div>
+
+<div class="panel"><div class="panel-body">
+  <p class="panel-note">
+    The specification asks the system to measure whether findings lead to
+    meaningful improvements, and completed actions are one of the measures.
+    A later wave reports any change in scores <strong>alongside</strong> these
+    actions, without claiming that one produced the other.
+  </p>
+  <p class="panel-note">
+    An action is owned by a <strong>role or a team</strong>, never by a
+    respondent. Responses are anonymous and cannot be traced to anyone.
+  </p>
+</div></div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Recorded actions</div></div>
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Action</th><th>Responds to</th><th>Type</th><th>Owner</th>
+        <th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for action in actions %}
+        <tr>
+          <td><strong>{{ action.title }}</strong>
+            {% if action.description %}<br>
+            <span class="muted">{{ action.description }}</span>{% endif %}
+            {% if action.evidence_note %}<br>
+            <span class="muted">What changed: {{ action.evidence_note }}</span>{% endif %}</td>
+          <td>{% if action.domain_code and action.subdomain_code %}
+                {{ subdomain_label(action.domain_code, action.subdomain_code) }}
+              {% elif action.domain_code %}{{ domain_label(action.domain_code) }}
+              {% else %}<span class="muted">organisation-wide</span>{% endif %}</td>
+          <td>{{ type_labels.get(action.intervention_type, '-') }}</td>
+          <td>{{ action.owner_label or '-' }}</td>
+          <td><span class="status-pill status-{{ 'green' if action.status == 'completed'
+                else 'amber' if action.status in ('agreed', 'in_progress')
+                else 'suppressed' }}">{{ action.status.replace('_', ' ') }}</span></td>
+          <td class="row-actions">
+            <form method="post"
+                  action="{{ url_for('org.action_status', action_id=action.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <select name="status" onchange="this.form.submit()">
+                {% for option in ['proposed', 'agreed', 'in_progress',
+                                  'completed', 'dropped'] %}
+                <option value="{{ option }}"
+                  {% if option == action.status %}selected{% endif %}>
+                  {{ option.replace('_', ' ') }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">Nothing recorded yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Record an action</div></div>
+  <div class="panel-body">
+    <form method="post"
+          action="{{ url_for('org.action_create', cycle_id=cycle.id) }}" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label for="title">What will be done</label>
+        <input type="text" id="title" name="title" required
+               placeholder="Review approval thresholds for routine purchases">
+      </div>
+      <div class="form-group">
+        <label for="description">Detail (optional)</label>
+        <textarea id="description" name="description" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="subdomain">What it responds to</label>
+        <select id="subdomain" name="subdomain_pair">
+          <option value="">Organisation-wide</option>
+          {% for pair in subdomain_pairs %}
+          <option value="{{ pair[0] }}|{{ pair[1] }}">
+            {{ domain_label(pair[0]) }} - {{ subdomain_label(pair[0], pair[1]) }}
+            ({{ intervention_map[pair].categories }})
+          </option>
+          {% endfor %}
+        </select>
+        <small class="muted">The bracketed text is the specification's own list
+          of possible response categories for that subdomain.</small>
+      </div>
+      <div class="form-group">
+        <label for="intervention_type">Kind of response</label>
+        <select id="intervention_type" name="intervention_type">
+          <option value="">Not specified</option>
+          {% for value in intervention_types %}
+          <option value="{{ value }}">{{ type_labels[value] }}</option>
+          {% endfor %}
+        </select>
+        <small class="muted">Capability development is not recorded against a
+          Reward Satisfaction finding: training is not a substitute for
+          addressing a compensation problem.</small>
+      </div>
+      <div class="form-group">
+        <label for="owner_label">Owner</label>
+        <input type="text" id="owner_label" name="owner_label"
+               placeholder="Head of Operations">
+        <small class="muted">A role or a team. Never an individual
+          respondent.</small>
+      </div>
+      <button type="submit" class="btn btn-primary">Record the action</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

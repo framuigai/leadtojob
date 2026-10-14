@@ -10,6 +10,15 @@
       {% if cycle.is_pilot %} &middot; pilot wave{% endif %}</p>
   </div>
   <div class="page-actions">
+    {% if can(current_user, 'manage_actions') %}
+      <a href="{{ url_for('org.actions_list', cycle_id=cycle.id) }}"
+         class="btn btn-secondary">Follow-up actions</a>
+    {% endif %}
+    {% if can(current_user, 'view_reports') %}
+      <a href="{{ url_for('org.report_preview', cycle_id=cycle.id,
+                          report_type='executive') }}"
+         class="btn btn-secondary">Reports</a>
+    {% endif %}
     {% if can(current_user, 'manage_cycles') %}
       <a href="{{ url_for('org.cycle_edit', cycle_id=cycle.id) }}"
          class="btn btn-secondary">Edit</a>

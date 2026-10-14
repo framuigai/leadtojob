@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - leadTo{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin / {{ org.name }}</div>
+  <h1>{{ title }}</h1>
+  <p class="muted">{{ cycle.cycle_name }}</p>
+</div></div>
+<div class="panel"><div class="panel-body">
+  <div class="flash flash-warning">{{ reason }}</div>
+  <a href="{{ url_for('admin.org_detail', org_id=org.id) }}"
+     class="btn btn-secondary">Back to {{ org.name }}</a>
+</div></div>
+{% endblock %}
