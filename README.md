@@ -31,5 +31,18 @@ pytest -q                        # DB-backed tests skip without TEST_DATABASE_UR
 | Phase | | |
 |---|---|---|
 | 1 | Scaffolding | ✅ done |
-| 2 | Identity, tenancy & live dashboards | next |
-| 3–11 | see `docs/jobsat build plan.md` §11 | |
+| 2 | Identity, tenancy & live dashboards | ✅ done |
+| 3 | Taxonomy & instrument | ✅ done |
+| 4 | Cycles & segments | ✅ done |
+| 5 | Deployment & the anonymous form | next |
+| 6–11 | see `docs/jobsat build plan.md` §11 | |
+
+## Seeding a fresh database
+
+```bash
+alembic upgrade head
+python seed_templates.py     # the 48 master items
+python seed_admin.py         # the L1 master admin, from SEED_ADMIN_* in .env
+```
+
+Both are idempotent: re-running reports what exists rather than duplicating it.
