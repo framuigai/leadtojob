@@ -260,6 +260,62 @@ def test_the_catalogue_screen_shows_cells_and_names_the_reward_exception(
     assert 'cell(s) have no course' not in body
 
 
+def test_the_coverage_grid_shows_every_cell_and_flags_an_empty_one(
+        client, seeded):
+    """
+    The grid is the whole 4 x 3 map, and a cell with no topic says so rather
+    than rendering blank — a blank cell reads as "nothing needed here".
+    """
+    import re
+    from app import domains
+    from app.models import InterventionCell
+    from tests.conftest import login
+    from tests.factories import make_master_admin
+
+    # Empty one cell that IS allowed training, so it must read "no topic"
+    # rather than "no course, by design".
+    db.session.query(InterventionCell).filter_by(
+        domain_code='TID', subdomain_code='T').delete()
+    l1 = make_master_admin(email='l1@leadto.test')
+    db.session.commit()
+
+    login(client, l1)
+    body = re.sub(r'\s+', ' ', client.get('/admin/catalogue').get_data(as_text=True))
+
+    assert 'Coverage by capability area' in body
+    for domain_code, subdomain_code in domains.subdomain_pairs():
+        assert domains.subdomain_label(domain_code, subdomain_code) in body
+    assert 'no topic' in body
+
+
+def test_the_topic_list_shows_every_active_topic_with_its_cells(client, seeded):
+    """
+    One row per topic, carrying the filter keys the shared component reads.
+    A topic mapped to two cells stays one row, so the count is a topic count.
+    """
+    import re
+    from app.models import InterventionCatalogue
+    from tests.conftest import login
+    from tests.factories import make_master_admin
+
+    l1 = make_master_admin(email='l1@leadto.test')
+    db.session.commit()
+
+    login(client, l1)
+    raw = client.get('/admin/catalogue').get_data(as_text=True)
+    body = re.sub(r'\s+', ' ', raw)
+
+    active = db.session.query(InterventionCatalogue).filter_by(
+        is_active=True).all()
+    assert raw.count('data-programme=') == len(active)
+    for topic in active:
+        assert topic.intervention_code in body
+
+    # The filter bar is wired to the table, not hand-rolled.
+    assert 'data-filter-for="course-list"' in body
+    assert 'id="course-list"' in body
+
+
 def test_the_catalogue_screen_is_l1_only(client, seeded):
     from tests.conftest import login
     from tests.factories import make_org, make_org_admin

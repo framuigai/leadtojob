@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ domain_label(domain_code) }} - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('admin.template_domain', domain_code=domain_code) }}">&larr; All templates</a>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>{{ domain_label(domain_code) }}</h1>
+    <p class="version-note">Version {{ version }} &mdash; saving creates version {{ version + 1 }}.</p>
+  </div>
+  <div class="page-actions">
+    <span class="badge badge-pre">{{ domain_code }}</span>
+    {% if domain_code == OUTCOME_DOMAIN %}
+    <span class="badge badge-orange">Outcome</span>
+    {% endif %}
+  </div>
+</div>
+
+{% if domain_code == 'TID' %}
+<div class="flash flash-info">{{ DAUNTING_CAVEAT }}</div>
+{% endif %}
+
+<form method="post">
+<div class="panel">
+  <table class="instrument-table">
+    <thead><tr>
+      <th class="col-num">#</th>
+      <th>Question text</th>
+      <th>Subdomain</th>
+      <th>Code</th>
+      <th>Anchor type</th>
+      <th class="col-check">Reverse</th>
+      <th class="col-check">Active</th>
+    </tr></thead>
+    <tbody>
+    {% for i in items %}
+      <tr>
+        <td class="col-num">{{ loop.index }}</td>
+        <td><input type="text" name="text-{{ i.id }}" value="{{ i.item_text }}"></td>
+        <td class="cell-sub">{{ subdomain_label(domain_code, i.subdomain_code) }}</td>
+        <td class="cell-meta"><code>{{ i.item_code }}</code></td>
+        <td class="cell-meta">{{ i.anchor_type }}</td>
+        <td class="col-check">
+          <input type="checkbox" name="reverse-{{ i.id }}"
+                 {% if i.is_reverse_scored %}checked{% endif %}>
+        </td>
+        <td class="col-check">
+          <input type="checkbox" name="active-{{ i.id }}"
+                 {% if i.is_active %}checked{% endif %}>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="editor-actions">
+    <button type="submit" class="btn btn-primary">Save as version {{ version + 1 }}</button>
+    <a class="btn btn-secondary" href="{{ url_for('admin.template_domain', domain_code=domain_code) }}">Cancel</a>
+  </div>
+</div>
+</form>
+
+<p class="muted">
+  Item codes, subdomains and ordinals are fixed: the scoring ladder groups by
+  them, so renaming one would merge two cells. Saving writes a new version and
+  leaves this one readable &mdash; organisations that have already been
+  provisioned keep the copy they hold and are unaffected.
+</p>
+{% endblock %}

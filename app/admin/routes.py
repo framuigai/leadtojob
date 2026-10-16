@@ -31,14 +31,15 @@ from app.analytics import reports as report_builder
 from app.analytics import scoring
 from app.analytics import validation as validation_module
 from app.audit import (
-    ORG_CREATE, ORG_EDIT, REPORT_DOWNLOAD, USER_CREATE, USER_DEACTIVATE,
-    USER_REACTIVATE, record_audit, user_payload,
+    INSTRUMENT_EDIT, ORG_CREATE, ORG_EDIT, REPORT_DOWNLOAD, USER_CREATE,
+    USER_DEACTIVATE, USER_REACTIVATE, record_audit, user_payload,
 )
 from app.auth.routes import require_capability
 from app.domains import DOMAINS, MASTER_ORG_ID, SUBDOMAINS, subdomain_label
 from app.models import (
     AiCostEvent, Analysis, AuditEvent, Branch, InterventionCatalogue,
-    MeasurementCycle, Org, ReportEvent, SurveyDeployment, SurveyItem, User,
+    InterventionCell, MeasurementCycle, Org, ReportEvent, SurveyDeployment,
+    SurveyItem, User,
 )
 from app.permissions import (
     CREATABLE_ROLES, EDIT_TEMPLATES, MANAGE_CATALOGUE, MANAGE_ORGS, ORG_ADMIN,
@@ -46,7 +47,7 @@ from app.permissions import (
 )
 from app.provisioning import (
     ProvisioningError, active_segments, clone_instrument_to_org,
-    create_default_segments, default_active_domains,
+    create_default_segments, default_active_domains, latest_version,
 )
 
 # Days since the last wave was deployed, for the status-board traffic light.
@@ -320,8 +321,14 @@ def users_list():
              .order_by(User.role, User.email).all())
     orgs = {o.id: o for o in db.session.query(Org).all()}
     branches = {b.id: b for b in db.session.query(Branch).all()}
+    # Filter options come from the rows actually rendered, so a select can
+    # never offer a value that matches nothing.
+    roles = sorted({u.role for u in users})
+    org_names = sorted({orgs[u.org_id].name for u in users
+                        if u.org_id and u.org_id in orgs})
     return render_template('admin/users.html', users=users, orgs=orgs,
-                           branches=branches)
+                           branches=branches, roles=roles,
+                           org_names=org_names)
 
 
 @admin_bp.route('/users/<uuid:user_id>/toggle', methods=['POST'])
@@ -358,20 +365,15 @@ def user_toggle(user_id):
 @admin_bp.route('/templates')
 @require_capability(EDIT_TEMPLATES)
 def templates_list():
-    """The master instrument, by domain, plus every org's cloned copy."""
+    """The master instrument, by domain."""
+    version = latest_version(MASTER_ORG_ID)
     counts = dict(
         db.session.query(SurveyItem.domain_code, func.count(SurveyItem.id))
-        .filter_by(org_id=MASTER_ORG_ID, version=1)
+        .filter_by(org_id=MASTER_ORG_ID, version=version)
         .group_by(SurveyItem.domain_code).all()
     )
-    org_counts = (
-        db.session.query(Org, func.count(SurveyItem.id))
-        .join(SurveyItem, SurveyItem.org_id == Org.id)
-        .filter(Org.id != MASTER_ORG_ID)
-        .group_by(Org.id).order_by(Org.name).all()
-    )
     return render_template('admin/templates_list.html', counts=counts,
-                           domains=DOMAINS, org_counts=org_counts,
+                           domains=DOMAINS, version=version,
                            total=sum(counts.values()))
 
 
@@ -386,16 +388,118 @@ def template_domain(domain_code):
     """
     if domain_code not in DOMAINS:
         abort(404)
+    version = latest_version(MASTER_ORG_ID)
     items = (db.session.query(SurveyItem)
-             .filter_by(org_id=MASTER_ORG_ID, version=1, domain_code=domain_code)
-             .order_by(SurveyItem.subdomain_code, SurveyItem.ordinal).all())
+             .filter_by(org_id=MASTER_ORG_ID, version=version,
+                        domain_code=domain_code)
+             .order_by(SurveyItem.sort_order, SurveyItem.subdomain_code,
+                       SurveyItem.ordinal).all())
     grouped = [
         (sub, subdomain_label(domain_code, sub),
          [i for i in items if i.subdomain_code == sub])
         for sub in SUBDOMAINS[domain_code]
     ]
     return render_template('admin/template_domain.html',
-                           domain_code=domain_code, grouped=grouped)
+                           domain_code=domain_code, grouped=grouped,
+                           items=items, version=version)
+
+
+@admin_bp.route('/templates/<domain_code>/edit', methods=['GET', 'POST'])
+@require_capability(EDIT_TEMPLATES)
+def template_edit(domain_code):
+    """
+    Edit one domain of the master instrument.
+
+    A save NEVER rewrites an item in place. It copies the whole instrument to
+    version N+1 with the edits applied, because a client's cloned copy is
+    evidence of what was asked and the master's own history is the only record
+    of what the clone was made from. Existing clients are untouched either way:
+    they hold their own rows, and only a future provisioning reads this.
+
+    Item codes, subdomains and ordinals are NOT editable. They are the identity
+    the scoring ladder groups by (§10.1), and letting an admin retype
+    'GEM-G-01' as 'GEM-G-02' would silently merge two cells.
+    """
+    if domain_code not in DOMAINS:
+        abort(404)
+
+    version = latest_version(MASTER_ORG_ID)
+    items = (db.session.query(SurveyItem)
+             .filter_by(org_id=MASTER_ORG_ID, version=version,
+                        domain_code=domain_code)
+             .order_by(SurveyItem.sort_order, SurveyItem.subdomain_code,
+                       SurveyItem.ordinal).all())
+    if not items:
+        abort(404)
+
+    if request.method == 'POST':
+        edits = {}
+        for item in items:
+            text = (request.form.get(f'text-{item.id}') or '').strip()
+            if not text:
+                flash(f'{item.item_code} cannot have empty question text.',
+                      'error')
+                return render_template('admin/template_edit.html',
+                                       domain_code=domain_code, items=items,
+                                       version=version)
+            edits[item.id] = {
+                'item_text': text,
+                'is_active': request.form.get(f'active-{item.id}') == 'on',
+                'is_reverse_scored':
+                    request.form.get(f'reverse-{item.id}') == 'on',
+            }
+
+        changed = [i.item_code for i in items
+                   if edits[i.id]['item_text'] != i.item_text
+                   or edits[i.id]['is_active'] != i.is_active
+                   or edits[i.id]['is_reverse_scored'] != i.is_reverse_scored]
+        if not changed:
+            flash('No changes to save.', 'info')
+            return redirect(url_for('admin.template_domain',
+                                    domain_code=domain_code))
+
+        # The whole instrument moves forward together. A version holding only
+        # the edited domain would be a 12-item instrument, and
+        # clone_instrument_to_org refuses anything that is not 48.
+        whole = (db.session.query(SurveyItem)
+                 .filter_by(org_id=MASTER_ORG_ID, version=version).all())
+        for item in whole:
+            edit = edits.get(item.id)
+            db.session.add(SurveyItem(
+                org_id=MASTER_ORG_ID,
+                version=version + 1,
+                domain_code=item.domain_code,
+                subdomain_code=item.subdomain_code,
+                item_code=item.item_code,
+                ordinal=item.ordinal,
+                sort_order=item.sort_order,
+                item_text=edit['item_text'] if edit else item.item_text,
+                anchor_type=item.anchor_type,
+                allows_na=item.allows_na,
+                is_reverse_scored=(edit['is_reverse_scored'] if edit
+                                   else item.is_reverse_scored),
+                is_active=edit['is_active'] if edit else item.is_active,
+            ))
+
+        record_audit(
+            INSTRUMENT_EDIT, 'survey_item_version', version + 1,
+            f'Master instrument {domain_code} edited; version '
+            f'{version} copied to {version + 1}.',
+            payload={'domain_code': domain_code,
+                     'from_version': version,
+                     'to_version': version + 1,
+                     'item_codes_changed': sorted(changed)},
+        )
+        db.session.commit()
+        flash(f'Saved as version {version + 1}. '
+              f'{len(changed)} question(s) changed. Existing clients are '
+              'unaffected.', 'success')
+        return redirect(url_for('admin.template_domain',
+                                domain_code=domain_code))
+
+    return render_template('admin/template_edit.html',
+                           domain_code=domain_code, items=items,
+                           version=version)
 
 
 # ── Audit ───────────────────────────────────────────────────────────────────
@@ -434,20 +538,45 @@ def catalogue():
     every client's report offers. That is why it is L1-only and why it is
     seeded from a reviewable JSON file rather than edited row by row.
 
-    The screen is organised by CELL rather than by course, because the question
-    an operator actually has is "what would a finding here produce?" — and the
-    answer "nothing" is the one worth seeing.
+    The coverage grid comes first because the question an operator actually
+    has is "what would a finding here produce?" — and the answer "nothing" is
+    the one worth seeing. The topic list below it is the catalogue itself.
     """
     rows = catalogue_module.coverage(db.session)
-    total = db.session.query(InterventionCatalogue).filter_by(is_active=True).count()
-    programmes = sorted({
-        r.source_programme for r in
-        db.session.query(InterventionCatalogue).filter_by(is_active=True).all()
-        if r.source_programme})
     gaps = [r for r in rows if not r['covered']]
-    return render_template('admin/catalogue.html', rows=rows, total=total,
-                           programmes=programmes, gaps=gaps,
-                           reward_guidance=catalogue_module.REWARD_GUIDANCE)
+    # The same cells as a domain x subdomain grid, for the coverage panel.
+    grid = [(d, [r for r in rows if r['domain_code'] == d]) for d in DOMAINS]
+
+    # Every active topic with the cells it is mapped to, grouped by programme.
+    # A topic may sit in more than one cell, so the cells are collected onto
+    # the topic rather than repeating the topic once per cell.
+    cells_by_topic = {}
+    for cell in db.session.query(InterventionCell).all():
+        cells_by_topic.setdefault(cell.intervention_id, []).append(
+            (cell.domain_code, cell.subdomain_code))
+
+    courses = []
+    for row in (db.session.query(InterventionCatalogue)
+                .filter_by(is_active=True)
+                .order_by(InterventionCatalogue.source_programme,
+                          InterventionCatalogue.sort_order,
+                          InterventionCatalogue.intervention_code).all()):
+        pairs = sorted(cells_by_topic.get(row.id, []))
+        courses.append({
+            'code': row.intervention_code,
+            'title': row.title,
+            'programme': row.source_programme or 'Unassigned',
+            'type': row.intervention_type,
+            'cells': [(d, subdomain_label(d, s)) for d, s in pairs],
+            'domains': sorted({d for d, _ in pairs}),
+        })
+    by_programme = [
+        (name, [c for c in courses if c['programme'] == name])
+        for name in sorted({c['programme'] for c in courses})
+    ]
+
+    return render_template('admin/catalogue.html', gaps=gaps, grid=grid,
+                           by_programme=by_programme, courses=courses)
 
 
 @admin_bp.route('/usage')
@@ -464,45 +593,86 @@ def usage():
     L1 only. A client being shown the unit economics of their own reports is a
     commercial conversation, not a product feature.
     """
-    rows = (db.session.query(
-                AiCostEvent.org_id,
-                func.count(AiCostEvent.id),
-                func.sum(AiCostEvent.input_tokens),
-                func.sum(AiCostEvent.output_tokens),
-                func.sum(AiCostEvent.cost_usd),
-                func.max(AiCostEvent.created_at))
-            .group_by(AiCostEvent.org_id).all())
-
     orgs = {o.id: o for o in db.session.query(Org).all()}
-    per_org = [{
-        'org': orgs.get(row[0]),
-        'runs': row[1],
-        'input_tokens': row[2] or 0,
-        'output_tokens': row[3] or 0,
-        'cost': row[4] or Decimal('0'),
-        'last': row[5],
-    } for row in rows]
-    per_org.sort(key=lambda r: r['cost'], reverse=True)
+    cycles = db.session.query(MeasurementCycle).all()
 
-    by_type = (db.session.query(
-                   AiCostEvent.report_type,
-                   func.count(AiCostEvent.id),
-                   func.sum(AiCostEvent.cost_usd))
-               .group_by(AiCostEvent.report_type).all())
+    # AI cost and report downloads are counted SEPARATELY and never merged:
+    # ai_cost_events is operational, report_events is a §13.4 access record.
+    ai_by_cycle = {}
+    for ev in db.session.query(AiCostEvent).all():
+        key = (ev.org_id, ev.cycle_id)
+        agg = ai_by_cycle.setdefault(key, {'runs': 0, 'cost': Decimal('0'),
+                                           'input_tokens': 0,
+                                           'output_tokens': 0, 'last': None})
+        agg['runs'] += 1
+        agg['cost'] += ev.cost_usd or Decimal('0')
+        agg['input_tokens'] += ev.input_tokens or 0
+        agg['output_tokens'] += ev.output_tokens or 0
+        if agg['last'] is None or (ev.created_at and ev.created_at > agg['last']):
+            agg['last'] = ev.created_at
 
-    recent = (db.session.query(AiCostEvent)
-              .order_by(AiCostEvent.created_at.desc()).limit(50).all())
+    dl_by_cycle = {}
+    for ev in db.session.query(ReportEvent).all():
+        key = (ev.org_id, ev.cycle_id)
+        agg = dl_by_cycle.setdefault(key, {'pdf': 0, 'excel': 0, 'total': 0})
+        agg['total'] += 1
+        if ev.export_format == 'pdf':
+            agg['pdf'] += 1
+        elif ev.export_format == 'excel':
+            agg['excel'] += 1
+
+    def _blank_ai():
+        return {'runs': 0, 'cost': Decimal('0'), 'input_tokens': 0,
+                'output_tokens': 0, 'last': None}
+
+    per_org = []
+    for org in sorted(orgs.values(), key=lambda o: o.name):
+        org_cycles = [c for c in cycles if c.org_id == org.id]
+        rows = []
+        for cycle in sorted(org_cycles, key=lambda c: c.cycle_name):
+            ai = ai_by_cycle.get((org.id, cycle.id), _blank_ai())
+            dl = dl_by_cycle.get((org.id, cycle.id),
+                                 {'pdf': 0, 'excel': 0, 'total': 0})
+            rows.append({'cycle': cycle, 'ai': ai, 'dl': dl})
+
+        # Events whose cycle was deleted still cost money, so they are shown
+        # against the org rather than dropped from the total.
+        loose_ai = ai_by_cycle.get((org.id, None))
+        loose_dl = dl_by_cycle.get((org.id, None))
+        if loose_ai or loose_dl:
+            rows.append({'cycle': None,
+                         'ai': loose_ai or _blank_ai(),
+                         'dl': loose_dl or {'pdf': 0, 'excel': 0, 'total': 0}})
+
+        if not rows:
+            continue
+        per_org.append({
+            'org': org,
+            'rows': rows,
+            'cycle_count': len(org_cycles),
+            'runs': sum(r['ai']['runs'] for r in rows),
+            'cost': sum((r['ai']['cost'] for r in rows), Decimal('0')),
+            'input_tokens': sum(r['ai']['input_tokens'] for r in rows),
+            'output_tokens': sum(r['ai']['output_tokens'] for r in rows),
+            'pdf': sum(r['dl']['pdf'] for r in rows),
+            'excel': sum(r['dl']['excel'] for r in rows),
+            'downloads': sum(r['dl']['total'] for r in rows),
+        })
+    per_org.sort(key=lambda r: (-r['cost'], r['org'].name))
 
     totals = {
+        'orgs': len(per_org),
         'runs': sum(r['runs'] for r in per_org),
         'cost': sum((r['cost'] for r in per_org), Decimal('0')),
         'input_tokens': sum(r['input_tokens'] for r in per_org),
         'output_tokens': sum(r['output_tokens'] for r in per_org),
+        'pdf': sum(r['pdf'] for r in per_org),
+        'excel': sum(r['excel'] for r in per_org),
+        'downloads': sum(r['downloads'] for r in per_org),
     }
 
     return render_template('admin/usage.html', per_org=per_org,
-                           by_type=by_type, recent=recent, totals=totals,
-                           orgs=orgs, model=ai_service.MODEL,
+                           totals=totals, model=ai_service.MODEL,
                            configured=ai_service.api_key_present())
 
 

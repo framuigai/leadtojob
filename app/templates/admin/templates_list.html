@@ -1,52 +1,51 @@
 {% extends "base.html" %}
-{% block title %}Instrument Templates - leadTo{% endblock %}
+{% block title %}Assessment Instrument - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
 <div class="page-header"><div class="page-header-left">
-  <div class="section-label">Master Admin</div>
-  <h1>Instrument Templates</h1>
-  <p class="muted">The master instrument: {{ total }} items, transcribed
-    verbatim from the specification. Each client organisation holds its own
-    frozen copy, cloned when it was created.</p>
+  <div class="section-label">Master Admin · Master Templates</div>
+  <h1>Assessment Instrument</h1>
+  <p class="muted">The master instrument every new client is cloned from —
+    {{ total }} items across four domains, transcribed verbatim from the
+    specification. Editing here changes what <strong>future</strong> clients
+    receive; existing clients keep the copy they already hold and are
+    unaffected.</p>
 </div></div>
 
-<div class="domain-grid">
-  {% for d in domains %}
-  <a class="domain-card" href="{{ url_for('admin.template_domain', domain_code=d) }}">
-    <div class="domain-card-header">
-      <div class="domain-card-name">{{ domain_label(d) }}</div>
-      <div class="domain-card-score">{{ counts.get(d, 0) }}</div>
-    </div>
-    <div class="domain-card-empty-body">
-      <div class="domain-card-waiting-meta">
-        {{ domain_definition(d) }}
-        {% if d == OUTCOME_DOMAIN %}<br><strong>Outcome domain.</strong>{% endif %}
-      </div>
-    </div>
-  </a>
-  {% endfor %}
-</div>
-
 <div class="panel">
-  <div class="panel-head"><div class="panel-title">Client copies</div></div>
-  <div class="panel-body">
-    <p class="panel-note">
-      A client instrument is <strong>evidence</strong>: once a wave has run,
-      "what did this question say?" has exactly one correct answer. Editing the
-      master never reaches a client that has already cloned it.
-    </p>
-    {% if org_counts %}
-    <table class="table">
-      <thead><tr><th>Organisation</th><th class="num">Items</th></tr></thead>
-      <tbody>
-      {% for org, n in org_counts %}
-        <tr><td>{{ org.name }}</td><td class="num">{{ n }}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <p class="muted">No client organisations yet.</p>
-    {% endif %}
+  <div class="table-scroll">
+  <table class="table">
+    <thead><tr>
+      <th>Domain</th>
+      <th>Role in the model</th>
+      <th class="num">Version</th>
+      <th class="num">Items</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+    {% for d in domains %}
+      <tr>
+        <td>
+          <strong>{{ domain_label(d) }}</strong>
+        </td>
+        <td>
+          {% if d == OUTCOME_DOMAIN %}
+            <span class="badge badge-orange">Outcome</span>
+          {% else %}
+            <span class="badge badge-pre">Diagnostic</span>
+          {% endif %}
+        </td>
+        <td class="num"><span class="badge badge-outline">v{{ version }}</span></td>
+        <td class="num">{{ counts.get(d, 0) }}</td>
+        <td class="num">
+          <a class="btn btn-primary btn-sm"
+             href="{{ url_for('admin.template_domain', domain_code=d) }}">Review &amp; edit</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
   </div>
 </div>
+
 {% endblock %}

@@ -2,42 +2,53 @@
 {% block title %}{{ domain_label(domain_code) }} - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
+<a class="back-link" href="{{ url_for('admin.templates_list') }}">&larr; All templates</a>
+
 <div class="page-header">
   <div class="page-header-left">
-    <div class="section-label">Master Admin / Instrument</div>
     <h1>{{ domain_label(domain_code) }}</h1>
-    <p class="muted">{{ domain_definition(domain_code) }}</p>
-    {% if domain_scope_note(domain_code) %}
-    <p class="muted"><strong>Scope:</strong> {{ domain_scope_note(domain_code) }}</p>
-    {% endif %}
+    <p class="version-note">Version {{ version }} &mdash; editing creates version {{ version + 1 }}.</p>
   </div>
   <div class="page-actions">
-    <a href="{{ url_for('admin.templates_list') }}" class="btn btn-secondary">All domains</a>
+    <span class="badge badge-pre">{{ domain_code }}</span>
+    {% if domain_code == OUTCOME_DOMAIN %}
+    <span class="badge badge-orange">Outcome</span>
+    {% endif %}
+    <a class="btn btn-primary"
+       href="{{ url_for('admin.template_edit', domain_code=domain_code) }}">Review &amp; edit</a>
   </div>
 </div>
 
-{% for code, label, items in grouped %}
+{% if domain_code == 'TID' %}
+<div class="flash flash-info">{{ DAUNTING_CAVEAT }}</div>
+{% endif %}
+
 <div class="panel">
-  <div class="panel-head">
-    <div class="panel-title">{{ label }}</div>
-    <span class="badge badge-outline">{{ items|length }} items</span>
-  </div>
-  <div class="panel-body">
-    <p class="panel-note">{{ subdomain_definition(domain_code, code) }}</p>
-    {% if domain_code == 'TID' and code == 'D' %}
-    <div class="flash flash-info">{{ DAUNTING_CAVEAT }}</div>
-    {% endif %}
-    <table class="table">
-      <thead><tr><th style="width:8rem">Code</th><th>Question</th></tr></thead>
-      <tbody>
-      {% for i in items %}
-        <tr><td><code>{{ i.item_code }}</code></td><td>{{ i.item_text }}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <table class="instrument-table">
+    <thead><tr>
+      <th class="col-num">#</th>
+      <th>Question text</th>
+      <th>Subdomain</th>
+      <th>Code</th>
+      <th>Anchor type</th>
+      <th class="col-check">Reverse</th>
+      <th class="col-check">Active</th>
+    </tr></thead>
+    <tbody>
+    {% for i in items %}
+      <tr>
+        <td class="col-num">{{ loop.index }}</td>
+        <td>{{ i.item_text }}</td>
+        <td class="cell-sub">{{ subdomain_label(domain_code, i.subdomain_code) }}</td>
+        <td class="cell-meta"><code>{{ i.item_code }}</code></td>
+        <td class="cell-meta">{{ i.anchor_type }}</td>
+        <td class="col-check">{{ 'Yes' if i.is_reverse_scored else '-' }}</td>
+        <td class="col-check">{{ 'Yes' if i.is_active else 'No' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
-{% endfor %}
 
 <p class="muted">
   Item codes and subdomain names appear on this screen because it belongs to the

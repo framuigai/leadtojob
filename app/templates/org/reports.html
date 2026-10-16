@@ -60,13 +60,24 @@
       <a href="{{ url_for('org.analysis', cycle_id=row.cycle.id) }}"
          class="btn btn-primary">View the analysis</a>
       {% endif %}
+      {% if row.state.key in ('ready', 'open') %}
+      <a href="{{ url_for('org.report_preview', cycle_id=row.cycle.id,
+                          report_type='executive') }}"
+         class="btn btn-secondary">Executive</a>
+      <a href="{{ url_for('org.report_preview', cycle_id=row.cycle.id,
+                          report_type='hr_od') }}"
+         class="btn btn-secondary">HR &amp; OD</a>
+      <a href="{{ url_for('org.report_preview', cycle_id=row.cycle.id,
+                          report_type='management') }}"
+         class="btn btn-secondary">Management</a>
+      {% endif %}
       <a href="{{ url_for('org.cycle_detail', cycle_id=row.cycle.id) }}"
          class="btn btn-secondary">Cycle</a>
     </div>
 
     <p class="muted" style="margin-top:1rem">
-      Downloadable Executive, HR &amp; OD and Management reports arrive in
-      phases 8-9. The analysis view shows the same figures on screen.
+      Each report opens as a preview with PDF and Excel downloads. The analysis
+      view shows the same figures on screen.
     </p>
   </div>
 </div>

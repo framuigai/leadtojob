@@ -2,13 +2,16 @@
 {% block title %}Instrument - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
-<div class="page-header"><div class="page-header-left">
-  <div class="section-label">{{ role_label(current_user.role) }}</div>
-  <h1>Your instrument</h1>
-  <p class="muted">{{ total }} questions, in the order respondents see them.
-    Read-only: this is your organisation's own frozen copy, and once a wave has
-    run it is the record of what was asked.</p>
-</div></div>
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">{{ role_label(current_user.role) }}</div>
+    <h1>Your instrument</h1>
+    <p class="version-note">Version {{ version }} &mdash; {{ total }} questions,
+      in the order respondents see them. Read-only: this is your organisation's
+      own frozen copy, and once a wave has run it is the record of what was
+      asked.</p>
+  </div>
+</div>
 
 {% for domain_code, items in grouped %}
 <div class="panel">
@@ -16,15 +19,26 @@
     <div class="panel-title">{{ domain_label(domain_code) }}</div>
     <span class="badge badge-outline">{{ items|length }} questions</span>
   </div>
-  <div class="panel-body">
-    <p class="panel-note">{{ domain_definition(domain_code) }}</p>
-    {% if domain_scope_note(domain_code) %}
-    <p class="panel-note">{{ domain_scope_note(domain_code) }}</p>
-    {% endif %}
-    <ol>
-      {% for i in items %}<li style="margin-bottom:.4rem">{{ i.item_text }}</li>{% endfor %}
-    </ol>
-  </div>
+  <table class="instrument-table">
+    <thead><tr>
+      <th class="col-num">#</th>
+      <th>Question text</th>
+      <th>Subdomain</th>
+      <th>Anchor type</th>
+      <th class="col-check">N/A</th>
+    </tr></thead>
+    <tbody>
+    {% for i in items %}
+      <tr>
+        <td class="col-num">{{ i.sort_order }}</td>
+        <td>{{ i.item_text }}</td>
+        <td class="cell-sub">{{ subdomain_label(domain_code, i.subdomain_code) }}</td>
+        <td class="cell-meta">{{ i.anchor_type }}</td>
+        <td class="col-check">{{ 'Yes' if i.allows_na else '-' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
 {% else %}
 <div class="empty-state"><div class="empty-icon">-</div>

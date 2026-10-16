@@ -307,6 +307,18 @@ def test_the_audit_screen_renders_and_filters(client, db, l1):
     assert 'Created organisation Acme Ltd' not in body
 
 
+def test_the_users_screen_carries_a_filter_bar_bound_to_the_table(client, db, l1):
+    """Filtering is the shared component over rows the route already sent."""
+    login(client, l1)
+    body = client.get('/admin/users').get_data(as_text=True)
+
+    assert 'data-filter-for="user-list"' in body
+    assert 'id="user-list"' in body
+    # L1's own row offers no toggle button; it reads "You" instead.
+    assert '>You<' in body
+    assert 'user_toggle' not in body
+
+
 def test_the_master_org_is_absent_from_the_users_screen_as_a_tenant(
         client, db, l1):
     login(client, l1)

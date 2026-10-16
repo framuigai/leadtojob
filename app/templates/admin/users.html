@@ -3,28 +3,78 @@
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
 <div class="page-header"><div class="page-header-left">
-  <div class="section-label">Master Admin</div>
+  <div class="section-label">Master Admin &middot; Users</div>
   <h1>Users</h1>
   <p class="muted">Administrators only. Survey respondents are never users -
     they reach the system through an anonymous link and the platform holds no
     record of who they are.</p>
 </div></div>
+
+<div class="filter-bar" data-filter-for="user-list">
+  <div class="filter-field">
+    <label for="user-q">Search</label>
+    <input id="user-q" type="text" data-key="search" data-match="search"
+           placeholder="Email or name">
+  </div>
+  <div class="filter-field">
+    <label for="user-role">Role</label>
+    <select id="user-role" data-key="role">
+      <option value="">All roles</option>
+      {% for r in roles %}
+      <option value="{{ r }}">{{ role_label(r) }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filter-field">
+    <label for="user-org">Organisation</label>
+    <select id="user-org" data-key="org">
+      <option value="">All organisations</option>
+      <option value="platform">platform</option>
+      {% for o in org_names %}
+      <option value="{{ o }}">{{ o }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filter-field">
+    <label for="user-status">Status</label>
+    <select id="user-status" data-key="status">
+      <option value="">All</option>
+      <option value="active">Active</option>
+      <option value="deactivated">Deactivated</option>
+    </select>
+  </div>
+  <button type="button" class="filter-clear">Clear</button>
+  <span class="filter-count" data-count-for="user-list"></span>
+</div>
+
 <div class="panel"><div class="table-scroll">
-  <table class="table">
-    <thead><tr><th>Email</th><th>Role</th><th>Organisation</th><th>Branch</th>
-      <th>Last signed in</th><th>Status</th><th></th></tr></thead>
+  <table class="table" id="user-list">
+    <thead><tr>
+      <th>Email</th><th>Name</th><th>Role</th><th>Organisation</th>
+      <th>Branch</th><th>Status</th><th>Last login</th><th></th>
+    </tr></thead>
     <tbody>
     {% for u in users %}
-      <tr>
-        <td>{{ u.email }}</td>
-        <td>{{ role_label(u.role) }}</td>
-        <td>{% if u.org_id and u.org_id in orgs %}{{ orgs[u.org_id].name }}
+      {% set org_name = orgs[u.org_id].name if u.org_id and u.org_id in orgs else 'platform' %}
+      <tr data-search="{{ u.email }} {{ u.full_name or '' }}"
+          data-role="{{ u.role }}"
+          data-org="{{ org_name }}"
+          data-status="{{ 'active' if u.is_active else 'deactivated' }}">
+        <td><strong>{{ u.email }}</strong></td>
+        <td>{{ u.full_name or '&mdash;'|safe }}</td>
+        <td><span class="badge badge-navy">{{ role_label(u.role) }}</span></td>
+        <td>{% if u.org_id and u.org_id in orgs %}{{ org_name }}
             {% else %}<span class="muted">platform</span>{% endif %}</td>
         <td>{% if u.branch_id and u.branch_id in branches %}{{ branches[u.branch_id].name }}
-            {% else %}-{% endif %}</td>
+            {% else %}<span class="muted">&mdash;</span>{% endif %}</td>
+        <td>
+          {% if u.is_active %}
+            <span class="status-pill status-green">Active</span>
+          {% else %}
+            <span class="status-pill status-amber">Deactivated</span>
+          {% endif %}
+        </td>
         <td>{{ u.last_login_at.strftime('%d %b %Y') if u.last_login_at else 'Never' }}</td>
-        <td>{% if u.is_active %}Active{% else %}
-            <span class="badge badge-outline">Deactivated</span>{% endif %}</td>
         <td class="row-actions">
           {% if u.id != current_user.id %}
           <form method="post" action="{{ url_for('admin.user_toggle', user_id=u.id) }}">
@@ -32,10 +82,15 @@
             <button type="submit" class="btn btn-sm btn-secondary">
               {{ 'Deactivate' if u.is_active else 'Reactivate' }}</button>
           </form>
+          {% else %}
+          <span class="muted">You</span>
           {% endif %}
         </td>
       </tr>
     {% endfor %}
+      <tr class="filter-empty" data-empty-for="user-list">
+        <td colspan="8" class="muted">No user matches those filters.</td>
+      </tr>
     </tbody>
   </table>
 </div></div>

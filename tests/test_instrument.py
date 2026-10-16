@@ -282,7 +282,7 @@ def test_l1_can_read_the_master_instrument(client, db):
 
     login(client, l1)
     body = client.get('/admin/templates').get_data(as_text=True)
-    assert 'Instrument Templates' in body
+    assert 'Assessment Instrument' in body
 
     body = client.get('/admin/templates/GEM').get_data(as_text=True)
     assert 'Overall, I am satisfied with my current job.' in body
@@ -331,3 +331,151 @@ def test_an_org_admin_cannot_reach_the_master_template_editor(client, db):
     res = client.get('/admin/templates')
     assert res.status_code == 302
     assert '/org/' in res.headers['Location']
+
+
+# ── The L1 editor ───────────────────────────────────────────────────────────
+
+def _edit_form(items, **overrides):
+    """The editor posts every row back, not just the changed one."""
+    form = {}
+    for i in items:
+        form[f'text-{i.id}'] = overrides.get(str(i.id), i.item_text)
+        if i.is_active:
+            form[f'active-{i.id}'] = 'on'
+        if i.is_reverse_scored:
+            form[f'reverse-{i.id}'] = 'on'
+    return form
+
+
+def _master_items(domain_code=None, version=1):
+    q = db.session.query(SurveyItem).filter_by(
+        org_id=MASTER_ORG_ID, version=version)
+    if domain_code:
+        q = q.filter_by(domain_code=domain_code)
+    return q.order_by(SurveyItem.sort_order).all()
+
+
+def test_l1_saving_an_edit_creates_a_new_version_and_leaves_the_old_one(client, db):
+    """
+    An item is never rewritten in place: version 1 must still answer "what did
+    this question say?" after version 2 exists.
+    """
+    make_master_instrument()
+    l1 = make_master_admin(email='l1@leadto.test')
+    db.session.commit()
+    login(client, l1)
+
+    items = _master_items('GEM')
+    target, original = items[0], items[0].item_text
+    form = _edit_form(items, **{str(target.id): 'Reworded for the pilot.'})
+
+    res = client.post('/admin/templates/GEM/edit', data=form)
+    assert res.status_code == 302
+
+    old = db.session.query(SurveyItem).filter_by(
+        org_id=MASTER_ORG_ID, version=1, item_code=target.item_code).one()
+    assert old.item_text == original
+
+    new = db.session.query(SurveyItem).filter_by(
+        org_id=MASTER_ORG_ID, version=2, item_code=target.item_code).one()
+    assert new.item_text == 'Reworded for the pilot.'
+
+
+def test_a_new_version_carries_the_whole_instrument_not_just_the_edited_domain(client, db):
+    """
+    A version holding only GEM is a 12-item instrument, and cloning one into a
+    client produces a survey that is short in a way nothing downstream checks.
+    """
+    make_master_instrument()
+    l1 = make_master_admin(email='l1@leadto.test')
+    db.session.commit()
+    login(client, l1)
+
+    items = _master_items('GEM')
+    form = _edit_form(items, **{str(items[0].id): 'Changed.'})
+    client.post('/admin/templates/GEM/edit', data=form)
+
+    assert len(_master_items(version=2)) == 48
+
+
+def test_an_edit_does_not_reach_an_org_that_has_already_cloned(client, db):
+    """The client copy is evidence. Editing the master never rewrites it."""
+    make_master_instrument()
+    org = make_org('Acme Ltd')
+    clone_instrument_to_org(org.id)
+    l1 = make_master_admin(email='l1@leadto.test')
+    db.session.commit()
+    login(client, l1)
+
+    items = _master_items('GEM')
+    before = db.session.query(SurveyItem).filter_by(
+        org_id=org.id, item_code=items[0].item_code).one().item_text
+
+    form = _edit_form(items, **{str(items[0].id): 'Changed at the master.'})
+    client.post('/admin/templates/GEM/edit', data=form)
+
+    after = db.session.query(SurveyItem).filter_by(
+        org_id=org.id, item_code=items[0].item_code).all()
+    assert len(after) == 1
+    assert after[0].item_text == before
+
+
+def test_an_org_provisioned_after_an_edit_receives_the_edited_version(client, db):
+    make_master_instrument()
+    l1 = make_master_admin(email='l1@leadto.test')
+    db.session.commit()
+    login(client, l1)
+
+    items = _master_items('GEM')
+    code = items[0].item_code
+    form = _edit_form(items, **{str(items[0].id): 'The current wording.'})
+    client.post('/admin/templates/GEM/edit', data=form)
+
+    later = make_org('Latecomer Ltd')
+    clone_instrument_to_org(later.id)
+    db.session.commit()
+
+    cloned = db.session.query(SurveyItem).filter_by(
+        org_id=later.id, item_code=code).one()
+    assert cloned.version == 2
+    assert cloned.item_text == 'The current wording.'
+
+
+def test_empty_question_text_is_refused_and_writes_no_version(client, db):
+    make_master_instrument()
+    l1 = make_master_admin(email='l1@leadto.test')
+    db.session.commit()
+    login(client, l1)
+
+    items = _master_items('GEM')
+    form = _edit_form(items, **{str(items[0].id): '   '})
+    res = client.post('/admin/templates/GEM/edit', data=form)
+
+    assert res.status_code == 200
+    assert _master_items(version=2) == []
+
+
+def test_saving_with_nothing_changed_creates_no_version(client, db):
+    make_master_instrument()
+    l1 = make_master_admin(email='l1@leadto.test')
+    db.session.commit()
+    login(client, l1)
+
+    client.post('/admin/templates/GEM/edit', data=_edit_form(_master_items('GEM')))
+    assert _master_items(version=2) == []
+
+
+def test_an_org_admin_cannot_reach_the_editor(client, db):
+    make_master_instrument()
+    org = make_org('Acme Ltd')
+    admin = make_org_admin(org, email='l2@acme.test')
+    db.session.commit()
+
+    login(client, admin)
+    res = client.get('/admin/templates/GEM/edit')
+    assert res.status_code == 302
+    assert '/org/' in res.headers['Location']
+
+    res = client.post('/admin/templates/GEM/edit', data={})
+    assert res.status_code == 302
+    assert _master_items(version=2) == []

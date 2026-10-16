@@ -44,6 +44,10 @@ BRANCH_EDIT         = 'branch.edit'
 BRANCH_DEACTIVATE   = 'branch.deactivate'
 BRANCH_REACTIVATE   = 'branch.reactivate'
 
+# A master-instrument edit. The target is the NEW version: an edit never
+# rewrites an item in place, so the log points at what was created.
+INSTRUMENT_EDIT     = 'instrument.edit'
+
 USER_CREATE         = 'user.create'
 USER_DEACTIVATE     = 'user.deactivate'
 USER_REACTIVATE     = 'user.reactivate'

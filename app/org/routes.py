@@ -52,7 +52,7 @@ from app.models import (
     SurveyDeployment, SurveyItem, User,
 )
 from app.org import org_bp
-from app.provisioning import active_segments
+from app.provisioning import active_segments, latest_version
 from app.permissions import (
     BRANCH_ADMIN, DEPLOY_ORG_WIDE, DEPLOY_SURVEYS, DEPLOY_TO_BRANCH,
     EDIT_DEPLOYMENT, ISSUE_TICKETS, MANAGE_BRANCH_ADMINS, MANAGE_BRANCHES,
@@ -704,8 +704,9 @@ def instrument():
     The org's own frozen copy of the 48 items. READ ONLY for L2 and L3 —
     editing is L1's.
     """
+    version = latest_version(current_user.org_id)
     items = (db.session.query(SurveyItem)
-             .filter_by(org_id=current_user.org_id, version=1)
+             .filter_by(org_id=current_user.org_id, version=version)
              .order_by(SurveyItem.sort_order).all())
     grouped = []
     for domain_code in domains.DOMAINS:
@@ -713,7 +714,7 @@ def instrument():
         if in_domain:
             grouped.append((domain_code, in_domain))
     return render_template('org/instrument.html', grouped=grouped,
-                           total=len(items))
+                           version=version, total=len(items))
 
 
 # ── Placeholders ────────────────────────────────────────────────────────────

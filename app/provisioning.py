@@ -17,6 +17,8 @@ Pure-ish: takes an org_id, uses db.session, DOES NOT COMMIT. The caller owns the
 transaction, so a clone and the org row it belongs to land together or not at
 all.
 """
+from sqlalchemy import func
+
 from app import db
 from app.domains import (
     DOMAINS, MASTER_ORG_ID, SUGGESTED_SEGMENT_KEYS,
@@ -28,7 +30,20 @@ class ProvisioningError(Exception):
     pass
 
 
-def clone_instrument_to_org(org_id, version=1):
+def latest_version(org_id):
+    """
+    The highest instrument version an org holds, or 1 when it holds none.
+
+    Editing the master never rewrites an item in place: a save writes a whole
+    new version and the old one stays readable, because a wave that has run
+    must still be able to answer "what did this question say?" exactly. Every
+    reader therefore asks for the latest version rather than assuming 1.
+    """
+    return (db.session.query(func.max(SurveyItem.version))
+            .filter_by(org_id=org_id).scalar() or 1)
+
+
+def clone_instrument_to_org(org_id, version=None):
     """
     Copy the 48 master items into `org_id`. Returns the number cloned.
 
@@ -37,6 +52,11 @@ def clone_instrument_to_org(org_id, version=1):
     """
     if org_id == MASTER_ORG_ID:
         raise ProvisioningError('refusing to clone the master into itself')
+
+    # Default to whatever the master currently holds, so an org provisioned
+    # after an edit receives the edited instrument rather than version 1.
+    if version is None:
+        version = latest_version(MASTER_ORG_ID)
 
     existing = (db.session.query(SurveyItem)
                 .filter_by(org_id=org_id, version=version).count())

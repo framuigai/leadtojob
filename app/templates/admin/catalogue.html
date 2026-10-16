@@ -1,30 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Intervention Catalogue - leadTo{% endblock %}
+{% block title %}Development Catalogue - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
 <div class="page-header"><div class="page-header-left">
-  <div class="section-label">Master Admin</div>
-  <h1>Intervention Catalogue</h1>
-  <p class="muted">
-    {{ total }} topics across
-    {{ programmes|length }} programmes. One catalogue shared by every client:
-    an edit here changes what every organisation's report offers, which is why
-    it is seeded from <code>docs/intervention_catalogue.json</code> rather than
-    edited row by row.
-  </p>
+  <div class="section-label">Master Admin &middot; Development Catalogue</div>
+  <h1>Development Catalogue</h1>
 </div></div>
-
-<div class="stats-row">
-  <div class="stat-card"><div class="stat-val">{{ total }}</div>
-    <div class="stat-label">Topics</div></div>
-  <div class="stat-card"><div class="stat-val">{{ programmes|length }}</div>
-    <div class="stat-label">Programmes</div></div>
-  <div class="stat-card"><div class="stat-val">
-    {{ rows|selectattr('covered')|list|length }} / {{ rows|length }}</div>
-    <div class="stat-label">Cells covered</div></div>
-  <div class="stat-card"><div class="stat-val">{{ gaps|length }}</div>
-    <div class="stat-label">Cells with nothing</div></div>
-</div>
 
 {% if gaps %}
 <div class="flash flash-warning">
@@ -38,41 +19,101 @@
 {% endif %}
 
 <div class="panel">
-  <div class="panel-head"><div class="panel-title">By subdomain</div></div>
-  <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Subdomain</th><th>Response categories</th>
-        <th>What a finding here produces</th></tr></thead>
-      <tbody>
-      {% for row in rows %}
-        <tr>
-          <td><strong>{{ row.label }}</strong><br>
-            <span class="muted">{{ domain_label(row.domain_code) }}</span></td>
-          <td class="muted">
-            {{ intervention_map_entry(row.domain_code, row.subdomain_code) }}</td>
-          <td>
-            {% if not row.training_permitted %}
-              <span class="badge badge-outline">no course, by design</span><br>
-              <span class="muted">{{ row.guidance }}</span><br>
-              <span class="muted">Specification &sect;8.5: training is not a
-                substitute for addressing a compensation problem. The supplied
-                curriculum maps no course here either.</span>
-            {% elif row.courses %}
-              <ul style="margin:0;padding-left:1.1rem">
-              {% for course in row.courses %}
-                <li>{{ course.title }}
-                  <span class="muted">&middot; <code>{{ course.intervention_code }}</code>
-                  &middot; {{ course.source_programme }}</span></li>
-              {% endfor %}
-              </ul>
-            {% else %}
-              <span class="status-pill status-amber">no course mapped</span>
-            {% endif %}
-          </td>
-        </tr>
+  <div class="coverage-caption">
+    Coverage by capability area &mdash; a cell with no topic produces no
+    recommendation for any client.
+  </div>
+  <table class="coverage-grid">
+    <tbody>
+    {% for domain_code, cells in grid %}
+      <tr>
+        <td class="grid-domain">{{ domain_label(domain_code) }}</td>
+        {% for cell in cells %}
+        <td>
+          <div class="grid-sub">{{ cell.label }}</div>
+          {% if not cell.training_permitted %}
+            <div class="grid-count grid-bydesign">no course, by design</div>
+          {% elif cell.count %}
+            <div class="grid-count">{{ cell.count }} topic{{ '' if cell.count == 1 else 's' }}</div>
+          {% else %}
+            <div class="grid-count grid-none">no topic</div>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="filter-bar" data-filter-for="course-list">
+  <div class="filter-field">
+    <label for="course-q">Search</label>
+    <input id="course-q" type="text" data-key="search" data-match="search"
+           placeholder="Code or topic">
+  </div>
+  <div class="filter-field">
+    <label for="course-domain">Domain</label>
+    <select id="course-domain" data-key="domains" data-match="contains">
+      <option value="">All domains</option>
+      {% for d in DOMAINS %}
+      <option value="{{ d }}">{{ domain_label(d) }}</option>
       {% endfor %}
-      </tbody>
-    </table>
+    </select>
+  </div>
+  <div class="filter-field">
+    <label for="course-programme">Programme</label>
+    <select id="course-programme" data-key="programme">
+      <option value="">All programmes</option>
+      {% for name, items in by_programme %}
+      <option value="{{ name }}">{{ name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filter-field">
+    <label for="course-type">Type</label>
+    <select id="course-type" data-key="type">
+      <option value="">All types</option>
+      {% for t in courses|map(attribute='type')|unique|sort %}
+      <option value="{{ t }}">{{ t }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="button" class="filter-clear">Clear</button>
+  <span class="filter-count" data-count-for="course-list"></span>
+</div>
+
+<div class="panel">
+  <div class="coverage-caption">Topics <span class="caption-count">{{ courses|length }}</span></div>
+  <div class="table-scroll">
+  <table class="table" id="course-list">
+    <thead><tr>
+      <th>Code</th><th>Topic</th><th>Programme</th><th>Type</th>
+      <th>Domain</th><th>Capability area</th>
+    </tr></thead>
+    <tbody>
+    {% for c in courses %}
+      <tr data-search="{{ c.code }} {{ c.title }}"
+          data-domains="|{{ c.domains|join('|') }}|"
+          data-programme="{{ c.programme }}"
+          data-type="{{ c.type }}">
+        <td class="cell-meta"><code>{{ c.code }}</code></td>
+        <td><strong>{{ c.title }}</strong></td>
+        <td class="cell-sub">{{ c.programme }}</td>
+        <td class="cell-sub">{{ c.type }}</td>
+        <td class="cell-sub">
+          {% for d, label in c.cells %}{{ domain_label(d) }}<br>{% endfor %}
+        </td>
+        <td class="cell-sub">
+          {% for d, label in c.cells %}{{ label }}<br>{% endfor %}
+        </td>
+      </tr>
+    {% endfor %}
+      <tr class="filter-empty" data-empty-for="course-list">
+        <td colspan="6" class="muted">No topic matches those filters.</td>
+      </tr>
+    </tbody>
+  </table>
   </div>
 </div>
 
@@ -81,7 +122,9 @@
     <strong>Training is one category among several.</strong> Every report shows
     the specification's own response categories alongside any course, so a
     reader is never left with courses as the only visible option. The three
-    Reward Satisfaction subdomains carry no course at all and never will.
+    Reward Satisfaction subdomains carry no course at all and never will:
+    specification &sect;8.5, training is not a substitute for addressing a
+    compensation problem.
   </p>
 </div></div>
 {% endblock %}

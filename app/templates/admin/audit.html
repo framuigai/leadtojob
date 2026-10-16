@@ -5,7 +5,8 @@
 <div class="page-header"><div class="page-header-left">
   <div class="section-label">Master Admin</div>
   <h1>Audit Log</h1>
-  <p class="muted">Append-only. Showing the most recent 500 actions.</p>
+  <p class="muted">Every destructive or corrective administrative action,
+    newest first. Append-only. Showing the most recent 500.</p>
 </div></div>
 
 <form method="get" class="filter-bar">
@@ -22,18 +23,19 @@
 
 <div class="panel"><div class="table-scroll">
   <table class="table">
-    <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th>
+    <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th>
       <th>Summary</th><th>Organisation</th></tr></thead>
     <tbody>
     {% for e in events %}
       <tr>
-        <td>{{ e.created_at.strftime('%d %b %Y %H:%M') if e.created_at else '-' }}</td>
-        <td>{{ e.actor_email }}<br><span class="muted">{{ role_label(e.actor_role) }}</span></td>
-        <td><code>{{ e.action }}</code></td>
-        <td>{{ e.target_type }}</td>
+        <td class="audit-when">{{ e.created_at.strftime('%d %b %Y %H:%M') if e.created_at else '-' }}</td>
+        <td><div class="audit-actor">{{ e.actor_email }}</div>
+          <div class="audit-role">{{ role_label(e.actor_role) }}</div></td>
+        <td><span class="action-pill">{{ e.action }}</span></td>
+        <td class="cell-sub">{{ e.target_type }}</td>
         <td>{{ e.summary }}</td>
-        <td>{% if e.org_id and e.org_id in orgs %}{{ orgs[e.org_id].name }}
-            {% else %}-{% endif %}</td>
+        <td class="cell-sub">{% if e.org_id and e.org_id in orgs %}{{ orgs[e.org_id].name }}
+            {% else %}<span class="muted">&mdash;</span>{% endif %}</td>
       </tr>
     {% else %}
       <tr><td colspan="6" class="muted">Nothing logged yet.</td></tr>
