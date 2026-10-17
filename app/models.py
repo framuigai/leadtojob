@@ -74,7 +74,7 @@ class Org(db.Model):
     brand_colour = Column(String(6))         # hex without '#', e.g. '2E75B6'
     # The domains this client measures by default. All four is the normal case
     # and the recommended one — a satisfaction diagnostic without GEM is not a
-    # diagnostic — but a client may legitimately run a shorter pulse wave. A
+    # diagnostic — but a client may legitimately run a shorter pulse cycle. A
     # new cycle inherits this set and may narrow it further; it can never
     # widen beyond it.
     active_domains = Column(ARRAY(String))
@@ -169,12 +169,12 @@ class User(UserMixin, db.Model):
 
 
 # ---------------------------------------------------------------------------
-# Measurement Cycles  — THE CYCLE IS A MEASUREMENT WAVE
+# Measurement Cycles  — ONE MEASUREMENT ROUND
 # ---------------------------------------------------------------------------
 
 class MeasurementCycle(db.Model):
     """
-    A wave: "Employee Satisfaction Survey 2026 H1".
+    A cycle: "Employee Satisfaction Survey 2026 H1".
 
     NOT a person and NOT a position — the sibling products' cycles are both.
     This is what spec §3.2.6 ("establish a baseline for subsequent
@@ -203,8 +203,8 @@ class MeasurementCycle(db.Model):
     purpose_statement = Column(Text, nullable=False)
 
     # Defaults to all four. Frozen on the first response (see §4.3 in the plan):
-    # two waves with different domain sets are not comparable, and the trend
-    # section refuses to trend a domain absent from either wave rather than
+    # two cycles with different domain sets are not comparable, and the trend
+    # section refuses to trend a domain absent from either cycle rather than
     # plotting a gap as a drop.
     assessed_domains = Column(ARRAY(String))
 
@@ -218,7 +218,7 @@ class MeasurementCycle(db.Model):
     closes_at = Column(DateTime(timezone=True))
     closed_at = Column(DateTime(timezone=True))
 
-    # The suppression floor for this wave. May be raised above the platform
+    # The suppression floor for this cycle. May be raised above the platform
     # default (config.MIN_REPORTING_N) and NEVER lowered below it — the check
     # lives in app/analytics/ and the LOWER_MIN_N capability is held by nobody.
     min_reporting_n = Column(Integer, nullable=False, default=5)
@@ -227,7 +227,7 @@ class MeasurementCycle(db.Model):
     # (spec §10.2: the organisation must document which it uses, because
     # mean-of-items and mean-of-subdomains differ when completeness varies).
     # FROZEN per cycle: changing it mid-stream silently changes everyone's
-    # numbers and makes two waves incomparable.
+    # numbers and makes two cycles incomparable.
     scoring_method = Column(String(24), nullable=False, default='mean_of_subdomains')
 
     # Retention, spec §13.8. NOT NULL, bounded 3-120 by the check below.
@@ -235,7 +235,7 @@ class MeasurementCycle(db.Model):
     # A nullable column would mean "not set", which in practice is INDEFINITE —
     # the state §13.8 forbids — and an unbounded integer is how "indefinitely"
     # gets entered as 9999. The clock starts when the cycle CLOSES, not when it
-    # opens: an open wave is never overdue however long it has been open.
+    # opens: an open cycle is never overdue however long it has been open.
     #
     # NOTHING DELETES ON A TIMER. There is no background worker in this product
     # and a silent purge of anonymous responses that cannot be recollected is
@@ -243,7 +243,7 @@ class MeasurementCycle(db.Model):
     # board with a confirmed, audited purge behind PURGE_EXPIRED_CYCLE.
     retention_months = Column(Integer, nullable=False, default=24)
 
-    # A pilot wave (spec §15). Turns on the optional instrument-feedback block
+    # A pilot cycle (spec §15). Turns on the optional instrument-feedback block
     # at the end of the form, whose answers are L1-only and never reach a
     # client report. See PilotFeedback.
     is_pilot = Column(Boolean, nullable=False, default=False)
@@ -322,7 +322,7 @@ class Segment(db.Model):
     is_active = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
     # Set on the first response of the first cycle that uses it. After this,
-    # options are read-only: renaming an option mid-wave reassigns responses
+    # options are read-only: renaming an option mid-cycle reassigns responses
     # that were given under the old meaning.
     frozen_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=_utcnow)
@@ -369,7 +369,7 @@ class SurveyDeployment(db.Model):
     """
     __tablename__ = 'survey_deployments'
     __table_args__ = (
-        # Hard-block two concurrent open waves over the same population.
+        # Hard-block two concurrent open deployments over the same population.
         # Declared here (not as raw SQL in a migration) so Alembic autogenerate
         # recognises it and doesn't propose dropping it. And declared in the
         # DATABASE, not merely checked in the route, because two admins
@@ -436,7 +436,7 @@ class SurveyDeployment(db.Model):
     closed = Column(Boolean, nullable=False, default=False)
 
     # Soft delete. Archiving ALSO sets closed=True: it kills the public link and
-    # takes the row out of uq_open_deployment, so the wave can be redeployed.
+    # takes the row out of uq_open_deployment, so the deployment can be remade.
     # Only L1 may restore one.
     archived_at = Column(DateTime(timezone=True), index=True)
     archived_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
@@ -610,7 +610,7 @@ class SurveyItem(db.Model):
     # 48 supplied items is currently reverse-worded. Pilot validation (§15) is
     # the most likely reason to introduce one, and retrofitting a reverse flag
     # through a scoring ladder after real data exists is the kind of change
-    # that silently flips a subdomain for every historical wave.
+    # that silently flips a subdomain for every historical cycle.
     is_reverse_scored = Column(Boolean, nullable=False, default=False)
 
     is_active = Column(Boolean, nullable=False, default=True)
@@ -783,7 +783,7 @@ class ImprovementActions(db.Model):
     "completion of agreed improvement actions", and §12.3 ends the Management
     Report with "follow-up commitments and progress monitoring". Neither is a
     report section that can be rendered from survey rows: both need state that
-    persists BETWEEN waves. Neither sibling product has an analogue to inherit.
+    persists BETWEEN cycles. Neither sibling product has an analogue to inherit.
 
     Without this table the product is a score generator, which §16's closing
     sentence explicitly says it is not: "The system's value lies in enabling a
@@ -804,7 +804,7 @@ class ImprovementActions(db.Model):
        human commits to an action. A row may be SEEDED FROM a catalogue entry
        and then carries source_catalogue_id, so the provenance survives.
 
-    3. The next wave's trend section reports actions ALONGSIDE the change, under
+    3. The next cycle's trend section reports actions ALONGSIDE the change, under
        §16's caveat (domains.TREND_CAVEAT). It prints both and refuses to join
        them into a claim.
     """
@@ -841,7 +841,7 @@ class ImprovementActions(db.Model):
     due_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     # What changed, in the owner's words. Feeds §16's "employee perceptions of
-    # changes implemented" alongside the next wave's scores.
+    # changes implemented" alongside the next cycle's scores.
     evidence_note = Column(Text)
 
     created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
@@ -866,7 +866,7 @@ class PilotFeedback(db.Model):
     THIS IS THE ONLY FREE TEXT IN THE PRODUCT, and its scope is what makes it
     acceptable:
 
-      * only on a pilot wave;
+      * only on a pilot cycle;
       * about the INSTRUMENT, not about the employer — which is a different
         risk profile from an employee comment box, the single largest
         re-identification vector in any employee survey;

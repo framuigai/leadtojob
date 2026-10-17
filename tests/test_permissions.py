@@ -64,8 +64,8 @@ def test_lower_min_n_is_held_by_no_role_at_all():
 def test_l2_deploys_org_wide_and_l3_deploys_to_its_branch():
     """
     L2 does NOT hold DEPLOY_TO_BRANCH. The reasoning is in permissions.py: a
-    wave is either organisation-wide or a branch's own, and letting both tiers
-    target the same branch produces two concurrent waves over one population
+    deployment is either organisation-wide or a branch's own, and letting both tiers
+    target the same branch produces two concurrent deployments over one population
     with no way to tell which is authoritative — and a response-rate
     denominator that means nothing.
 
@@ -87,7 +87,7 @@ def test_l2_deploys_org_wide_and_l3_deploys_to_its_branch():
 
 def test_l1_only_capabilities_are_l1_only():
     for cap in (p.MANAGE_ORGS, p.EDIT_TEMPLATES, p.VIEW_COSTS, p.VIEW_AUDIT_LOG,
-                p.MANAGE_CATALOGUE, p.VIEW_VALIDATION_REPORT,
+                p.MANAGE_CATALOGUE,
                 p.VIEW_PILOT_FEEDBACK, p.DELETE_ANSWERED, p.RESTORE_ARCHIVED,
                 p.DELETE_ORG_OR_BRANCH, p.PURGE_EXPIRED_CYCLE):
         assert p.can(L1, cap), cap
@@ -105,16 +105,6 @@ def test_destroying_collected_responses_is_l1_only():
     assert p.can(L1, p.DELETE_ANSWERED)
     assert not p.can(L2, p.DELETE_ANSWERED)
     assert not p.can(L3, p.DELETE_ANSWERED)
-
-
-def test_the_validation_report_is_not_a_client_deliverable():
-    """
-    It is psychometric evidence about the INSTRUMENT (spec §15), not a finding
-    about the client's workforce. Handing it over invites the instrument's
-    weaknesses to be read as the organisation's.
-    """
-    assert p.can(L1, p.VIEW_VALIDATION_REPORT)
-    assert not p.can(L2, p.VIEW_VALIDATION_REPORT)
 
 
 def test_pilot_feedback_is_not_a_client_deliverable():
@@ -167,7 +157,7 @@ def test_a_branch_admin_with_no_branch_sees_nothing():
     assert p.visible_branch_ids(orphan) == []
 
 
-def test_only_unscoped_tiers_see_org_wide_waves():
+def test_only_unscoped_tiers_see_org_wide_deployments():
     assert p.can_see_org_wide(L1)
     assert p.can_see_org_wide(L2)
     assert not p.can_see_org_wide(L3)

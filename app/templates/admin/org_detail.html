@@ -10,11 +10,8 @@
   </div>
   <div class="page-actions">
     {% if not org.setup_complete %}
-    <form method="post" action="{{ url_for('admin.org_complete', org_id=org.id) }}"
-          style="display:inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-primary">Complete setup</button>
-    </form>
+    <a href="{{ url_for('admin.org_setup_confirm', org_id=org.id) }}"
+       class="btn btn-primary">Resume setup</a>
     {% endif %}
     <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">All organisations</a>
   </div>
@@ -22,8 +19,8 @@
 
 {% if not org.setup_complete %}
 <div class="flash flash-warning">
-  Setup is incomplete. This organisation needs at least one administrator before
-  anyone at the client can sign in.
+  Setup is incomplete. This organisation is a resumable draft and needs at
+  least one administrator before anyone at the client can sign in.
 </div>
 {% endif %}
 

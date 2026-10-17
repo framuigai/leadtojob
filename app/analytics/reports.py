@@ -13,7 +13,7 @@ sent together, opened side by side, and a client who finds "Executive Summary"
 in one and "Exec Report" in the other stops trusting both.
 
 ────────────────────────────────────────────────────────────────────────────────
-REPORTS ARE GENERATED FROM A CLOSED WAVE
+REPORTS ARE GENERATED FROM A CLOSED CYCLE
 ────────────────────────────────────────────────────────────────────────────────
 Enforced here, in `require_reportable()`, not merely suggested on a screen.
 
@@ -21,7 +21,7 @@ In-report suppression defends against subtraction WITHIN one document. It
 cannot defend across time: two reports of the same group computed at n=5 and
 n=6 give up respondent 6's entire profile by subtraction, and no amount of cell
 suppression prevents that. The only defence is that a group's figures are
-published once, from a wave that has stopped moving.
+published once, from a cycle that has stopped moving.
 
 Every report also records the n it was computed at, on the page and in
 `report_events`.
@@ -90,7 +90,20 @@ def report_filename(report_type, org_name, cycle_id, extension):
 def require_reportable(report_type, cycle, deployments, profiles,
                        scope_label=None):
     """
-    Refuse to generate, with a reason, in the three cases that matter.
+    Refuse to generate, with a reason, in the two cases that matter.
+
+    AN OPEN CYCLE IS NOT ONE OF THEM. A cycle still collecting reports as
+    PROVISIONAL rather than being withheld — trainiq gates on responses and
+    never on deployment state, promo likewise, and the three products must not
+    disagree about when a client may read their own numbers. What an open
+    cycle does NOT get is a generated Interpretation, and it does not get a
+    report without the provisional note: see build_context.
+
+    The subtraction risk that an open cycle carries is real — two reads of the
+    same group at different n give up the difference between them — but it is
+    answered by marking the read and logging it, not by refusing it, because
+    the client-facing screen already offered exactly this and the risk was
+    being carried silently.
 
     Checked HERE rather than in a route or a template: a template-level check
     is one `{% if %}` away from being forgotten in the next report, and these
@@ -98,17 +111,8 @@ def require_reportable(report_type, cycle, deployments, profiles,
     """
     if not deployments:
         raise ReportNotAvailable(
-            f'{report_title(report_type)}: this wave has not been deployed, so '
+            f'{report_title(report_type)}: this cycle has not been deployed, so '
             'there is nothing to report.'
-        )
-
-    if any(not d.closed for d in deployments):
-        raise ReportNotAvailable(
-            f'{report_title(report_type)}: this wave is still open. Reports are '
-            'generated once a wave has closed, so that a figure cannot change '
-            'after someone has read and acted on it — and so that two reports '
-            'of the same group taken at different times cannot be subtracted '
-            'from one another to reveal an individual response.'
         )
 
     n = len(profiles)
@@ -182,6 +186,19 @@ def build_context(report_type, org, cycle, deployments, profiles,
             coverage_rows.append(
                 (domains.subdomain_label(*pair), result.distribution.na_pct))
 
+    # The lowest-scoring reportable subdomains, computed HERE rather than
+    # sorted in a template: a Jinja sort over mixed GroupResult/Suppressed
+    # objects either raises or silently drops the suppressed ones, and which
+    # it does depends on the data. Suppressed cells are excluded deliberately
+    # — an unreportable figure must not become a finding by being ranked.
+    lowest_scoring = sorted(
+        ({'pair': pair, 'label': domains.subdomain_label(*pair),
+          'result': result}
+         for pair, result in subdomain_rows
+         if isinstance(result, sc.GroupResult)),
+        key=lambda row: (row['result'].mean, row['label']))[:5]
+
+    provisional = any(not d.closed for d in deployments)
     responses_received = sum(d.responses_received for d in deployments)
     expected = sum(d.expected_respondents for d in deployments)
 
@@ -199,6 +216,9 @@ def build_context(report_type, org, cycle, deployments, profiles,
         'expected': expected,
         'response_rate': (responses_received / expected * 100) if expected else None,
         'min_reporting_n': min_n,
+        'lowest_scoring': lowest_scoring,
+        'provisional': provisional,
+        'provisional_note': domains.PROVISIONAL_NOTE if provisional else None,
         'scoring_method': cycle.scoring_method,
         'scoring_method_label': (
             'the mean of the three subdomain scores'
@@ -273,7 +293,7 @@ def add_charts(context):
             [(change.measure_label if hasattr(change, 'measure_label')
               else str(measure), change)
              for measure, change in context['trend'].changes],
-            title='Change since the previous wave')
+            title='Change since the previous cycle')
 
     context['chart_distributions'] = {
         pair: charts.distribution_bar(result.distribution)
@@ -316,9 +336,16 @@ def _header(sheet, context, subtitle=None):
         f"Reporting threshold: n ≥ {context['min_reporting_n']}"
     )
     sheet['A3'].font = Font(size=9, italic=True)
-    sheet['A4'] = 'CONFIDENTIAL'
+    sheet['A4'] = ('CONFIDENTIAL — PROVISIONAL' if context.get('provisional')
+                   else 'CONFIDENTIAL')
     sheet['A4'].font = Font(size=9, bold=True)
     row = 6
+    if context.get('provisional'):
+        # In the header, not only in Limitations: a sheet gets filtered,
+        # copied and pasted into a deck, and row 5 travels with it.
+        sheet['A5'] = context['provisional_note']
+        sheet['A5'].font = Font(size=9, italic=True, bold=True)
+        row = 7
     if subtitle:
         sheet[f'A{row}'] = subtitle
         sheet[f'A{row}'].font = Font(size=11, bold=True)
@@ -382,7 +409,8 @@ def build_xlsx(context):
                    ', '.join(domains.DOMAIN_LABELS[d]
                              for d in (context['cycle'].assessed_domains or []))]])
     row = _table(overview, row, ['Limitations'],
-                 [[context['bands_note']],
+                 ([[context['provisional_note']]] if context['provisional'] else [])
+                 + [[context['bands_note']],
                   [context['association_caveat']],
                   [context['perception_caveat']],
                   ['No individual response appears in this report, and no '
@@ -481,12 +509,45 @@ def build_xlsx(context):
                          if hasattr(change, 'measure_label') else str(measure))
                 trend_rows.append([label, change.reason, '', '', '', ''])
         row = _table(trend_sheet, row,
-                     ['Measure', 'Previous wave', 'This wave', 'Change',
+                     ['Measure', 'Previous cycle', 'This cycle', 'Change',
                       'n (previous)', 'n (this)'], trend_rows)
         row = _table(trend_sheet, row, ['Note'], [[context['trend_caveat']]])
         if context['trend'].composition_note:
             row = _table(trend_sheet, row, ['Composition'],
                          [[context['trend'].composition_note]])
+
+    # Output parity: the courses the PDF names must be nameable from the
+    # workbook too, with the same codes, or the two disagree about what was
+    # recommended.
+    if context.get('recommendations'):
+        sheet = workbook.create_sheet('Interventions')
+        row = _header(sheet, context,
+                      'Possible responses for the subdomains to look at first'
+                      + (' (ordered by score)'
+                         if context.get('recommendation_basis') == 'score'
+                         else ' (ordered by contrast)'))
+        rows = []
+        for rec in context['recommendations']:
+            head = [domains.DOMAIN_LABELS.get(rec['domain_code'],
+                                              rec['domain_code']),
+                    rec['subdomain'],
+                    round(rec['score'], 2) if rec.get('score') is not None else '',
+                    rec.get('n') or '',
+                    rec['areas_to_investigate'], rec['response_categories']]
+            if rec['courses']:
+                for course in rec['courses']:
+                    rows.append(head + [course.intervention_code, course.title,
+                                        course.source_programme or ''])
+            else:
+                note = (rec['guidance'] if not rec['training_permitted']
+                        else 'No capability development is currently mapped '
+                             'to this subdomain.')
+                rows.append(head + ['', note, ''])
+        row = _table(sheet, row,
+                     ['Domain', 'Subdomain', 'Score', 'n',
+                      'Areas to investigate', 'Possible response categories',
+                      'Course code', 'Course', 'Programme'], rows)
+        row = _table(sheet, row, ['Note'], [[context['intervention_note']]])
 
     buffer = io.BytesIO()
     workbook.save(buffer)
@@ -518,12 +579,13 @@ def narrative_payload(context):
 
     payload = {
         'organisation': context['org'].name,
-        'wave': context['cycle'].cycle_name,
+        'cycle': context['cycle'].cycle_name,
         'scope': context['scope_label'],
         'responses': context['n'],
         'response_rate_pct': (round(context['response_rate'], 1)
                               if context['response_rate'] is not None else None),
         'minimum_reporting_threshold': context['min_reporting_n'],
+        'provisional': context['provisional'],
         'domain_scoring_method': context['scoring_method_label'],
         'overall_satisfaction_subdomains': {
             domains.subdomain_label(*pair): _score(result)
@@ -583,7 +645,7 @@ def narrative_payload(context):
         }
 
     if context.get('trend'):
-        payload['change_since_previous_wave'] = {
+        payload['change_since_previous_cycle'] = {
             (change.measure_label if hasattr(change, 'measure_label')
              else str(measure)): (
                 {'previous': round(change.previous.mean, 2),
@@ -614,7 +676,7 @@ def narrative_payload(context):
 NARRATIVE_SECTIONS = {
     EXECUTIVE: {
         'executive_summary':
-            'Four to six sentences for senior leadership: what this wave '
+            'Four to six sentences for senior leadership: what this cycle '
             'measured, the participation, and the two or three things most '
             'worth their attention. Quantitative and specific.',
         'key_findings':
@@ -624,7 +686,7 @@ NARRATIVE_SECTIONS = {
             'One paragraph on where to look first and what further evidence '
             'would be needed, drawn only from the reading order supplied.',
         'limitations':
-            'One paragraph: what this wave does not establish. Include that '
+            'One paragraph: what this cycle does not establish. Include that '
             'associations are not causes, that score bands are not validated '
             'for this instrument, and anything notable about coverage or '
             'group sizes.',
@@ -650,7 +712,7 @@ NARRATIVE_SECTIONS = {
             'from the available response categories supplied for each '
             'subdomain.',
         'limitations':
-            'One paragraph on what this wave does not establish.',
+            'One paragraph on what this cycle does not establish.',
     },
     MANAGEMENT: {
         'summary':
@@ -686,6 +748,43 @@ NARRATIVE_SECTIONS = {
 # permission table reads. That is the mistake the sibling product made with its
 # candidate purge.
 
+def attach_catalogue(db_session, context):
+    """
+    Put the courses on a context. CALLED FROM BOTH BUILDERS, which is the
+    whole point of it being a function.
+
+    There are two paths to a report context — assemble() for the L1 board and
+    _build_report() in the org blueprint for the client's own screen — and
+    only one of them used to do this. The result was that every report a
+    client downloaded named no course at all, while the same report pulled
+    from the admin board named them: the catalogue looked broken when what
+    was broken was that one caller forgot a step. A context without
+    `recommendations` now cannot happen in one place and not the other.
+
+    for_priority() follows the order the engine produced. Two places deciding
+    what matters most is two places to disagree.
+    """
+    from app import catalogue as catalogue_module  # noqa: PLC0415
+
+    context['recommendations'] = catalogue_module.for_priority(
+        db_session, context.get('priority'))
+    context['recommendation_basis'] = 'contrast'
+    if not context['recommendations']:
+        # No contrast to rank by — below association.contrast_floor() the
+        # priority view is empty. Rank by score instead and SAY SO, rather
+        # than printing no development section at all, which reads as "no
+        # development needed" on exactly the cycles least able to afford that
+        # reading.
+        context['recommendations'] = catalogue_module.for_scores(
+            db_session, context.get('subdomain_rows'))
+        context['recommendation_basis'] = 'score'
+    context['catalogue_by_cell'] = {
+        (c['domain_code'], c['subdomain_code']): c
+        for c in catalogue_module.coverage(db_session)
+    }
+    return context
+
+
 def assemble(db_session, org, cycle, report_type, deployments,
              scope_branch=None, segments=(), narrative=None, with_charts=False):
     """
@@ -712,14 +811,14 @@ def assemble(db_session, org, cycle, report_type, deployments,
     if cycle.previous_cycle_id:
         earlier = db_session.get(MeasurementCycle, cycle.previous_cycle_id)
         if earlier is not None and earlier.org_id == cycle.org_id:
-            earlier_waves = (db_session.query(SurveyDeployment)
+            earlier_deployments = (db_session.query(SurveyDeployment)
                              .filter_by(cycle_id=earlier.id, org_id=cycle.org_id)
                              .filter(SurveyDeployment.archived_at.is_(None)).all())
             if scope_branch is not None:
-                earlier_waves = [w for w in earlier_waves
+                earlier_deployments = [w for w in earlier_deployments
                                  if w.branch_id == scope_branch.id]
             earlier_profiles = scoring_module.load_profiles(
-                db_session, [w.id for w in earlier_waves],
+                db_session, [w.id for w in earlier_deployments],
                 method=earlier.scoring_method)
             if earlier_profiles:
                 previous = (earlier_profiles,
@@ -741,13 +840,7 @@ def assemble(db_session, org, cycle, report_type, deployments,
     #
     # for_priority() follows the order the engine produced. Two places deciding
     # what matters most is two places to disagree.
-    from app import catalogue as catalogue_module
-    context['recommendations'] = catalogue_module.for_priority(
-        db_session, context.get('priority'))
-    context['catalogue_by_cell'] = {
-        (c['domain_code'], c['subdomain_code']): c
-        for c in catalogue_module.coverage(db_session)
-    }
+    attach_catalogue(db_session, context)
 
     if with_charts:
         add_charts(context)

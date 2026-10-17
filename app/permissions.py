@@ -68,13 +68,6 @@ VIEW_AUDIT_LOG     = 'view_audit_log'       # who did what — L1 ONLY
 # tenant, so a single edit changes what every client's report offers.
 MANAGE_CATALOGUE   = 'manage_catalogue'
 
-# The Validation Report (plan §5.4, spec §15): Cronbach's alpha, the GEM
-# discriminant check, item-total correlations, straight-lining rates. L1 ONLY —
-# it is psychometric evidence about the INSTRUMENT, not a finding about the
-# client's workforce, and handing it to a client invites the instrument's
-# weaknesses to be read as the organisation's.
-VIEW_VALIDATION_REPORT = 'view_validation_report'
-
 # Pilot instrument feedback (plan §6.7, spec §15). L1 ONLY and never rendered
 # in a client report: a client who sees it reads it as employee comment, which
 # is the thing v1 deliberately excludes.
@@ -88,7 +81,7 @@ VIEW_ALL_BRANCHES    = 'view_all_branches'     # see beyond own branch
 
 # ── Measurement work ────────────────────────────────────────────────────────
 
-MANAGE_CYCLES      = 'manage_cycles'       # create measurement waves
+MANAGE_CYCLES      = 'manage_cycles'       # create measurement cycles
 # Define and FREEZE the reporting dimensions (department, function, location,
 # tenure band). L2 only: options are a controlled vocabulary set before the
 # cycle opens, because two spellings of "Finance" become two groups and neither
@@ -97,9 +90,9 @@ MANAGE_SEGMENTS    = 'manage_segments'
 DEPLOY_SURVEYS     = 'deploy_surveys'      # deploy into an existing cycle
 DEPLOY_ORG_WIDE    = 'deploy_org_wide'     # deploy with branch_id = NULL (HQ)
 # Deploy AT a named branch (branch_id NOT NULL). Deliberately withheld from L2 —
-# the one place this table is not cumulative. A wave is either organisation-wide
+# the one place this table is not cumulative. A deployment is either organisation-wide
 # (L2's) or a branch's own (L3's); letting both tiers target the same branch
-# produces two concurrent waves over one population with no way to tell which is
+# produces two concurrent deployments over one population with no way to tell which is
 # authoritative, and the response-rate denominator becomes meaningless. L2 keeps
 # full VISIBILITY of branch work and every removal right it had — it simply does
 # not ORIGINATE a branch-targeted deployment. L1 holds it as operator of last
@@ -136,7 +129,7 @@ LOWER_MIN_N = 'lower_min_n'
 
 EDIT_DEPLOYMENT      = 'edit_deployment'       # deadline / expected respondents
 ARCHIVE_DEPLOYMENT   = 'archive_deployment'    # soft delete, recoverable
-DELETE_DEPLOYMENT    = 'delete_deployment'     # hard delete of an UNUSED wave
+DELETE_DEPLOYMENT    = 'delete_deployment'     # hard delete of an UNUSED deployment
 DELETE_ANSWERED      = 'delete_answered'       # destroy collected responses — L1 ONLY
 RESTORE_ARCHIVED     = 'restore_archived'      # bring an archived row back — L1 ONLY
 DELETE_ORG_OR_BRANCH = 'delete_org_or_branch'  # remove a whole org/branch — L1 ONLY
@@ -149,7 +142,7 @@ PURGE_EXPIRED_CYCLE  = 'purge_expired_cycle'
 _CAPABILITIES = {
     MASTER_ADMIN: {
         MANAGE_ORGS, EDIT_TEMPLATES, VIEW_TEMPLATES, VIEW_COSTS, VIEW_AUDIT_LOG,
-        MANAGE_CATALOGUE, VIEW_VALIDATION_REPORT, VIEW_PILOT_FEEDBACK,
+        MANAGE_CATALOGUE, VIEW_PILOT_FEEDBACK,
         MANAGE_BRANCHES, MANAGE_BRANCH_ADMINS, VIEW_ALL_BRANCHES,
         MANAGE_CYCLES, MANAGE_SEGMENTS, DEPLOY_SURVEYS,
         DEPLOY_ORG_WIDE, DEPLOY_TO_BRANCH, ISSUE_TICKETS,
@@ -161,7 +154,7 @@ _CAPABILITIES = {
     },
     ORG_ADMIN: {
         # Deliberately NOT: MANAGE_ORGS, EDIT_TEMPLATES, VIEW_COSTS,
-        # VIEW_AUDIT_LOG, MANAGE_CATALOGUE, VIEW_VALIDATION_REPORT,
+        # VIEW_AUDIT_LOG, MANAGE_CATALOGUE,
         # VIEW_PILOT_FEEDBACK. Template editing is L1-only; the catalogue is
         # shared by every tenant; the validation and pilot outputs are evidence
         # about the instrument, not about this client.
@@ -212,7 +205,7 @@ def can_hard_delete_others_branch(user) -> bool:
     """
     Whether `user` may HARD delete a row owned by a branch other than their own.
 
-    L2 may archive a branch's wave (recoverable, audited) but not destroy it:
+    L2 may archive a branch's deployment (recoverable, audited) but not destroy it:
     oversight should not let one tier irrecoverably remove work a branch
     created. L1 may, as operator of last resort. L3 owns its own rows and never
     reaches another branch at all.
@@ -244,7 +237,7 @@ def can_see_org_wide(user) -> bool:
     """
     Whether org-wide (branch_id IS NULL / HQ) deployments are visible.
 
-    L1 and L2 yes; L3 no — a branch admin must not see waves that were
+    L1 and L2 yes; L3 no — a branch admin must not see deployments that were
     deliberately run above the branch layer.
     """
     return not is_branch_scoped(user)

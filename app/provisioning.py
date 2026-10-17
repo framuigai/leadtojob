@@ -3,7 +3,7 @@ Cloning the master instrument into a client org, and the default segments.
 
 WHY CLONE AT ALL, rather than every org reading the master directly?
 
-Because the instrument a client's respondents answered is EVIDENCE. Once a wave
+Because the instrument a client's respondents answered is EVIDENCE. Once a cycle
 has run, "what did question GEM-G-01 say?" has exactly one correct answer: the
 text that was on the screen. A shared master makes that text mutable
 retrospectively — an edit for client B silently rewrites what client A's 300
@@ -35,7 +35,7 @@ def latest_version(org_id):
     The highest instrument version an org holds, or 1 when it holds none.
 
     Editing the master never rewrites an item in place: a save writes a whole
-    new version and the old one stays readable, because a wave that has run
+    new version and the old one stays readable, because a cycle that has run
     must still be able to answer "what did this question say?" exactly. Every
     reader therefore asks for the latest version rather than assuming 1.
     """
@@ -132,10 +132,10 @@ def create_default_segments(org_id):
 def freeze_segments(org_id):
     """
     Stamp every active segment as frozen. Called on the FIRST RESPONSE of the
-    first wave that uses them.
+    first cycle that uses them.
 
     After this, option codes and labels are read-only. Renaming an option
-    mid-wave silently re-groups responses that were given under the old
+    mid-cycle silently re-groups responses that were given under the old
     meaning — and because the response rows themselves are unchanged, nothing
     in the data would ever reveal it.
     """
@@ -170,7 +170,7 @@ def validate_segment_values(org_id, values):
 
     Returns the subset that is valid. UNKNOWN KEYS AND UNKNOWN CODES ARE
     DROPPED, NOT REJECTED: a respondent whose department was renamed between
-    the wave opening and their answering must not lose their 48 answers over
+    the cycle opening and their answering must not lose their 48 answers over
     it. The segment is simply absent for them, and they fall into the
     "unspecified" group, which the report shows as its own row rather than
     silently folding into another.

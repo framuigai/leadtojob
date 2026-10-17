@@ -11,18 +11,28 @@
 
   It carries no item-level detail and no free text, because a team is small and
   both are where a manager starts recognising individuals.
+
+  WHAT IT DOES CARRY, and why it was thin before: group-level SUBDOMAIN figures
+  are not item-level detail. Showing a manager only the three domain means left
+  them with three numbers and nothing to act on — the practical sections below
+  had no data under them at all on a small cycle, and the document read as
+  though the survey had found nothing. §12.3 asks for group results and
+  practical actions for the manager's own team; that needs the subdomains, the
+  weakest of them named, and the §11 response categories mapped to each.
 #}
 
-<h2 class="sec">1. Your team at a glance</h2>
+<h2 class="sec"><span class="sec-num">1.</span> Your team at a glance</h2>
 {% if narrative.summary %}<p>{{ narrative.summary }}</p>{% endif %}
 <table class="data">
   <tbody>
     <tr><td>Responses from your group</td><td class="num">{{ n }}</td></tr>
+    <tr><td>Invited</td><td class="num">{{ expected or 'not recorded' }}</td></tr>
     <tr><td>Response rate</td><td class="num">
       {% if response_rate is not none %}{{ '%.0f'|format(response_rate) }}%
       {% else %}not available{% endif %}</td></tr>
     <tr><td>Minimum reporting threshold</td>
         <td class="num">n &ge; {{ min_reporting_n }}</td></tr>
+    <tr><td>Domain scoring method</td><td>{{ scoring_method_label }}</td></tr>
   </tbody>
 </table>
 <div class="callout">
@@ -32,17 +42,76 @@
   decision about an individual.
 </div>
 
-<h2 class="sec">2. Where your team reports most positively</h2>
+<h2 class="sec"><span class="sec-num">2.</span> Overall Satisfaction in your group</h2>
+<p class="muted">
+  Reported as three separate subdomains. There is no single overall
+  satisfaction score: the three are related but not interchangeable, and the
+  distribution matters as much as the mean. A 3.0 where everyone answered 3 and
+  a 3.0 made of 1s and 5s are different teams.
+</p>
+{% include "reports/_outcome_table.html" %}
+
+<h2 class="sec"><span class="sec-num">3.</span> The diagnostic domains</h2>
 {% if narrative.strengths %}<p>{{ narrative.strengths }}</p>{% endif %}
 {% include "reports/_domain_table.html" %}
 
-<h2 class="sec">3. Where your team reports least positively</h2>
+<h3 class="sub">By subdomain</h3>
+<p class="muted">Spread is the standard deviation within your group. A wide
+spread is a finding in itself — it means the team is not one place on that
+question — and it is a prompt to look further, not a problem with the data.</p>
+<table class="data">
+  <thead><tr><th>Subdomain</th><th class="num">Score</th><th class="num">n</th>
+    <th class="num">Agree</th><th class="num">Disagree</th>
+    <th class="num">N/A</th><th class="num">Spread</th></tr></thead>
+  <tbody>
+  {% for pair, result in subdomain_rows %}
+    <tr><td>{{ subdomain_label(pair[0], pair[1]) }}</td>
+    {% if result.__class__.__name__ == 'GroupResult' %}
+      <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+      <td class="num">{{ result.n }}</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.favourable_pct or 0) }}%</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}%</td>
+      <td class="num">{{ '%.0f'|format(result.distribution.na_pct or 0) }}%</td>
+      <td class="num">{{ '%.2f'|format(result.dispersion.sd) }}</td>
+    {% else %}
+      <td colspan="6" class="suppressed">{{ result.label }}</td>
+    {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<div class="callout">{{ daunting_caveat }}</div>
+
+<h2 class="sec"><span class="sec-num">4.</span> Where your team reports least positively</h2>
 {% if narrative.attention %}<p>{{ narrative.attention }}</p>{% endif %}
 {% if priority %}{% include "reports/_priority.html" %}
-{% else %}<p class="suppressed">{{ priority.reason }}</p>{% endif %}
+{% else %}
+{#
+  No contrast is available, so this section says what IS available — the
+  lowest-scoring subdomains — rather than printing the reason and stopping.
+  The reason is still printed underneath, because the basis for this order is
+  weaker and the manager should not have to guess that.
+#}
+<table class="data">
+  <thead><tr><th>Subdomain</th><th class="num">Score</th>
+    <th class="num">Agree</th><th class="num">Disagree</th></tr></thead>
+  <tbody>
+  {% for row in lowest_scoring %}
+    <tr><td>{{ row.label }}</td>
+      <td class="num">{{ '%.2f'|format(row.result.mean) }}</td>
+      <td class="num">{{ '%.0f'|format(row.result.distribution.favourable_pct or 0) }}%</td>
+      <td class="num">{{ '%.0f'|format(row.result.distribution.unfavourable_pct or 0) }}%</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted">Ordered by score within your group, lowest first. These are
+relative positions among your own figures, not low scores on any fixed scale,
+and no band label is applied to them. {{ priority.reason }}</p>
+{% endif %}
 
 {% if comparisons %}
-<h2 class="sec">4. How your group compares with the organisation</h2>
+<h2 class="sec"><span class="sec-num">5.</span> How your group compares with the organisation</h2>
 <p class="muted">Shown as a difference from the organisation-wide figure, not as
 a position in a table. Other groups are not ranked here and your group is not
 ranked against them.</p>
@@ -66,7 +135,7 @@ ranked against them.</p>
 {% endfor %}
 {% endif %}
 
-<h2 class="sec">{{ 5 if comparisons else 4 }}. Practical actions</h2>
+<h2 class="sec"><span class="sec-num">{{ 6 if comparisons else 5 }}.</span> Practical actions</h2>
 {% if narrative.practical_actions %}<p>{{ narrative.practical_actions }}</p>{% endif %}
 <p class="muted">
   These are things within a manager's own control. Pay, grading and
@@ -74,8 +143,49 @@ ranked against them.</p>
   response is a pay-equity or market review by the organisation, and it is
   listed for your information rather than as your action.
 </p>
+{#
+  THE SPECIFICATION'S OWN §11 CATEGORIES, for the subdomains this group scored
+  lowest on. Courses are NOT listed here: enrolment is an HR and OD decision,
+  so the named courses belong in the two reports that reach the people who
+  make it. What a manager gets is the response category, which is the part
+  they can act on this week.
+#}
+{% if recommendations %}
+<table class="data">
+  <thead><tr><th>If this is low in your group</th>
+    <th class="num">Score</th><th>Areas to investigate</th>
+    <th>Possible response categories</th></tr></thead>
+  <tbody>
+  {% for rec in recommendations %}
+    <tr>
+      <td>{{ rec.subdomain }}<br>
+        <span class="muted">{{ domain_label(rec.domain_code) }}</span></td>
+      <td class="num">{{ '%.2f'|format(rec.score) if rec.score is not none
+                         else '-' }}</td>
+      <td>{{ rec.areas_to_investigate }}</td>
+      <td>{{ rec.response_categories }}
+        {% if not rec.training_permitted %}
+        <br><span class="muted">{{ rec.guidance }}</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted">
+  {% if recommendation_basis == 'score' %}
+  Ordered by score within your group, lowest first — too few people answered
+  for a contrast between the least and most satisfied thirds.
+  {% else %}
+  Ordered by the size of the contrast between the least and most satisfied
+  thirds.
+  {% endif %}
+  Where development is the right response, your HR or OD team holds the course
+  catalogue and the named courses appear in their report.
+</p>
+{% endif %}
 
-<h2 class="sec">{{ 6 if comparisons else 5 }}. Questions for a team conversation</h2>
+<h2 class="sec"><span class="sec-num">{{ 7 if comparisons else 6 }}.</span> Questions for a team conversation</h2>
 {% if narrative.discussion_questions %}
 <ul class="plain">
   {% for question in narrative.discussion_questions.split(';') %}
@@ -88,8 +198,8 @@ asking who gave which answer. Nobody can tell you the second, and asking is
 what stops people answering honestly next time.</p>
 {% endif %}
 
-<h2 class="sec">{{ 7 if comparisons else 6 }}. Follow-up</h2>
-<p>Record what you commit to. A later wave will report any change alongside the
+<h2 class="sec"><span class="sec-num">{{ 8 if comparisons else 7 }}.</span> Follow-up</h2>
+<p>Record what you commit to. A later cycle will report any change alongside the
 actions completed, without claiming that one produced the other.</p>
 {% if actions %}
 <table class="data">

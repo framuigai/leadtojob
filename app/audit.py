@@ -196,12 +196,12 @@ def deployment_payload(deployment):
 
 def session_payload(session, answered_count=0):
     """
-    Voiding a session. Records the session id, the wave, the declared segment
+    Voiding a session. Records the session id, the deployment, the declared segment
     KEYS and how many items had been answered — and NOT the answers, and NOT
     the segment VALUES.
 
     The keys say which dimensions the respondent declared; the values would
-    narrow a 200-person wave to a department of six, in a row that outlives the
+    narrow a 200-person deployment to a department of six, in a row that outlives the
     retention purge of the responses themselves.
     """
     return {

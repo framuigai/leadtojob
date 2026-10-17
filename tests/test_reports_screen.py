@@ -64,7 +64,7 @@ def test_a_cycle_with_no_deployment_says_deploy_it(client, org):
     login(client, org['admin'])
     body = flat(client.get('/org/reports').get_data(as_text=True))
     assert 'not deployed yet' in body
-    assert 'deploy the wave' in body
+    assert 'deploy the cycle' in body
 
 
 def test_a_cycle_below_the_threshold_says_how_many_more_and_why(client, org):
@@ -76,9 +76,9 @@ def test_a_cycle_below_the_threshold_says_how_many_more_and_why(client, org):
     as an error will go looking for a way to clear it.
     """
     cycle = make_cycle(org['org'], 'KD-1', status='open', min_reporting_n=5)
-    wave = make_deployment(org['org'], cycle, expected_respondents=20)
+    deployment = make_deployment(org['org'], cycle, expected_respondents=20)
     for _ in range(2):
-        _respond(org['org'].id, wave, 4, 4)
+        _respond(org['org'].id, deployment, 4, 4)
     db.session.commit()
 
     login(client, org['admin'])
@@ -89,30 +89,31 @@ def test_a_cycle_below_the_threshold_says_how_many_more_and_why(client, org):
     assert 'could be traced back to them' in body
 
 
-def test_an_open_wave_says_close_it_before_reporting(client, org):
+def test_an_open_deployment_is_reportable_and_marked_provisional(client, org):
     """
-    Phase 8 generates from a CLOSED wave. Two reports of the same group at
-    different n give up the difference between them by subtraction, and no
-    in-report suppression prevents that — so the screen says so here.
+    The reports are offered, and the screen qualifies them. Withholding them
+    until a close was this product's own invention; both siblings gate on
+    responses alone.
     """
     cycle = make_cycle(org['org'], 'KD-1', status='open', min_reporting_n=1)
-    wave = make_deployment(org['org'], cycle, expected_respondents=20)
+    deployment = make_deployment(org['org'], cycle, expected_respondents=20)
     for _ in range(3):
-        _respond(org['org'].id, wave, 4, 4)
+        _respond(org['org'].id, deployment, 4, 4)
     db.session.commit()
 
     login(client, org['admin'])
     body = flat(client.get('/org/reports').get_data(as_text=True))
+    assert 'provisional' in body.lower()
     assert 'still collecting' in body
-    assert 'cannot shift underneath one that has already been read' in body
+    assert '/report/executive' in body
 
 
-def test_a_closed_wave_above_the_threshold_is_ready(client, org):
+def test_a_closed_deployment_above_the_threshold_is_ready(client, org):
     cycle = make_cycle(org['org'], 'KD-1', status='open', min_reporting_n=1)
-    wave = make_deployment(org['org'], cycle, expected_respondents=20)
+    deployment = make_deployment(org['org'], cycle, expected_respondents=20)
     for _ in range(3):
-        _respond(org['org'].id, wave, 4, 4)
-    wave.closed = True
+        _respond(org['org'].id, deployment, 4, 4)
+    deployment.closed = True
     db.session.commit()
 
     login(client, org['admin'])
@@ -123,13 +124,13 @@ def test_a_closed_wave_above_the_threshold_is_ready(client, org):
 
 # ── The analysis view ──────────────────────────────────────────────────────
 
-def _wave_with(org_record, pairs, segments=None):
+def _deployment_with(org_record, pairs, segments=None):
     """pairs: list of (outcome, diagnostic). segments: parallel list of codes."""
     cycle = make_cycle(org_record['org'], 'KD-A', status='open',
                        min_reporting_n=1)
-    wave = make_deployment(org_record['org'], cycle, expected_respondents=50)
+    deployment = make_deployment(org_record['org'], cycle, expected_respondents=50)
     for i, (outcome, diagnostic) in enumerate(pairs):
-        _respond(org_record['org'].id, wave, outcome, diagnostic,
+        _respond(org_record['org'].id, deployment, outcome, diagnostic,
                  segment=(segments[i] if segments else None))
     db.session.commit()
     return cycle
@@ -137,7 +138,7 @@ def _wave_with(org_record, pairs, segments=None):
 
 def test_the_analysis_view_reports_the_three_outcome_subdomains_separately(
         client, org):
-    _wave_with(org, [(4, 3)] * 6 + [(2, 3)] * 6)
+    _deployment_with(org, [(4, 3)] * 6 + [(2, 3)] * 6)
 
     login(client, org['admin'])
     body = client.get('/org/cycles/KD-A/analysis').get_data(as_text=True)
@@ -155,7 +156,7 @@ def test_the_analysis_view_carries_the_10_4_caveat(client, org):
     THE NAMED ACCEPTANCE CRITERION, at the point it matters — on the page a
     person reads, not merely on the object.
     """
-    _wave_with(org, [(1, 1)] * 6 + [(3, 3)] * 6 + [(5, 5)] * 6)
+    _deployment_with(org, [(1, 1)] * 6 + [(3, 3)] * 6 + [(5, 5)] * 6)
 
     login(client, org['admin'])
     body = flat(client.get('/org/cycles/KD-A/analysis').get_data(as_text=True))
@@ -165,7 +166,7 @@ def test_the_analysis_view_carries_the_10_4_caveat(client, org):
 
 
 def test_the_analysis_view_shows_the_contrast_as_a_sentence(client, org):
-    _wave_with(org, [(1, 1)] * 6 + [(3, 3)] * 6 + [(5, 5)] * 6)
+    _deployment_with(org, [(1, 1)] * 6 + [(3, 3)] * 6 + [(5, 5)] * 6)
 
     login(client, org['admin'])
     body = flat(client.get('/org/cycles/KD-A/analysis').get_data(as_text=True))
@@ -175,7 +176,7 @@ def test_the_analysis_view_shows_the_contrast_as_a_sentence(client, org):
 
 
 def test_the_priority_view_is_ordered_by_contrast_on_the_page(client, org):
-    _wave_with(org, [(1, 1)] * 6 + [(3, 3)] * 6 + [(5, 5)] * 6)
+    _deployment_with(org, [(1, 1)] * 6 + [(3, 3)] * 6 + [(5, 5)] * 6)
 
     login(client, org['admin'])
     body = client.get('/org/cycles/KD-A/analysis').get_data(as_text=True)
@@ -186,7 +187,7 @@ def test_the_priority_view_is_ordered_by_contrast_on_the_page(client, org):
 
 def test_a_group_too_small_for_a_contrast_says_so_on_the_page(client, org):
     """Not an empty panel — "too few people" and "nothing found" differ."""
-    _wave_with(org, [(1, 1)] * 3 + [(5, 5)] * 3)
+    _deployment_with(org, [(1, 1)] * 3 + [(5, 5)] * 3)
 
     login(client, org['admin'])
     body = flat(client.get('/org/cycles/KD-A/analysis').get_data(as_text=True))
@@ -196,7 +197,7 @@ def test_a_group_too_small_for_a_contrast_says_so_on_the_page(client, org):
 
 def test_the_analysis_view_never_shows_a_band_label(client, org):
     """§10.5, on the page."""
-    _wave_with(org, [(1, 1)] * 6 + [(3, 3)] * 6 + [(5, 5)] * 6)
+    _deployment_with(org, [(1, 1)] * 6 + [(3, 3)] * 6 + [(5, 5)] * 6)
 
     login(client, org['admin'])
     body = client.get('/org/cycles/KD-A/analysis').get_data(as_text=True)
@@ -210,7 +211,7 @@ def test_the_analysis_view_states_the_scoring_method_in_force(client, org):
     §10.2 requires the method to be documented. A figure whose rule is not on
     the page is not an auditable figure.
     """
-    _wave_with(org, [(4, 4)] * 6)
+    _deployment_with(org, [(4, 4)] * 6)
 
     login(client, org['admin'])
     body = flat(client.get('/org/cycles/KD-A/analysis').get_data(as_text=True))
@@ -227,7 +228,7 @@ def test_a_segment_comparison_appears_and_is_not_sorted_by_score(client, org):
     db.session.commit()
 
     codes = ['FIN'] * 6 + ['OPS'] * 6
-    _wave_with(org, [(2, 2)] * 6 + [(5, 5)] * 6, segments=codes)
+    _deployment_with(org, [(2, 2)] * 6 + [(5, 5)] * 6, segments=codes)
 
     login(client, org['admin'])
     body = client.get('/org/cycles/KD-A/analysis').get_data(as_text=True)
@@ -237,7 +238,7 @@ def test_a_segment_comparison_appears_and_is_not_sorted_by_score(client, org):
 
 
 def test_the_analysis_view_lists_what_it_does_not_show(client, org):
-    _wave_with(org, [(4, 4)] * 6)
+    _deployment_with(org, [(4, 4)] * 6)
 
     login(client, org['admin'])
     body = flat(client.get('/org/cycles/KD-A/analysis').get_data(as_text=True))

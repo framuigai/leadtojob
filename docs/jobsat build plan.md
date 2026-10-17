@@ -90,7 +90,7 @@ and appear in reports. What must *not* leak is different:
 - any group result rendered has `n >= MIN_REPORTING_N` (§2.6) — a suppressed cell renders as
   `Suppressed (n < 5)`, never as a number, never as a blank that a reader will mistake for zero;
 - the `Daunting` subdomain never co-occurs with stress/overload vocabulary;
-- no band label (`Low`/`Moderate`/`High`/`Critical`) appears while `BANDS_VALIDATED = False` (§10.5);
+- no band label (`Low`/`Moderate`/`High`/`Critical`) appears anywhere (§10.5);
 - no causal verb (`causes`, `drives`, `because of`, `due to`, `leads to`) appears in a generated
   narrative paragraph adjacent to an association figure. The guard is **negation-aware** — the reports
   deliberately print "this does **not** show that X causes Y" — reuse promote's `verdict_hits()` pattern
@@ -465,7 +465,7 @@ This is the product. Computed **deterministically in Python**, never by the mode
 
 ### 5.3 Bands and colours — deliberately deferred
 
-`BANDS_VALIDATED = False`, a single module constant.
+`scoring.band()`, which always raises.
 
 While it is `False` (v1, and until pilot evidence says otherwise, §10.5):
 
@@ -555,9 +555,9 @@ cannot fix a pay structure, and offering it as "your action" is worse than silen
 > says why, with the aggregate rolled up to the parent group instead. Gate it in `app/analytics/`, and
 > pin it: `tests/test_manager_report_suppression.py`.
 
-**4 · Validation Report** (L1 only) — §5.4 output: α per subdomain, inter-subdomain correlations,
-item-total correlations, N/A and straight-lining rates, flagged items, and an explicit recommendation on
-whether `BANDS_VALIDATED` or a GEM composite may yet be turned on.
+**Removed.** A fourth, L1-only Validation Report was planned here. It is not specified anywhere in the
+PDF — §12 defines three reports — and it has been removed from the product. Instrument validation
+(§15, §18) is carried out by other means, outside this system.
 
 ### 6.3 Trend, once a second wave exists (§3.2.7, §16)
 
@@ -575,7 +575,7 @@ computed deterministically in Python and merely **narrated**.
 
 Four additions to the system prompt, all load-bearing:
 - never assert causation, and never use `causes / drives / because of / leads to` about an association;
-- never apply a band label or a verdict while `BANDS_VALIDATED` is false;
+- never apply a band label or a verdict;
 - never interpret low `D` (Daunting) as stress or overload (§2.3);
 - never recommend training for a subdomain whose §11 categories do not include it, and never present
   training as a response to a compensation finding (§8.5).
@@ -861,12 +861,12 @@ is nothing to look at for six phases.
 | 3 | **Taxonomy & instrument** | `survey_items` seeded (48 from the PDF §5–§8 now; re-seeded from the workbook when it lands), master-template cloning, L1 editor, L2/L3 read-only viewer | 48 items, 4 per subdomain, every `item_code` unique and well-formed; a short subdomain aborts the seed naming the line |
 | 4 | **Cycles & segments** | Measurement cycle CRUD, `assessed_domains`, purpose statement, `min_reporting_n`, `retention_months`, segment definition and freeze | two open cycles for one org+branch rejected by the DB; segments frozen after the first response; `assessed_domains` frozen likewise |
 | 5 | **Deployment & the anonymous form** | One deployment per cycle, one link, 4-section form plus segment step, save-and-resume on the anonymous session, N/A on every item, `open_link` and `ticketed` modes, the §9.2 landing page | rendered HTML carries no internal key and no identity field; a used ticket is rejected; the anonymity wording matches the mode |
-| 6 | **Scoring engine** | Full §5.1 ladder, N/A exclusion, distributions, dispersion, coverage, suppression, `BANDS_VALIDATED=False` | unit tests with **no Flask context**: a respondent using 12 N/A neither gains nor loses weight; a hand-computed fixture reproduces exactly; `gem_composite()` raises; a group of 4 suppresses, and its sibling suppresses too |
+| 6 | **Scoring engine** | Full §5.1 ladder, N/A exclusion, distributions, dispersion, coverage, suppression, no band labels | unit tests with **no Flask context**: a respondent using 12 N/A neither gains nor loses weight; a hand-computed fixture reproduces exactly; `gem_composite()` raises; a group of 4 suppresses, and its sibling suppresses too |
 | 7 | **Association engine & Reports screen** | §5.2 correlations, tertile contrast, priority view, segment comparison; cycle-grouped reports screen with the three-state "needs: …" line; on-screen Plotly | an association below `ASSOCIATION_MIN_N` is labelled or withheld; the §10.4 caveat is present on every association output, asserted by test |
 | 8 | **Reports 1 & 2** | Executive + HR/OD, PDF and XLSX, charts, limitations sections | PDF/XLSX titles and wording identical; renders when a whole domain is N/A for a third of respondents; `test_privacy_and_wording.py` green on a populated render |
 | 9 | **Report 3, trend & follow-up** | Management report with a hard suppression gate; trend section once a second wave exists; `improvement_actions` CRUD and the follow-up section (§3.9, §6.5) | a 4-person team produces no report and says why; a wave missing a domain is refused, not plotted as a drop; an action naming a respondent fails `test_privacy_and_wording.py` |
 | 10 | **Validation, catalogue, Supabase & Render** | Validation report (§5.4), `intervention_catalogue` + seeder, interventions in reports 1–3, retention/purge path, Supabase migration, Render Blueprint cutover, `jobs.leadto.co.ke` DNS | α and inter-subdomain correlations computed on a seeded fixture; recommendations deterministic and type-filtered on repeat runs; `FLASK_ENV=production` serves over HTTPS on the custom domain; `intervention_map.json` is signed off and every §11 row's type is traceable to quoted prose |
-| 11 | **Pilot & validation wave** | Pilot mode and `pilot_feedback` (§6.7), §15 validation run with a real client, `ai_cost_events` + Usage & Costs tab, the band-threshold decision | the GEM discriminant check runs on real data and produces a written recommendation on `BANDS_VALIDATED` and the GEM composite; nothing is marketed as validated before this row is green (§18 product note) |
+| 11 | **Pilot wave** | Pilot mode and `pilot_feedback` (§6.7), `ai_cost_events` + Usage & Costs tab | nothing is marketed as validated before instrument validation has been carried out separately (§18 product note); the product ships no band labels and no GEM composite either way |
 
 **Phase 6 is the product — write its tests before its code.** Phases 3 and 10 absorb the survey workbook
 and the curriculum when they arrive; nothing earlier blocks on them.

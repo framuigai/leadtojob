@@ -204,6 +204,40 @@ def test_the_order_is_deterministic(seeded):
     assert first == second == sorted(first)
 
 
+def test_reward_cells_do_not_crowd_out_every_course(seeded):
+    """
+    All three Reward subdomains ranking first used to leave a report naming no
+    course at all: PIE carries none by §8.5, and the quadrant held only those.
+    The priority order is unchanged — Reward still leads — but trainable cells
+    below the cut now reach the report.
+    """
+    class _Entry:
+        def __init__(self, diagnostic, quadrant):
+            self.diagnostic = diagnostic
+            self.quadrant = quadrant
+
+    class _View:
+        entries = [
+            _Entry(('PIE', 'P'), 'investigate_first'),
+            _Entry(('PIE', 'I'), 'investigate_first'),
+            _Entry(('PIE', 'E'), 'investigate_first'),
+            _Entry(('BIT', 'T'), 'monitor'),
+            _Entry(('TID', 'D'), 'monitor'),
+        ]
+
+    recs = catalogue.for_priority(db.session, _View())
+
+    # Reward still leads, and still carries guidance rather than a course.
+    assert [r['subdomain_code'] for r in recs[:3]] == ['P', 'I', 'E']
+    assert all(not r['courses'] for r in recs[:3])
+    assert all(r['guidance'] for r in recs[:3])
+
+    # And at least one course is now nameable, with its code.
+    named = [c for r in recs for c in r['courses']]
+    assert named
+    assert all(c.intervention_code for c in named)
+
+
 # ── The correction made when the real curriculum arrived ───────────────────
 
 def test_training_permission_comes_from_the_one_explicit_prohibition():

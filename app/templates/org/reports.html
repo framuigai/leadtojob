@@ -19,11 +19,11 @@
       {{ row.cycle.cycle_name }}
       <span class="muted">&middot; <code>{{ row.cycle.id }}</code></span>
     </div>
-    <span class="status-pill status-{{ 'green' if row.state.key == 'ready'
+    <span class="status-pill status-{{ 'amber' if row.state.provisional
+        else 'green' if row.state.key == 'ready'
         else 'suppressed' if row.state.key == 'below_threshold' else 'amber' }}">
-      {% if row.state.key == 'ready' %}ready
+      {% if row.state.key == 'ready' %}{{ 'provisional' if row.state.provisional else 'ready' }}
       {% elif row.state.key == 'below_threshold' %}below threshold
-      {% elif row.state.key == 'open' %}collecting
       {% else %}not deployed{% endif %}
     </span>
   </div>
@@ -33,16 +33,21 @@
         <div class="stat-label">Responses</div></div>
       <div class="stat-card"><div class="stat-val">{{ row.expected }}</div>
         <div class="stat-label">Invited</div></div>
-      <div class="stat-card"><div class="stat-val">{{ row.waves|length }}</div>
+      <div class="stat-card"><div class="stat-val">{{ row.deployments|length }}</div>
         <div class="stat-label">Deployments</div></div>
-      <div class="stat-card"><div class="stat-val">n &ge; {{ row.cycle.min_reporting_n }}</div>
-        <div class="stat-label">Reporting threshold</div></div>
     </div>
 
     {#
       THE "NEEDS" LINE. Three states, never collapsed into "unavailable" -
       they are three different jobs, and the third is not a job at all.
     #}
+    {% if row.state.provisional %}
+    <p class="panel-note"><strong>Provisional.</strong> This cycle is still
+      collecting, so these figures will move as more people answer. The
+      reports carry that note on their cover. Close the cycle for the
+      settled read.</p>
+    {% endif %}
+
     {% if row.state.needs %}
       {% if row.state.key == 'below_threshold' %}
       <div class="flash flash-info">
@@ -56,11 +61,11 @@
     {% endif %}
 
     <div class="page-actions">
-      {% if row.state.key in ('ready', 'open') %}
+      {% if row.state.key == 'ready' %}
       <a href="{{ url_for('org.analysis', cycle_id=row.cycle.id) }}"
          class="btn btn-primary">View the analysis</a>
       {% endif %}
-      {% if row.state.key in ('ready', 'open') %}
+      {% if row.state.key == 'ready' %}
       <a href="{{ url_for('org.report_preview', cycle_id=row.cycle.id,
                           report_type='executive') }}"
          class="btn btn-secondary">Executive</a>

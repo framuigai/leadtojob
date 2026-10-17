@@ -5,7 +5,7 @@ A bare substring scan cannot police this product's language, because the
 reports deliberately print the negated forms of the very things they must not
 assert:
 
-    "This wave shows associations between measures, not causes."
+    "This deployment shows associations between measures, not causes."
     "It does not show that Trust causes higher or lower satisfaction."
 
 Both sentences are REQUIRED by §10.4 and both contain the word "causes". A

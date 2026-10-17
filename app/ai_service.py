@@ -4,7 +4,7 @@ Anthropic call + narrative orchestration. MANUAL TRIGGER ONLY.
 Settled posture, inherited from trainiq and promo and not up for rediscovery:
 
   * A narrative is generated when a human presses Interpret on a report. It is
-    NEVER auto-dispatched when a response threshold is crossed. A wave that
+    NEVER auto-dispatched when a response threshold is crossed. A cycle that
     fills up overnight must not spend money, or write a characterisation of a
     workforce's morale, while nobody is watching.
 
@@ -216,7 +216,7 @@ def generate(payload, sections, context_note=None):
     requested = '\n'.join(f'  "{key}": {description}'
                           for key, description in sections.items())
     user_message = (
-        'Here are the computed figures for this measurement wave. Every number '
+        'Here are the computed figures for this measurement cycle. Every number '
         'is final — narrate it, do not recalculate it, and do not infer any '
         'figure that is not present.\n\n'
         f'{json.dumps(payload, indent=2, default=str)}\n\n'

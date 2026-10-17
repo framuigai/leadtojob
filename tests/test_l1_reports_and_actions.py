@@ -41,10 +41,10 @@ def world(db):
     return {'org': org, 'admin': admin, 'l1': l1}
 
 
-def _closed_wave(world, cycle_id='KD-1', n=18, branch=None, min_n=1):
+def _closed_cycle(world, cycle_id='KD-1', n=18, branch=None, min_n=1):
     cycle = make_cycle(world['org'], cycle_id, status='open', branch=branch,
                        min_reporting_n=min_n)
-    wave = make_deployment(world['org'], cycle, branch=branch,
+    deployment = make_deployment(world['org'], cycle, branch=branch,
                            expected_respondents=n + 6,
                            public_slug=f'slug-{cycle_id}')
     items = db.session.query(SurveyItem).filter_by(
@@ -52,21 +52,21 @@ def _closed_wave(world, cycle_id='KD-1', n=18, branch=None, min_n=1):
     for i in range(n):
         tier = i * 3 // n
         session = ResponseSession(
-            deployment_id=wave.id, org_id=world['org'].id,
-            branch_id=wave.branch_id, segment_values={},
+            deployment_id=deployment.id, org_id=world['org'].id,
+            branch_id=deployment.branch_id, segment_values={},
             submitted_at=datetime.now(timezone.utc))
         db.session.add(session)
         db.session.flush()
         for item in items:
             db.session.add(SurveyResponse(
-                session_id=session.id, deployment_id=wave.id,
+                session_id=session.id, deployment_id=deployment.id,
                 org_id=world['org'].id, item_id=item.id,
                 score=(2, 3, 5)[tier], not_applicable=False))
-        wave.responses_received = (wave.responses_received or 0) + 1
-    wave.closed = True
+        deployment.responses_received = (deployment.responses_received or 0) + 1
+    deployment.closed = True
     cycle.status = 'closed'
     db.session.commit()
-    return cycle, wave
+    return cycle, deployment
 
 
 # ── 1. L1 can reach a client's reports ─────────────────────────────────────
@@ -76,7 +76,7 @@ def test_l1_can_open_a_clients_report(client, world):
     The permission table always said so; until now no route could satisfy it,
     because L1 has no org_id and every report route was org-scoped.
     """
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['l1'])
 
     res = client.get(f'/admin/orgs/{world["org"].id}/reports/{cycle.id}/executive')
@@ -87,7 +87,7 @@ def test_l1_can_open_a_clients_report(client, world):
 
 
 def test_l1_can_download_a_clients_report(client, world):
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['l1'])
 
     res = client.get(
@@ -102,7 +102,7 @@ def test_l1_gets_no_interpret_action(client, world):
     written by that client's own administrator, who is accountable for it — not
     by the platform operator on their behalf.
     """
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['l1'])
 
     body = client.get(
@@ -118,7 +118,7 @@ def test_an_l1_download_is_audited(client, world):
     A platform operator opening a client's workforce feedback is precisely the
     access §13.4 exists to make reviewable.
     """
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['l1'])
     client.get(f'/admin/orgs/{world["org"].id}/reports/{cycle.id}/hr_od/pdf')
 
@@ -132,7 +132,7 @@ def test_an_l1_download_is_audited(client, world):
 def test_l1_still_cannot_reach_a_report_below_the_threshold(client, world):
     """The suppression gate does not relax for the platform operator."""
     branch = make_branch(world['org'], 'Nakuru plant')
-    cycle, _ = _closed_wave(world, 'KD-SMALL', n=3, branch=branch, min_n=5)
+    cycle, _ = _closed_cycle(world, 'KD-SMALL', n=3, branch=branch, min_n=5)
     login(client, world['l1'])
 
     body = client.get(
@@ -154,7 +154,7 @@ def test_an_org_admin_cannot_use_the_l1_report_route(client, world):
     is filtered by current_user.org_id. Here there is no such filter, so the
     gate has to be a capability only L1 holds.
     """
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['admin'])
     res = client.get(
         f'/admin/orgs/{world["org"].id}/reports/{cycle.id}/executive')
@@ -182,7 +182,7 @@ def test_an_org_admin_cannot_read_ANOTHER_orgs_report_through_the_admin_route(
 def test_a_branch_admin_cannot_use_the_l1_report_route(client, db, world):
     branch = make_branch(world['org'], 'Nakuru plant')
     l3 = make_branch_admin(world['org'], branch, email='l3@kilimo.test')
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     db.session.commit()
 
     login(client, l3)
@@ -225,7 +225,7 @@ def test_cost_and_access_records_stay_separate(client, world):
     ai_cost_events is operational; report_events is a §13.4 compliance record.
     Merging them means a cost cleanup deletes an access record.
     """
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['l1'])
     client.get(f'/admin/orgs/{world["org"].id}/reports/{cycle.id}/executive/pdf')
 
@@ -236,7 +236,7 @@ def test_cost_and_access_records_stay_separate(client, world):
 # ── 3. Improvement actions — §16's follow-up loop ──────────────────────────
 
 def test_an_action_can_be_recorded_against_a_subdomain(client, world):
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['admin'])
 
     client.post(f'/org/cycles/{cycle.id}/actions/new', data={
@@ -260,7 +260,7 @@ def test_an_action_naming_a_respondent_is_refused_with_an_explanation(
     exists to prevent. Refused at the point of entry so the person typing it is
     told why, rather than only caught later by a privacy sweep.
     """
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['admin'])
 
     res = client.post(f'/org/cycles/{cycle.id}/actions/new', data={
@@ -272,7 +272,7 @@ def test_an_action_naming_a_respondent_is_refused_with_an_explanation(
 
 
 def test_an_owner_naming_a_respondent_is_refused_too(client, world):
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['admin'])
 
     res = client.post(f'/org/cycles/{cycle.id}/actions/new', data={
@@ -288,7 +288,7 @@ def test_training_is_refused_as_a_response_to_a_reward_finding(client, world):
     "Training should not be treated as a substitute for addressing
     substantiated compensation inequities or structural reward problems."
     """
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['admin'])
 
     res = client.post(f'/org/cycles/{cycle.id}/actions/new', data={
@@ -305,7 +305,7 @@ def test_training_is_refused_as_a_response_to_a_reward_finding(client, world):
 
 def test_a_pay_equity_review_against_the_same_finding_is_accepted(client, world):
     """The complement — the refusal is about the TYPE, not about the domain."""
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['admin'])
 
     client.post(f'/org/cycles/{cycle.id}/actions/new', data={
@@ -322,7 +322,7 @@ def test_a_half_filled_pair_cannot_be_constructed(client, world):
     three different constructs — 'I' is Purpose and Impact, Positive
     Interactions AND Industry Comparison.
     """
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['admin'])
 
     res = client.post(f'/org/cycles/{cycle.id}/actions/new', data={
@@ -332,7 +332,7 @@ def test_a_half_filled_pair_cannot_be_constructed(client, world):
 
 
 def test_completing_an_action_records_when_and_what_changed(client, world):
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['admin'])
     client.post(f'/org/cycles/{cycle.id}/actions/new', data={
         'title': 'Delegate purchase approvals', 'subdomain_pair': 'TID|T',
@@ -358,11 +358,11 @@ def test_actions_appear_in_the_report_alongside_the_change_not_joined_to_it(
     first produced the second is the most natural sentence in the world to
     write, and exactly what the caveat forbids.
     """
-    first, _ = _closed_wave(world, 'KD-A')
+    first, _ = _closed_cycle(world, 'KD-A')
     second = make_cycle(world['org'], 'KD-B', status='open',
                         min_reporting_n=1, previous_cycle_id=first.id)
     db.session.commit()
-    _, wave = _closed_wave(world, 'KD-B2')      # ensure data exists
+    _, deployment = _closed_cycle(world, 'KD-B2')      # ensure data exists
     db.session.commit()
 
     login(client, world['admin'])
@@ -399,11 +399,11 @@ def test_a_branch_admin_cannot_touch_another_branchs_action(client, db, world):
 # ── The L1 Reports board ───────────────────────────────────────────────────
 #
 # Both sibling products bury reports inside the organisation detail page, which
-# is fine for one client and wrong for twelve: "which waves are ready to report
+# is fine for one client and wrong for twelve: "which deployments are ready to report
 # on" cannot be answered without opening every org in turn.
 
 def test_the_reports_board_lists_every_client(client, db, world):
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     globex = make_org('Globex Inc')
     clone_instrument_to_org(globex.id)
     make_cycle(globex, 'GBX-1', status='open', min_reporting_n=1)
@@ -416,21 +416,40 @@ def test_the_reports_board_lists_every_client(client, db, world):
     assert cycle.cycle_name in body
 
 
+def test_the_reports_board_narrows_to_one_org(client, db, world):
+    """The status board's View button reaches one client's reports."""
+    _closed_cycle(world)
+    globex = make_org('Globex Inc')
+    clone_instrument_to_org(globex.id)
+    make_cycle(globex, 'GBX-1', status='open', min_reporting_n=1)
+    db.session.commit()
+
+    login(client, world['l1'])
+    body = client.get(
+        f'/admin/reports?org={world["org"].id}').get_data(as_text=True)
+    assert 'Kilimo Dairies' in body
+    assert 'Globex Inc' not in body
+
+    assert client.get('/admin/reports?org=not-a-uuid').status_code == 404
+
+
 def test_the_reports_board_shows_the_three_states(client, db, world):
     """Same three states as the client screen, because they are three
-    different jobs and the third is not a job at all."""
+    different jobs and the third is not a job at all. A cycle still
+    collecting is ready-and-provisional, which is a qualification on the
+    report rather than a fourth state."""
     import re
 
-    ready, _ = _closed_wave(world, 'KD-READY', n=18)
+    ready, _ = _closed_cycle(world, 'KD-READY', n=18)
 
-    collecting, open_wave = _closed_wave(world, 'KD-OPEN', n=18)
-    open_wave.closed = False
+    collecting, open_deployment = _closed_cycle(world, 'KD-OPEN', n=18)
+    open_deployment.closed = False
 
     small = make_cycle(world['org'], 'KD-SMALL', status='open', min_reporting_n=5)
-    small_wave = make_deployment(world['org'], small, expected_respondents=10,
+    small_deployment = make_deployment(world['org'], small, expected_respondents=10,
                                  public_slug='slug-small')
-    small_wave.responses_received = 2
-    small_wave.closed = True
+    small_deployment.responses_received = 2
+    small_deployment.closed = True
 
     make_cycle(world['org'], 'KD-NONE', status='draft', min_reporting_n=1)
     db.session.commit()
@@ -439,14 +458,30 @@ def test_the_reports_board_shows_the_three_states(client, db, world):
     body = re.sub(r'\s+', ' ', client.get('/admin/reports').get_data(as_text=True))
 
     assert 'ready' in body
-    assert 'collecting' in body
+    assert 'provisional' in body
     assert 'below threshold' in body
     assert 'not deployed' in body
     assert '2 of 5 responses needed' in body
 
 
+def test_a_ready_cycle_offers_all_three_reports_in_both_formats(client, db, world):
+    """Spec §12 defines three reports; each is reachable as PDF and Excel."""
+    cycle, _ = _closed_cycle(world)
+    db.session.commit()
+
+    login(client, world['l1'])
+    body = client.get('/admin/reports').get_data(as_text=True)
+
+    base = f'/admin/orgs/{world["org"].id}/reports/{cycle.id}'
+    for report_type in reports.REPORT_TYPES:
+        assert f'{base}/{report_type}"' in body
+        assert f'{base}/{report_type}/pdf' in body
+        assert f'{base}/{report_type}/xlsx' in body
+    assert len(reports.REPORT_TYPES) == 3
+
+
 def test_the_reports_board_links_only_to_ready_cycles(client, db, world):
-    ready, _ = _closed_wave(world, 'KD-READY', n=18)
+    ready, _ = _closed_cycle(world, 'KD-READY', n=18)
     small = make_cycle(world['org'], 'KD-SMALL', status='open', min_reporting_n=5)
     make_deployment(world['org'], small, expected_respondents=10,
                     public_slug='slug-small2')
@@ -460,7 +495,7 @@ def test_the_reports_board_links_only_to_ready_cycles(client, db, world):
 
 def test_the_reports_board_marks_which_reports_were_interpreted(client, db,
                                                                 world):
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     db.session.add(Analysis(
         org_id=world['org'].id, cycle_id=cycle.id,
         report_type='executive', scope_key=None,
@@ -475,7 +510,7 @@ def test_the_reports_board_marks_which_reports_were_interpreted(client, db,
 
 def test_the_reports_board_offers_no_interpret_action(client, world):
     """Read-only, like every L1 report path."""
-    _closed_wave(world)
+    _closed_cycle(world)
     login(client, world['l1'])
     body = client.get('/admin/reports').get_data(as_text=True)
     assert 'Write the interpretation' not in body
@@ -483,7 +518,7 @@ def test_the_reports_board_offers_no_interpret_action(client, world):
 
 
 def test_the_reports_board_excludes_the_master_template_org(client, world):
-    _closed_wave(world)
+    _closed_cycle(world)
     login(client, world['l1'])
     body = client.get('/admin/reports').get_data(as_text=True)
     assert 'Master Template' not in body

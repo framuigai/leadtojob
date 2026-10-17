@@ -24,6 +24,12 @@
   </div>
 </div>
 
+{% if context.provisional %}
+<div class="flash flash-warning">
+  <strong>Provisional.</strong> {{ context.provisional_note }}
+</div>
+{% endif %}
+
 <div class="panel">
   <div class="panel-head"><div class="panel-title">Interpretation</div></div>
   <div class="panel-body">
@@ -42,7 +48,11 @@
         does not produce them.
       </p>
     {% endif %}
-    {% if can_interpret and can(current_user, 'run_analysis') %}
+    {% if context.provisional %}
+    <p class="muted">An interpretation is written once and quoted long
+      afterwards, so it waits for the cycle to close. The figures above do
+      not.</p>
+    {% elif can_interpret and can(current_user, 'run_analysis') %}
     <form method="post"
           action="{{ url_for('org.report_interpret', cycle_id=context.cycle.id,
                              report_type=report_type) }}">

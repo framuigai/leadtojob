@@ -235,10 +235,10 @@ def contrast_bars(contrasts, outcome_label, title=None):
 
 def trend_bars(changes, title=None):
     """
-    Previous wave against this wave.
+    Previous cycle against this cycle.
 
     A measure that is NOT COMPARABLE is omitted entirely rather than drawn at
-    zero. A domain absent from one wave plotted as 0 reads as a collapse that
+    zero. A domain absent from one cycle plotted as 0 reads as a collapse that
     did not happen — the organisation asked fewer questions, it did not get
     worse. See app/analytics/trend.py.
     """
@@ -254,10 +254,10 @@ def trend_bars(changes, title=None):
     offset = 0.21
     axis.barh([p - offset for p in positions],
               [c.previous.mean for _, c in rows], height=0.36,
-              color=GRID, label='Previous wave')
+              color=GRID, label='Previous cycle')
     axis.barh([p + offset for p in positions],
               [c.current.mean for _, c in rows], height=0.36,
-              color=NEUTRAL_BAR, label='This wave')
+              color=NEUTRAL_BAR, label='This cycle')
 
     for position, (_, change) in zip(positions, rows):
         axis.text(change.current.mean + 0.06, position + offset,

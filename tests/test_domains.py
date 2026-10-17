@@ -108,16 +108,16 @@ def test_not_applicable_is_not_part_of_the_numeric_scale():
 
 # ── Bands (spec §10.5) ──────────────────────────────────────────────────────
 
-def test_bands_are_not_validated_and_the_note_says_so():
+def test_the_deferred_bands_note_says_there_are_no_bands():
     """
     This is a specification requirement, not a preference, so it is pinned.
 
-    Flipping BANDS_VALIDATED to True must be a deliberate act accompanied by
-    pilot evidence and a band table derived from it — not a side effect of
-    someone wanting a colour on a dashboard.
+    There is no band vocabulary in this product and no switch to turn one on:
+    §10.5 requires pilot evidence first, and a colour on a dashboard is not
+    that evidence.
     """
-    assert domains.BANDS_VALIDATED is False
     assert 'not been validated' in domains.BANDS_DEFERRED_NOTE
+    assert not hasattr(domains, 'BANDS_VALIDATED')
 
 
 # ── 'Daunting' (spec §6.4) ──────────────────────────────────────────────────

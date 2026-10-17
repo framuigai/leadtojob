@@ -1,16 +1,19 @@
 {% extends "base.html" %}
 {% block title %}New Organisation - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
 {% block content %}
 <div class="page-header"><div class="page-header-left">
-  <div class="section-label">Master Admin</div>
-  <h1>New Organisation</h1>
+  <div class="section-label">Master Admin &middot; New Organisation</div>
+  <h1>Details &amp; scope</h1>
 </div></div>
+
+{% include "admin/_wizard_steps.html" %}
 
 <div class="panel"><div class="panel-body">
   <p class="panel-note">
     The organisation is created immediately as a <strong>resumable draft</strong>
-    and gets its own frozen copy of the 48-item instrument. You can close this
-    tab after saving and finish setup later.
+    and gets its own frozen copy of the instrument. You can close this tab
+    after saving and finish setup later.
   </p>
   <form method="post" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -24,8 +27,33 @@
       <input type="text" id="industry" name="industry"
              value="{{ request.form.get('industry', '') }}">
     </div>
-    <button type="submit" class="btn btn-primary">Create organisation</button>
-    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">Cancel</a>
+
+    <div class="form-group">
+      <label>Domains this client measures</label>
+      <input type="hidden" name="scope_submitted" value="1">
+      {% for d in DOMAINS %}
+      <label class="domain-choice{% if d == OUTCOME_DOMAIN %} is-fixed{% endif %}">
+        <input type="checkbox" name="domains" value="{{ d }}"
+               {% if d == OUTCOME_DOMAIN %}checked disabled{% else %}checked{% endif %}>
+        <span>
+          <div class="domain-choice-name">{{ domain_label(d) }}</div>
+          <div class="domain-choice-note">
+            {% if d == OUTCOME_DOMAIN %}
+              Always measured. Every diagnostic domain is reported in relation
+              to it, so a client without it cannot produce a diagnostic.
+            {% else %}
+              Diagnostic domain.
+            {% endif %}
+          </div>
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+
+    <div class="wizard-actions">
+      <button type="submit" class="btn btn-primary">Create and continue</button>
+      <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">Cancel</a>
+    </div>
   </form>
 </div></div>
 {% endblock %}

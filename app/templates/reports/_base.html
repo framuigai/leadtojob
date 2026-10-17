@@ -20,22 +20,39 @@
   <style>
   {% include "reports/_cover_style.css.html" %}
   {% include "reports/_report_style.css.html" %}
+    {#
+      THE PAGE GEOMETRY IS THE SIBLINGS'. Zero horizontal margin, with the
+      gutter supplied by .content instead, so the cover BLEEDS to the paper
+      edge exactly as promo's and trainiq's do. With a side margin the dark
+      cover panel floats in a white frame and the three products stop looking
+      like one vendor — which is the whole reason the cover markup and CSS
+      are kept byte-identical to promo's.
+    #}
     @page {
       size: A4;
-      margin: 18mm 16mm 20mm 16mm;
+      margin: 2cm 0 1.6cm;
       @bottom-left {
         content: "{{ org.name }} - {{ title }} - CONFIDENTIAL";
         font-size: 7.5pt; color: #6b7280;
+        padding-left: 2.5cm;
       }
       @bottom-right {
-        content: "n = {{ n }} - reported only for groups of {{ min_reporting_n }} or more - page " counter(page);
-        font-size: 7.5pt; color: #6b7280;
+        content: "n = {{ n }} · groups of {{ min_reporting_n }}+ only · page " counter(page);
+        font-size: 7.5pt; color: #6b7280; white-space: nowrap;
+        padding-right: 2.5cm;
       }
     }
+    @page :first { margin: 0 0 1.6cm; }
+    * { box-sizing: border-box; }
     body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
            font-size: 9.5pt; color: #2B2F38; line-height: 1.5; }
-    h2.sec { font-size: 13pt; margin: 22pt 0 6pt; color: #1F3A52;
-             border-bottom: 1px solid #DDE1E7; padding-bottom: 4pt; }
+    /* Numbered section headings. The numeral is deliberately quieter than
+       the heading: it is a locator, not part of the title, and at full
+       weight it competes with the words next to it. */
+    h2.sec { font-size: 13.5pt; font-weight: bold; margin: 24pt 0 8pt;
+             color: #1F3A52; border-bottom: 1px solid #DDE1E7;
+             padding-bottom: 5pt; letter-spacing: -0.1pt; }
+    h2.sec .sec-num { color: #9AA3AE; font-weight: bold; padding-right: 3pt; }
     h3.sub { font-size: 10.5pt; margin: 14pt 0 4pt; color: #1F3A52; }
     table.data { width: 100%; border-collapse: collapse; margin: 8pt 0 10pt; }
     table.data th { text-align: left; font-size: 8pt; text-transform: uppercase;
@@ -55,6 +72,18 @@
     ul.plain { margin: 6pt 0 6pt 14pt; padding: 0; }
     ul.plain li { margin-bottom: 4pt; }
     .pagebreak { page-break-before: always; }
+    /* The gutter the zero page-margin gives up. Same value as the siblings. */
+    .content { padding: 1.25cm 2.5cm 0; }
+    /* Curriculum codes: the identifier the client's LMS shares with the
+       catalogue, so they are monospaced and never wrapped. A broken code is
+       an unusable one. Same treatment as the sibling products give theirs. */
+    td.code-cell { font-family: monospace; font-size: 8pt; color: #4b5563;
+                   white-space: nowrap; }
+    .provisional-banner {
+      border: 1pt solid #F05A28; border-left-width: 4pt;
+      background: #FFF6F2; padding: 7pt 9pt; margin: 0 0 12pt;
+      font-size: 9pt; line-height: 1.45;
+    }
   </style>
 </head>
 <body>
@@ -64,11 +93,23 @@
 {% set cover_meta = [
      ('Scope', scope_label),
      ('Responses', n ~ (' of ' ~ expected if expected else '')),
-     ('Threshold', 'n >= ' ~ min_reporting_n),
+     ('Threshold', 'n ≥ ' ~ min_reporting_n),
      ('Generated', generated_on),
+     ('Status', 'Provisional' if provisional else 'Final'),
 ] %}
 {% set scope_line = scope_label %}
 {% include "reports/_cover.html" %}
+
+<div class="content">
+
+{% if provisional %}
+{#
+  On the cover page, before anything a reader could quote. A PDF outlives the
+  screen that explained it, so the qualification travels inside the document.
+#}
+<p class="provisional-banner"><strong>Provisional — this cycle is still
+  collecting.</strong> {{ provisional_note }}</p>
+{% endif %}
 
 {% block body %}{% endblock %}
 
@@ -86,6 +127,9 @@
       pooled. Groups of fewer than {{ min_reporting_n }} are suppressed, and
       where one group is suppressed another is suppressed with it so the hidden
       figure cannot be recovered by subtracting the rest from the total.</li>
+  {% if provisional %}
+  <li><strong>Provisional figures.</strong> {{ provisional_note }}</li>
+  {% endif %}
   <li><strong>Not for decisions about individuals.</strong> Nothing in this
       report may be used in an appraisal, a performance process, a promotion
       decision or any other decision about a particular employee.</li>
@@ -94,5 +138,7 @@
       reported separately as coverage; they are not counted as a middle
       answer.</li>
 </ul>
+
+</div>
 </body>
 </html>

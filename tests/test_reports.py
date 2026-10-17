@@ -8,7 +8,7 @@ Phase 8:
 
 Phase 9:
     a 4-person team produces no report and says why;
-    a wave missing a domain is refused, not plotted as a drop.
+    a deployment missing a domain is refused, not plotted as a drop.
 
 These render real PDFs and real workbooks and read them back. A report that
 builds without raising is not the same as a report that is correct, and the
@@ -92,13 +92,13 @@ def _respond(org_id, deployment, scores, segment=None, na_domains=()):
     deployment.responses_received = (deployment.responses_received or 0) + 1
 
 
-def _closed_wave(world, cycle_id='KD-1', n=18, branch=None, min_n=1,
+def _closed_cycle(world, cycle_id='KD-1', n=18, branch=None, min_n=1,
                  assessed=None, previous=None, varied=True):
     cycle = make_cycle(world['org'], cycle_id, status='open', branch=branch,
                        min_reporting_n=min_n,
                        assessed_domains=assessed or list(domains.DOMAINS),
                        previous_cycle_id=previous)
-    wave = make_deployment(world['org'], cycle, branch=branch,
+    deployment = make_deployment(world['org'], cycle, branch=branch,
                            expected_respondents=n + 6,
                            public_slug=f'slug-{cycle_id}')
     for i in range(n):
@@ -106,12 +106,12 @@ def _closed_wave(world, cycle_id='KD-1', n=18, branch=None, min_n=1,
         gem = (2, 3, 5)[tier]
         scores = {d: gem if d == 'GEM' else (2, 3, 4)[tier]
                   for d in (assessed or domains.DOMAINS)}
-        _respond(world['org'].id, wave, scores,
+        _respond(world['org'].id, deployment, scores,
                  segment=('FIN' if i % 2 else 'OPS'))
-    wave.closed = True
+    deployment.closed = True
     cycle.status = 'closed'
     db.session.commit()
-    return cycle, wave
+    return cycle, deployment
 
 
 # ── Parity: the PDF and the XLSX cannot disagree ───────────────────────────
@@ -140,7 +140,7 @@ def test_the_filename_comes_from_one_function():
 def test_the_pdf_and_the_xlsx_agree_on_title_and_figures(client, world,
                                                         report_type):
     """THE NAMED PHASE 8 CRITERION — checked by reading both files back."""
-    cycle, _ = _closed_wave(world)
+    cycle, _ = _closed_cycle(world)
     login(client, world['admin'])
 
     pdf_res = client.get(
@@ -182,17 +182,17 @@ def test_a_report_renders_when_a_whole_domain_is_na_for_a_third(client, world):
     the coverage must be visible, and nothing may render as a zero.
     """
     cycle = make_cycle(world['org'], 'KD-NA', status='open', min_reporting_n=1)
-    wave = make_deployment(world['org'], cycle, expected_respondents=24,
+    deployment = make_deployment(world['org'], cycle, expected_respondents=24,
                            public_slug='slug-na')
     for i in range(18):
         scores = {d: (3 if i % 2 else 4) for d in domains.DOMAINS}
         if i < 6:
-            _respond(world['org'].id, wave,
+            _respond(world['org'].id, deployment,
                      {d: v for d, v in scores.items() if d != 'PIE'},
                      na_domains=('PIE',))
         else:
-            _respond(world['org'].id, wave, scores)
-    wave.closed = True
+            _respond(world['org'].id, deployment, scores)
+    deployment.closed = True
     cycle.status = 'closed'
     db.session.commit()
 
@@ -216,18 +216,18 @@ def test_a_suppressed_cell_never_renders_as_a_blank_or_a_zero(client, world):
     make_segment(world['org'], 'department', 'Department',
                  [('FIN', 'Finance'), ('OPS', 'Operations'), ('SAL', 'Sales')])
     cycle = make_cycle(world['org'], 'KD-SUP', status='open', min_reporting_n=5)
-    wave = make_deployment(world['org'], cycle, expected_respondents=40,
+    deployment = make_deployment(world['org'], cycle, expected_respondents=40,
                            public_slug='slug-sup')
     for i in range(20):
-        _respond(world['org'].id, wave, {d: 4 for d in domains.DOMAINS},
+        _respond(world['org'].id, deployment, {d: 4 for d in domains.DOMAINS},
                  segment='FIN')
     for i in range(20):
-        _respond(world['org'].id, wave, {d: 3 for d in domains.DOMAINS},
+        _respond(world['org'].id, deployment, {d: 3 for d in domains.DOMAINS},
                  segment='OPS')
     for i in range(3):
-        _respond(world['org'].id, wave, {d: 1 for d in domains.DOMAINS},
+        _respond(world['org'].id, deployment, {d: 1 for d in domains.DOMAINS},
                  segment='SAL')
-    wave.closed = True
+    deployment.closed = True
     cycle.status = 'closed'
     db.session.commit()
 
@@ -245,7 +245,7 @@ def test_no_band_vocabulary_survives_into_a_populated_pdf(client, world):
     §10.5, on the finished artefact. Both sibling products have a four-band
     palette and inheriting it is the easiest mistake available.
     """
-    cycle, _ = _closed_wave(world, 'KD-BANDS')
+    cycle, _ = _closed_cycle(world, 'KD-BANDS')
     login(client, world['admin'])
     res = client.get(f'/org/cycles/{cycle.id}/report/{reports.EXECUTIVE}/pdf')
     text = _pdf_text(res.data)
@@ -257,7 +257,7 @@ def test_no_band_vocabulary_survives_into_a_populated_pdf(client, world):
 
 
 def test_the_word_daunting_never_reaches_a_report(client, world):
-    cycle, _ = _closed_wave(world, 'KD-D')
+    cycle, _ = _closed_cycle(world, 'KD-D')
     login(client, world['admin'])
     res = client.get(f'/org/cycles/{cycle.id}/report/{reports.HR_OD}/pdf')
     text = _pdf_text(res.data)
@@ -267,7 +267,7 @@ def test_the_word_daunting_never_reaches_a_report(client, world):
 
 def test_a_report_never_mentions_ai(client, world):
     """Inherited rule. The section is called Interpretation."""
-    cycle, _ = _closed_wave(world, 'KD-AI')
+    cycle, _ = _closed_cycle(world, 'KD-AI')
     login(client, world['admin'])
     res = client.get(f'/org/cycles/{cycle.id}/report/{reports.HR_OD}/pdf')
     text = _pdf_text(res.data)
@@ -278,7 +278,7 @@ def test_a_report_never_mentions_ai(client, world):
 
 def test_every_report_carries_n_and_the_threshold(client, world):
     """A number without its n is how a four-person finding becomes a board slide."""
-    cycle, _ = _closed_wave(world, 'KD-N')
+    cycle, _ = _closed_cycle(world, 'KD-N')
     login(client, world['admin'])
     res = client.get(f'/org/cycles/{cycle.id}/report/{reports.EXECUTIVE}/pdf')
     text = _pdf_text(res.data)
@@ -287,7 +287,7 @@ def test_every_report_carries_n_and_the_threshold(client, world):
 
 
 def test_the_limitations_section_is_required_not_an_appendix(client, world):
-    cycle, _ = _closed_wave(world, 'KD-LIM')
+    cycle, _ = _closed_cycle(world, 'KD-LIM')
     login(client, world['admin'])
     res = client.get(f'/org/cycles/{cycle.id}/report/{reports.EXECUTIVE}/pdf')
     text = _pdf_text(res.data)
@@ -298,7 +298,7 @@ def test_the_limitations_section_is_required_not_an_appendix(client, world):
 
 def test_downloading_writes_a_report_event(client, world):
     """§13.4 requires role-based access to results; this is the evidence."""
-    cycle, _ = _closed_wave(world, 'KD-EV')
+    cycle, _ = _closed_cycle(world, 'KD-EV')
     login(client, world['admin'])
     client.get(f'/org/cycles/{cycle.id}/report/{reports.EXECUTIVE}/pdf')
 
@@ -308,23 +308,93 @@ def test_downloading_writes_a_report_event(client, world):
     assert event.generated_by == world['admin'].id
 
 
-# ── The closed-wave gate ───────────────────────────────────────────────────
+# ── The open cycle: reported, and marked ask‑as‑at ───────────────────────
 
-def test_an_open_wave_refuses_to_generate_and_says_why(client, world):
+def test_an_open_deployment_reports_as_provisional(client, world):
     """
-    The temporal-differencing mitigation, enforced rather than suggested. Two
-    reports of the same group at n=5 and n=6 give up respondent 6 by
-    subtraction, and no in-report suppression prevents it.
+    An open cycle is NOT withheld — trainiq and promo both gate on responses
+    and never on deployment state, and this product disagreeing with them was
+    its own invention. What it gets instead is the provisional note, on the
+    screen and on the cover of whatever is downloaded from it.
     """
-    cycle, wave = _closed_wave(world, 'KD-OPEN')
-    wave.closed = False
+    cycle, deployment = _closed_cycle(world, 'KD-OPEN')
+    deployment.closed = False
     db.session.commit()
 
     login(client, world['admin'])
     body = client.get(
         f'/org/cycles/{cycle.id}/report/{reports.EXECUTIVE}').get_data(as_text=True)
-    assert 'still open' in body
-    assert 'subtracted from one another' in body
+    assert 'still collecting responses' in body
+    assert 'Provisional' in body
+
+
+def test_a_provisional_report_refuses_an_interpretation(client, world):
+    """
+    The one thing an open cycle does not get. Figures may be read early;
+    prose that will be quoted after the n has been forgotten may not.
+    """
+    cycle, deployment = _closed_cycle(world, 'KD-OPEN2')
+    deployment.closed = False
+    db.session.commit()
+
+    login(client, world['admin'])
+    res = client.post(
+        f'/org/cycles/{cycle.id}/report/{reports.EXECUTIVE}/interpret',
+        follow_redirects=True)
+    assert 'only after the cycle closes' in res.get_data(as_text=True)
+
+
+# ── The catalogue reaches BOTH builders ───────────────────────────────
+
+def test_the_client_facing_report_names_courses_with_their_codes(client, world):
+    """
+    The two context builders must agree about what a report recommends.
+
+    _build_report() in the org blueprint and assemble() in this module are
+    separate paths to a context, and only assemble() attached the catalogue.
+    Every report a CLIENT downloaded therefore named no course at all, while
+    the same report pulled from the L1 board named them — the catalogue looked
+    broken when one caller had simply forgotten a step.
+    """
+    from seed_catalogue import seed
+    seed(force=True)
+    cycle, _ = _closed_cycle(world, 'KD-COURSE', n=18)
+    db.session.commit()
+
+    login(client, world['admin'])
+    raw = client.get(
+        f'/org/cycles/{cycle.id}/report/{reports.EXECUTIVE}/pdf').get_data()
+    text = ' '.join(
+        ' '.join(page.extract_text()
+                 for page in PdfReader(io.BytesIO(raw)).pages).split())
+
+    codes = set(re.findall(r'[A-Z]{2}-[A-Z]{3}[-A-Z0-9]*T\d\d', text))
+    assert codes, 'the Executive Report named no course code'
+
+
+def test_a_small_cycle_still_recommends_ranked_by_score(client, world):
+    """
+    Below association.contrast_floor() there is no contrast to rank by, and
+    the catalogue used to produce nothing at all — a report naming no course
+    not because none applied but because the ranking input was missing. The
+    fallback ranks by score and the report says which basis it used.
+    """
+    from seed_catalogue import seed
+    seed(force=True)
+    cycle, _ = _closed_cycle(world, 'KD-TINY', n=4)
+    db.session.commit()
+
+    login(client, world['admin'])
+    raw = client.get(
+        f'/org/cycles/{cycle.id}/report/{reports.HR_OD}/pdf').get_data()
+    text = ' '.join(
+        ' '.join(page.extract_text()
+                 for page in PdfReader(io.BytesIO(raw)).pages).split())
+
+    assert re.search(r'[A-Z]{2}-[A-Z]{3}[-A-Z0-9]*T\d\d', text)
+    assert 'Ordered by score' in text
+    # And it does not pass the weaker basis off as the stronger one.
+    assert 'too few respondents' in text
 
 
 def test_an_undeployed_cycle_refuses_to_generate(client, world):
@@ -350,11 +420,11 @@ def test_a_four_person_team_produces_no_report_and_says_why(client, db, world):
     branch = make_branch(world['org'], 'Nakuru plant')
     cycle = make_cycle(world['org'], 'KD-SMALL', status='open',
                        branch=branch, min_reporting_n=5)
-    wave = make_deployment(world['org'], cycle, branch=branch,
+    deployment = make_deployment(world['org'], cycle, branch=branch,
                            expected_respondents=10, public_slug='slug-small')
     for _ in range(4):
-        _respond(world['org'].id, wave, {d: 4 for d in domains.DOMAINS})
-    wave.closed = True
+        _respond(world['org'].id, deployment, {d: 4 for d in domains.DOMAINS})
+    deployment.closed = True
     db.session.commit()
 
     login(client, world['admin'])
@@ -380,11 +450,11 @@ def test_a_team_at_the_threshold_does_produce_a_report(client, db, world):
     branch = make_branch(world['org'], 'Nakuru plant')
     cycle = make_cycle(world['org'], 'KD-OK', status='open', branch=branch,
                        min_reporting_n=5)
-    wave = make_deployment(world['org'], cycle, branch=branch,
+    deployment = make_deployment(world['org'], cycle, branch=branch,
                            expected_respondents=10, public_slug='slug-ok')
     for _ in range(5):
-        _respond(world['org'].id, wave, {d: 4 for d in domains.DOMAINS})
-    wave.closed = True
+        _respond(world['org'].id, deployment, {d: 4 for d in domains.DOMAINS})
+    deployment.closed = True
     db.session.commit()
 
     login(client, world['admin'])
@@ -398,12 +468,12 @@ def test_the_management_report_says_no_individual_is_visible(client, db, world):
     branch = make_branch(world['org'], 'Nakuru plant')
     cycle = make_cycle(world['org'], 'KD-MGR', status='open', branch=branch,
                        min_reporting_n=1)
-    wave = make_deployment(world['org'], cycle, branch=branch,
+    deployment = make_deployment(world['org'], cycle, branch=branch,
                            expected_respondents=10, public_slug='slug-mgr')
     for i in range(12):
-        _respond(world['org'].id, wave,
+        _respond(world['org'].id, deployment,
                  {d: (2 if i < 6 else 5) for d in domains.DOMAINS})
-    wave.closed = True
+    deployment.closed = True
     db.session.commit()
 
     login(client, world['admin'])
@@ -422,17 +492,17 @@ def test_the_management_report_says_no_individual_is_visible(client, db, world):
 
 # ── Phase 9: trend ─────────────────────────────────────────────────────────
 
-def test_a_wave_missing_a_domain_is_refused_not_plotted_as_a_drop(client, world):
+def test_a_cycle_missing_a_domain_is_refused_not_plotted_as_a_drop(client, world):
     """
     THE NAMED PHASE 9 CRITERION.
 
-    A pulse wave of GEM + TID following a full wave. Reward Satisfaction has a
+    A pulse deployment of GEM + TID following a full deployment. Reward Satisfaction has a
     figure last time and none this time. Plotted naively that renders as a fall
     to zero — a catastrophic finding that did not happen. The organisation
     asked fewer questions; it did not get worse.
     """
-    first, _ = _closed_wave(world, 'KD-W1', n=18)
-    second, _ = _closed_wave(world, 'KD-W2', n=18,
+    first, _ = _closed_cycle(world, 'KD-W1', n=18)
+    second, _ = _closed_cycle(world, 'KD-W2', n=18,
                              assessed=['GEM', 'TID'], previous=first.id)
 
     login(client, world['admin'])
@@ -440,30 +510,30 @@ def test_a_wave_missing_a_domain_is_refused_not_plotted_as_a_drop(client, world)
     assert res.status_code == 200
     text = _pdf_text(res.data)
 
-    assert 'was not measured in this wave' in text
+    assert 'was not measured in this cycle' in text
     assert 'is not a domain that fell' in text
     # And no false drop anywhere near it.
     assert 'Reward Satisfaction' in text
 
 
 def test_a_comparable_domain_does_report_its_change(client, world):
-    first, _ = _closed_wave(world, 'KD-T1', n=18)
-    second, _ = _closed_wave(world, 'KD-T2', n=18, previous=first.id)
+    first, _ = _closed_cycle(world, 'KD-T1', n=18)
+    second, _ = _closed_cycle(world, 'KD-T2', n=18, previous=first.id)
 
     login(client, world['admin'])
     res = client.get(f'/org/cycles/{second.id}/report/{reports.HR_OD}/pdf')
     text = _pdf_text(res.data)
-    assert 'Change since the previous wave' in text
+    assert 'Change since the previous cycle' in text
     assert 'does not by itself prove' in text        # §16's caveat
 
 
-def test_the_trend_reports_both_waves_response_counts(client, world):
+def test_the_trend_reports_both_cycles_response_counts(client, world):
     """
-    §16: "consider other explanations, timing, sample composition". A wave of
-    40 and a wave of 120 are not the same population measured twice.
+    §16: "consider other explanations, timing, sample composition". A deployment of
+    40 and a deployment of 120 are not the same population measured twice.
     """
-    first, _ = _closed_wave(world, 'KD-C1', n=30)
-    second, _ = _closed_wave(world, 'KD-C2', n=12, previous=first.id)
+    first, _ = _closed_cycle(world, 'KD-C1', n=30)
+    second, _ = _closed_cycle(world, 'KD-C2', n=12, previous=first.id)
 
     login(client, world['admin'])
     res = client.get(f'/org/cycles/{second.id}/report/{reports.HR_OD}/pdf')
@@ -472,12 +542,12 @@ def test_the_trend_reports_both_waves_response_counts(client, world):
     assert 'may reflect who answered' in text
 
 
-def test_no_trend_section_without_a_previous_wave(client, world):
-    cycle, _ = _closed_wave(world, 'KD-SOLO')
+def test_no_trend_section_without_a_previous_cycle(client, world):
+    cycle, _ = _closed_cycle(world, 'KD-SOLO')
     login(client, world['admin'])
     res = client.get(f'/org/cycles/{cycle.id}/report/{reports.HR_OD}/pdf')
     text = _pdf_text(res.data)
-    assert 'Change since the previous wave' not in text
+    assert 'Change since the previous cycle' not in text
 
 
 # ── The narrative payload ──────────────────────────────────────────────────
@@ -493,24 +563,24 @@ def test_the_narrative_payload_contains_no_suppressed_group(world):
     make_segment(world['org'], 'department', 'Department',
                  [('FIN', 'Finance'), ('OPS', 'Operations'), ('SAL', 'Sales')])
     cycle = make_cycle(world['org'], 'KD-PAY', status='open', min_reporting_n=5)
-    wave = make_deployment(world['org'], cycle, expected_respondents=60,
+    deployment = make_deployment(world['org'], cycle, expected_respondents=60,
                            public_slug='slug-pay')
     for i in range(20):
-        _respond(world['org'].id, wave, {d: 4 for d in domains.DOMAINS},
+        _respond(world['org'].id, deployment, {d: 4 for d in domains.DOMAINS},
                  segment='FIN')
     for i in range(20):
-        _respond(world['org'].id, wave, {d: 3 for d in domains.DOMAINS},
+        _respond(world['org'].id, deployment, {d: 3 for d in domains.DOMAINS},
                  segment='OPS')
     for i in range(2):
-        _respond(world['org'].id, wave, {d: 1 for d in domains.DOMAINS},
+        _respond(world['org'].id, deployment, {d: 1 for d in domains.DOMAINS},
                  segment='SAL')
-    wave.closed = True
+    deployment.closed = True
     db.session.commit()
 
     from app.provisioning import active_segments
-    profiles = sc.load_profiles(db.session, [wave.id])
+    profiles = sc.load_profiles(db.session, [deployment.id])
     context = reports.build_context(
-        reports.HR_OD, world['org'], cycle, [wave], profiles,
+        reports.HR_OD, world['org'], cycle, [deployment], profiles,
         segments=active_segments(world['org'].id))
     payload = reports.narrative_payload(context)
 
@@ -524,10 +594,10 @@ def test_the_narrative_payload_contains_no_suppressed_group(world):
 
 
 def test_the_narrative_payload_carries_no_identity(world):
-    cycle, wave = _closed_wave(world, 'KD-ID')
-    profiles = sc.load_profiles(db.session, [wave.id])
+    cycle, deployment = _closed_cycle(world, 'KD-ID')
+    profiles = sc.load_profiles(db.session, [deployment.id])
     context = reports.build_context(
-        reports.EXECUTIVE, world['org'], cycle, [wave], profiles)
+        reports.EXECUTIVE, world['org'], cycle, [deployment], profiles)
     blob = repr(reports.narrative_payload(context))
 
     for forbidden in ('session_id', 'email', 'respondent', '@'):
@@ -539,10 +609,10 @@ def test_the_payload_offers_only_the_specs_own_response_categories(world):
     §11's wording, verbatim, so the model can only name categories the
     specification actually lists — and the Reward rows contain no training.
     """
-    cycle, wave = _closed_wave(world, 'KD-CAT')
-    profiles = sc.load_profiles(db.session, [wave.id])
+    cycle, deployment = _closed_cycle(world, 'KD-CAT')
+    profiles = sc.load_profiles(db.session, [deployment.id])
     context = reports.build_context(
-        reports.HR_OD, world['org'], cycle, [wave], profiles)
+        reports.HR_OD, world['org'], cycle, [deployment], profiles)
     categories = reports.narrative_payload(context)['available_response_categories']
 
     assert categories['Peer Comparison'] == 'Role and pay-equity review'
@@ -563,7 +633,7 @@ def test_another_orgs_report_is_not_reachable(client, db, world):
 
 
 def test_an_unknown_report_type_is_404(client, world):
-    cycle, _ = _closed_wave(world, 'KD-404')
+    cycle, _ = _closed_cycle(world, 'KD-404')
     login(client, world['admin'])
     assert client.get(
         f'/org/cycles/{cycle.id}/report/final_verdict').status_code == 404
@@ -586,14 +656,14 @@ def test_a_populated_report_makes_no_unnegated_causal_claim(client, db, world,
     branch = make_branch(world['org'], 'Nakuru plant')
     cycle = make_cycle(world['org'], 'KD-WORD', status='open', branch=branch,
                        min_reporting_n=1)
-    wave = make_deployment(world['org'], cycle, branch=branch,
+    deployment = make_deployment(world['org'], cycle, branch=branch,
                            expected_respondents=24, public_slug='slug-word')
     for i in range(18):
         tier = i * 3 // 18
-        _respond(world['org'].id, wave,
+        _respond(world['org'].id, deployment,
                  {d: (2, 3, 5)[tier] if d == 'GEM' else (1, 3, 5)[tier]
                   for d in domains.DOMAINS})
-    wave.closed = True
+    deployment.closed = True
     db.session.commit()
 
     # A narrative that deliberately contains the REQUIRED negated forms, so
@@ -603,7 +673,7 @@ def test_a_populated_report_makes_no_unnegated_causal_claim(client, db, world,
         scope_key=str(branch.id) if report_type == reports.MANAGEMENT else None,
         payload={
             'executive_summary':
-                'This wave shows associations between measures, not causes. '
+                'This deployment shows associations between measures, not causes. '
                 'Trust scores 2.1 against 3.4 across the diagnostic '
                 'subdomains.',
             'summary':
@@ -645,7 +715,7 @@ def test_the_populated_render_test_would_catch_a_real_violation(client, db,
     The meta-check for the test above. If a narrative DID assert causation, the
     sweep must fail — otherwise the four assertions are decoration.
     """
-    cycle, _ = _closed_wave(world, 'KD-BAD')
+    cycle, _ = _closed_cycle(world, 'KD-BAD')
     db.session.add(Analysis(
         org_id=world['org'].id, cycle_id=cycle.id,
         report_type=reports.EXECUTIVE, scope_key=None,

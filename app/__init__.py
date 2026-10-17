@@ -115,7 +115,7 @@ def _register_template_globals(app):
     two private copies and reports mislabelled every answer by one step.
 
     Note what is NOT exposed: nothing that would let a template invent a band
-    label while domains.BANDS_VALIDATED is False (spec §10.5).
+    label (spec §10.5).
     """
     from app import domains
     from app.permissions import ROLE_LABELS, can
@@ -143,7 +143,6 @@ def _register_template_globals(app):
         not_applicable_short=domains.NOT_APPLICABLE_SHORT,
         # The constants that keep the reports honest. One copy each, so a new
         # template or chart cannot omit one by forgetting it exists.
-        BANDS_VALIDATED=domains.BANDS_VALIDATED,
         BANDS_DEFERRED_NOTE=domains.BANDS_DEFERRED_NOTE,
         ASSOCIATION_CAVEAT=domains.ASSOCIATION_CAVEAT,
         PERCEPTION_CAVEAT=domains.PERCEPTION_CAVEAT,
@@ -192,7 +191,7 @@ def _check_required_config(app, config_name):
     # every outbound link from it. Its default is http://localhost:5000, which
     # in production would not fail — it would quietly print survey links to
     # localhost into the admin UI, where they look plausible and are pasted
-    # into an all-staff email. The failure surfaces days later, as a wave with
+    # into an all-staff email. The failure surfaces days later, as a cycle with
     # a zero response rate that nobody can explain.
     base_url = (app.config.get('SURVEY_BASE_URL') or '').strip()
     if not base_url or 'localhost' in base_url or '127.0.0.1' in base_url:

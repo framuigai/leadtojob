@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Confirm setup - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin &middot; {{ org.name }}</div>
+  <h1>Confirm</h1>
+</div></div>
+
+{% include "admin/_wizard_steps.html" %}
+
+<div class="panel">
+  <table class="table">
+    <tbody>
+      <tr><td>Organisation</td><td><strong>{{ org.name }}</strong></td></tr>
+      <tr><td>Industry</td>
+          <td>{{ org.industry or '—' }}</td></tr>
+      <tr><td>Domains measured</td>
+          <td>
+            {% for d in (org.active_domains or []) %}
+            <span class="domain-chip">{{ domain_label(d) }}</span>
+            {% endfor %}
+          </td></tr>
+      <tr><td>Instrument</td>
+          <td>{{ item_count }} questions, this organisation's own copy</td></tr>
+      <tr><td>Reporting segments</td>
+          <td>
+            {% if segments %}
+              {% for s in segments %}{{ s.label }}{% if not loop.last %}, {% endif %}{% endfor %}
+              <div class="muted">Options are defined by the client before
+                their first cycle opens.</div>
+            {% else %}—{% endif %}
+          </td></tr>
+      <tr><td>Administrator</td>
+          <td>
+            {% if admins %}
+              {% for a in admins %}{{ a.email }}{% if not loop.last %}, {% endif %}{% endfor %}
+            {% else %}
+              <span class="status-pill status-amber">none yet</span>
+            {% endif %}
+          </td></tr>
+    </tbody>
+  </table>
+</div>
+
+{% if not admins %}
+<div class="flash flash-warning">
+  This organisation has no administrator. Setup cannot be completed without
+  one: nobody at the client could sign in to create a cycle, and the
+  organisation would sit on the board looking provisioned while delivering
+  nothing.
+</div>
+{% endif %}
+
+<div class="wizard-actions">
+  {% if admins %}
+  <form method="post" action="{{ url_for('admin.org_complete', org_id=org.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-primary">Complete setup</button>
+  </form>
+  {% else %}
+  <a class="btn btn-primary"
+     href="{{ url_for('admin.org_admin_new', org_id=org.id) }}">Add an administrator</a>
+  {% endif %}
+  <a class="btn btn-secondary"
+     href="{{ url_for('admin.org_setup_instrument', org_id=org.id) }}">Back</a>
+  <a class="btn btn-secondary"
+     href="{{ url_for('admin.org_detail', org_id=org.id) }}">Finish later</a>
+</div>
+{% endblock %}

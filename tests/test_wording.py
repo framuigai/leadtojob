@@ -28,7 +28,7 @@ REAL_CAUSAL_VIOLATIONS = [
 ]
 
 LEGITIMATE_NEGATED_FORMS = [
-    'This wave shows associations between measures, not causes.',
+    'This deployment shows associations between measures, not causes.',
     'It does not show that Trust causes higher or lower satisfaction.',
     'These patterns do not, by themselves, establish that one factor caused '
     'another.',

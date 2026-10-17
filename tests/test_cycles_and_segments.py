@@ -32,7 +32,7 @@ def org_world(db):
     return {'org': org, 'branch': branch, 'admin': admin}
 
 
-# ── The database, not the route, blocks a duplicate open wave ───────────────
+# ── The database, not the route, blocks a duplicate open deployment ───────────────
 
 def test_two_open_org_wide_deployments_for_one_cycle_are_rejected_by_the_db(
         db, org_world):
@@ -80,8 +80,8 @@ def test_an_org_wide_and_a_branch_deployment_may_coexist(db, org_world):
 
 def test_a_closed_deployment_frees_the_slot_for_a_redeploy(db, org_world):
     """
-    The index is PARTIAL — `WHERE closed = false`. A wave that has been closed
-    no longer blocks a new one, which is what makes a mis-deployed wave
+    The index is PARTIAL — `WHERE closed = false`. A deployment that has been closed
+    no longer blocks a new one, which is what makes a mis-deployed deployment
     recoverable.
     """
     cycle = make_cycle(org_world['org'], 'ACME-H1')
@@ -165,8 +165,8 @@ def test_a_purpose_statement_is_required_and_must_say_something(client, db, org_
 
     §9.2 requires respondents be told the purpose, how results will be used and
     that there will be no retaliation, BEFORE the first question. This text is
-    what the landing page renders. A wave that opens with "Survey" in that box
-    is the wave whose answers are not worth having, and no later screen can fix
+    what the landing page renders. A deployment that opens with "Survey" in that box
+    is the deployment whose answers are not worth having, and no later screen can fix
     it.
     """
     login(client, org_world['admin'])
@@ -177,14 +177,14 @@ def test_a_purpose_statement_is_required_and_must_say_something(client, db, org_
     assert db.session.get(MeasurementCycle, 'JS-2026-H1') is None
 
 
-def test_a_wave_without_the_outcome_domain_is_refused(client, db, org_world):
+def test_a_cycle_without_the_outcome_domain_is_refused(client, db, org_world):
     """
     §1 and §10.4: the diagnostic domains are reported IN RELATION TO the
     outcome domain. Without it there is nothing to relate them to, and the
     product degenerates into three unanchored scores that invite exactly the
     "generic satisfaction score" reading the specification exists to replace.
 
-    A shorter pulse wave is legitimate — GEM plus one diagnostic — which is why
+    A shorter pulse deployment is legitimate — GEM plus one diagnostic — which is why
     the rule is "the outcome domain must be present", not "all four".
     """
     login(client, org_world['admin'])
@@ -195,7 +195,7 @@ def test_a_wave_without_the_outcome_domain_is_refused(client, db, org_world):
     assert db.session.get(MeasurementCycle, 'JS-2026-H1') is None
 
 
-def test_a_pulse_wave_of_the_outcome_plus_one_diagnostic_is_allowed(
+def test_a_pulse_cycle_of_the_outcome_plus_one_diagnostic_is_allowed(
         client, db, org_world):
     login(client, org_world['admin'])
     client.post('/org/cycles/new',
@@ -261,7 +261,7 @@ def test_assessed_domains_freeze_once_a_response_exists(client, db, org_world):
     """
     THE NAMED ACCEPTANCE CRITERION.
 
-    Narrowing the domains mid-wave makes the two halves of one wave
+    Narrowing the domains mid-deployment makes the two halves of one deployment
     incomparable, and the trend section would rather refuse than plot a missing
     domain as a drop. Nothing in the data reveals it happened afterwards, which
     is why it is blocked rather than warned about.
@@ -285,8 +285,8 @@ def test_assessed_domains_freeze_once_a_response_exists(client, db, org_world):
 def test_the_scoring_method_freezes_once_a_response_exists(client, db, org_world):
     """
     §10.2 does not mandate a method; it mandates documenting which one is used.
-    Switching it mid-wave silently changes every figure already reported from
-    that wave — including figures somebody has acted on.
+    Switching it mid-deployment silently changes every figure already reported from
+    that deployment — including figures somebody has acted on.
     """
     cycle = make_cycle(org_world['org'], 'JS-2026-H1', status='open')
     make_deployment(org_world['org'], cycle, responses_received=12)
@@ -303,7 +303,7 @@ def test_the_scoring_method_freezes_once_a_response_exists(client, db, org_world
 
 
 def test_domains_remain_editable_before_any_response(client, db, org_world):
-    """The complement — a draft wave must still be adjustable."""
+    """The complement — a draft deployment must still be adjustable."""
     make_cycle(org_world['org'], 'JS-2026-H1', status='draft')
     db.session.commit()
 
@@ -321,9 +321,9 @@ def test_domains_remain_editable_before_any_response(client, db, org_world):
 
 def test_a_cycle_moves_draft_to_open_to_closed_and_no_further(client, db, org_world):
     """
-    Reopening a closed wave is deliberately absent. The retention clock starts
+    Reopening a closed deployment is deliberately absent. The retention clock starts
     at close, its figures have been reported, and letting new responses arrive
-    afterwards changes a number somebody has already acted on. A new wave
+    afterwards changes a number somebody has already acted on. A new deployment
     linked by previous_cycle_id is the supported path — and it is what makes
     the result a trend rather than a revision.
     """
@@ -348,12 +348,12 @@ def test_a_cycle_moves_draft_to_open_to_closed_and_no_further(client, db, org_wo
     assert db.session.get(MeasurementCycle, 'JS-2026-H1').status == 'closed'
 
 
-def test_a_wave_cannot_open_while_an_active_segment_has_no_options(
+def test_a_deployment_cannot_open_while_an_active_segment_has_no_options(
         client, db, org_world):
     """
     An active segment with no options renders an empty dropdown on the survey
     form — and because segments freeze on the first response, it cannot be
-    repaired once the wave is running.
+    repaired once the deployment is running.
     """
     make_segment(org_world['org'], 'department', 'Department', options=())
     make_cycle(org_world['org'], 'JS-2026-H1', status='draft')
@@ -457,7 +457,7 @@ def test_a_valid_declaration_is_kept(db, org_world):
 
 def test_an_unknown_code_is_dropped_not_rejected(db, org_world):
     """
-    A respondent whose department was renamed between the wave opening and
+    A respondent whose department was renamed between the deployment opening and
     their answering must not LOSE THEIR 48 ANSWERS over it. The segment is
     simply absent for them and they fall into the unspecified group, which the
     report shows as its own row rather than silently folding into another.

@@ -4,42 +4,93 @@
   Two things are rendered together, deliberately:
 
     - the specification's OWN response categories for the subdomain, and
-    - any catalogue course mapped to it.
+    - any catalogue course mapped to it, BY CODE.
 
   Courses alone would make training the answer, which §11 closes by warning
   against: "Training is one intervention category among several." Categories
   alone would make the catalogue pointless. Both, every time.
 
+  The course code is printed because it is the identifier the client's LMS and
+  the leadTo curriculum share. A title alone cannot be ordered, enrolled
+  against or checked off, and two courses may legitimately share a title
+  across programmes.
+
   The three Reward Satisfaction subdomains carry no course and say so in
   words, rather than appearing as an empty row that reads like "nothing to do".
+
+  `recommendation_basis` is 'contrast' when the ranking came from the priority
+  view and 'score' when the cycle was too small for a contrast. The report
+  states which, because they are not equally strong and a reader cannot tell
+  them apart from the table alone.
 #}
 {% if recommendations %}
 <p class="muted">
-  Shown for the subdomains the reading order puts first. These are possible
-  directions, not instructions.
+  {% if recommendation_basis == 'score' %}
+  Ordered by score, lowest first. This cycle has too few respondents to
+  compare the least and most satisfied thirds, so these are the subdomains
+  this group scored lowest on rather than those that differ most between
+  thirds. It is a weaker basis for an order, and it is not a judgement of the
+  scores themselves.
+  {% else %}
+  Shown for the subdomains the reading order puts first, by the size of the
+  contrast between the least and most satisfied thirds.
+  {% endif %}
+  These are possible directions, not instructions.
 </p>
+
+<table class="data">
+  <thead><tr>
+    <th>Code</th><th>Course</th><th>Programme</th>
+    <th>Domain</th><th>Subdomain</th><th class="num">Score</th>
+  </tr></thead>
+  <tbody>
+  {% for rec in recommendations %}
+    {% if rec.courses %}
+      {% for course in rec.courses %}
+      <tr>
+        <td class="code-cell">{{ course.intervention_code }}</td>
+        <td>{{ course.title }}</td>
+        <td class="muted">{{ course.source_programme or '-' }}</td>
+        <td>{{ domain_label(rec.domain_code) }}</td>
+        <td>{{ rec.subdomain }}</td>
+        <td class="num">{{ '%.2f'|format(rec.score) if rec.score is not none
+                           else '-' }}</td>
+      </tr>
+      {% endfor %}
+    {% else %}
+      <tr>
+        <td class="code-cell">&mdash;</td>
+        <td colspan="2" class="suppressed">
+          {% if not rec.training_permitted %}{{ rec.guidance }}
+          {% else %}No capability development is currently mapped to this
+            subdomain. The response categories below still apply.{% endif %}
+        </td>
+        <td>{{ domain_label(rec.domain_code) }}</td>
+        <td>{{ rec.subdomain }}</td>
+        <td class="num">{{ '%.2f'|format(rec.score) if rec.score is not none
+                           else '-' }}</td>
+      </tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+
+<h3 class="sub">What each of those subdomains calls for</h3>
 {% for rec in recommendations %}
 <div class="callout">
-  <strong>{{ rec.subdomain }}</strong><br>
+  <strong>{{ rec.subdomain }}</strong>
+  <span class="muted">&middot; {{ domain_label(rec.domain_code) }}{% if rec.n %}
+    &middot; n = {{ rec.n }}{% endif %}</span><br>
   <span class="muted">Areas to investigate:</span> {{ rec.areas_to_investigate }}<br>
   <span class="muted">Possible response categories:</span> {{ rec.response_categories }}
-  {% if rec.courses %}
-  <br><span class="muted">Related capability development:</span>
-  <ul class="plain" style="margin-top:4pt">
-    {% for course in rec.courses %}
-    <li>{{ course.title }} <span class="muted">({{ course.source_programme }})</span></li>
-    {% endfor %}
-  </ul>
-  {% elif not rec.training_permitted %}
+  {% if not rec.training_permitted %}
   <br><span class="muted">{{ rec.guidance }}</span>
-  {% else %}
-  <br><span class="muted">No capability development is currently mapped to this
-    subdomain. The response categories above still apply.</span>
   {% endif %}
 </div>
 {% endfor %}
 {% endif %}
 
+<h3 class="sub">The full map</h3>
 <table class="data">
   <thead><tr><th>If this is low</th><th>Areas to investigate</th>
     <th>Possible response categories</th></tr></thead>

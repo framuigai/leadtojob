@@ -1,34 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — leadTo Job Satisfaction{% endblock %}
-{% block container_class %}container-wide{% endblock %}
+{% block container_class %}container-wide board-page{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div class="page-header-left">
         <div class="section-label">
             {{ role_label(current_user.role) }}
-            {% if current_user.org %} · {{ current_user.org.name }}{% endif %}
+            {% if current_user.branch %} · {{ current_user.branch.name }}{% endif %}
         </div>
-        <h1>Job Satisfaction</h1>
-        {% if branch_scoped %}
-        <p style="color:var(--text-muted);font-size:.875rem;">
-            Showing results for
+        <h1>{{ current_user.org.name if current_user.org else 'Organisation' }}</h1>
+        <p class="page-sub">
+            {% if branch_scoped %}
+            Measurement cycles and responses for
             {{ current_user.branch.name if current_user.branch else 'your branch' }} only.
+            {% else %}
+            Every measurement cycle in the organisation and how far its
+            responses have got.
+            {% endif %}
         </p>
-        {% endif %}
     </div>
     <div class="page-actions">
         <a href="{{ url_for('org.cycles_list') }}" class="btn btn-secondary">Cycles</a>
+        <a href="{{ url_for('org.deployments_list') }}" class="btn btn-secondary">Deployments</a>
         <a href="{{ url_for('org.reports') }}" class="btn btn-primary">Reports</a>
     </div>
 </div>
 
 {# ────────────────────────────────────────────────────────────────────────────
-   WHAT IS NOT AT THE TOP OF THIS PAGE, AND WHY.
+   WHAT IS NOT ON THIS PAGE, AND WHY.
 
-   There is no single "Organisational Satisfaction 3.4 / 5" headline. Both
-   sibling products put a figure in this slot and it is the first thing a client
-   asks for here.
+   No "Organisational Satisfaction 3.4 / 5" headline, and no domain breakdown.
 
      §10.3 — the three Overall Satisfaction subdomains "should initially be
              reported separately. An overall GEM composite should only be
@@ -37,135 +39,191 @@
      §10.5 — a band label on that number would not be validated merely because
              the scale runs 1 to 5.
 
-   The slot and its styling are preserved. The metric is participation plus the
-   three Overall Satisfaction subdomains side by side — the same amount of room,
-   a more honest answer to the same question.
-   ──────────────────────────────────────────────────────────────────────────── #}
+   The domain cards that used to fill this page said "Awaiting responses" beside
+   a paragraph of definitions, twelve times over. That is a glossary, not a
+   dashboard: it carried no figure an admin could act on and buried the three
+   that it did carry. Scores belong to a cycle's analysis and its reports, where
+   they have a subject, an n and a threshold attached. The sibling product
+   reached the same conclusion for the same reason and keeps domain detail out
+   of this slot.
 
+   What is left is what an admin can act on: how much is open, and what each
+   cycle is still waiting for.
+   ──────────────────────────────────────────────────────────────────────────── #}
 <div class="stats-row">
-    <div class="stat-card">
+    <div class="card stat-card" style="--accent:var(--blue);">
+        <div class="stat-val">{{ stats.cycles }}</div>
+        <div class="stat-label">Cycles</div>
+    </div>
+    <div class="card stat-card" style="--accent:var(--navy);">
         <div class="stat-val">{{ stats.responses }}</div>
         <div class="stat-label">Responses</div>
     </div>
-    <div class="stat-card">
+    <div class="card stat-card" style="--accent:var(--navy);">
         <div class="stat-val">{% if stats.rate is not none %}{{ stats.rate }}%{% else %}—{% endif %}</div>
         <div class="stat-label">Response rate</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-val">{{ stats.open_waves }}</div>
-        <div class="stat-label">Open waves</div>
+    <div class="card stat-card" style="--accent:var(--amber);">
+        <div class="stat-val">{{ stats.open_deployments }}</div>
+        <div class="stat-label">Open deployments</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-val">n &ge; {{ stats.min_n }}</div>
-        <div class="stat-label">Reporting threshold</div>
+    <div class="card stat-card" style="--accent:var(--green);">
+        <div class="stat-val">{{ stats.ready }}</div>
+        <div class="stat-label">Reportable</div>
     </div>
 </div>
 
-{% if cycles %}
+<div class="section-label">Measurement cycles</div>
+
+{% if rows %}
 <div class="panel">
-    <div class="panel-head">
-        <div class="panel-title">Recent cycles</div>
-        <a href="{{ url_for('org.cycles_list') }}" class="btn btn-sm btn-secondary">All cycles</a>
+
+    {# The ONE shared filter component (static/js/filters.js). Display-only:
+       it runs over rows the route already scoped and can never reveal one it
+       did not send. #}
+    <div class="filter-bar filter-bar-flush" data-filter-for="cycle-table"
+         data-noun="cycle" data-noun-plural="cycles">
+        <div class="filter-field">
+            <label for="f-status">Status</label>
+            <select id="f-status" data-key="status">
+                <option value="">All statuses</option>
+                <option value="draft">Draft</option>
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="f-scope">Scope</label>
+            <select id="f-scope" data-key="scope">
+                <option value="">All scopes</option>
+                <option value="org">Organisation-wide</option>
+                <option value="branch">Branch</option>
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="f-state">Reporting</label>
+            <select id="f-state" data-key="state">
+                <option value="">Any state</option>
+                <option value="ready">Reportable</option>
+                <option value="below_threshold">Below threshold</option>
+                <option value="not_deployed">Not deployed</option>
+            </select>
+        </div>
+        <div class="filter-field filter-grow">
+            <label for="f-search">Search</label>
+            <input id="f-search" type="search" data-key="name" data-match="search"
+                   placeholder="Cycle name or reference…">
+        </div>
+        <button type="button" class="filter-clear btn btn-sm btn-secondary">Clear</button>
     </div>
-    <div class="panel-body">
-        <table class="table">
-            <thead><tr><th>Reference</th><th>Name</th><th>Status</th><th>Threshold</th></tr></thead>
-            <tbody>
-            {% for c in cycles %}
+
+    <div class="table-scroll">
+    <table class="table" id="cycle-table">
+        <thead>
             <tr>
-                <td><code>{{ c.id }}</code></td>
-                <td><a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">{{ c.cycle_name }}</a></td>
-                <td><span class="status-pill status-{{ 'green' if c.status == 'open' else 'amber' if c.status == 'draft' else 'red' }}">{{ c.status }}</span></td>
-                <td>n &ge; {{ c.min_reporting_n }}</td>
+                <th class="sortable" data-sort="name">Cycle</th>
+                <th>Scope</th>
+                <th class="num sortable" data-sort="deployments" data-type="number">Deployments</th>
+                <th class="num sortable" data-sort="responses" data-type="number">Responses</th>
+                <th class="num">Threshold</th>
+                <th>Status</th>
+                <th>Reporting</th>
+                <th></th>
             </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+        </thead>
+        <tbody>
+        {% for row in rows %}
+            {% set c = row.cycle %}
+            <tr data-name="{{ c.cycle_name }} {{ c.id }}"
+                data-status="{{ c.status }}"
+                data-scope="{{ 'branch' if c.branch_id else 'org' }}"
+                data-state="{{ row.state.key }}"
+                data-deployments="{{ row.deployments|length }}"
+                data-responses="{{ row.responses }}">
+                <td>
+                    <a class="org-name"
+                       href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">{{ c.cycle_name }}</a>
+                    <span class="org-industry"><code>{{ c.id }}</code></span>
+                </td>
+                <td>
+                    {% if c.branch_id %}
+                        <span class="cycle-owner cycle-owner-branch">
+                            {{ c.branch.name if c.branch else 'Branch' }}</span>
+                    {% else %}
+                        <span class="cycle-owner cycle-owner-org">Organisation-wide</span>
+                    {% endif %}
+                </td>
+                <td class="num">
+                    <span class="metric">{{ row.deployments|length }}</span>
+                    <span class="cell-quiet" style="display:block;">
+                        {% if row.open %}{{ row.open }} still open
+                        {% elif row.deployments %}all closed
+                        {% else %}none yet{% endif %}
+                    </span>
+                </td>
+                {#  Denominator is the INVITED count, and the rate is printed
+                    beneath it. A response count without the number invited is
+                    the figure people quote; it is also the one that cannot be
+                    interpreted.  #}
+                <td class="num">
+                    <span class="metric">{{ row.responses }}{% if row.expected %} / {{ row.expected }}{% endif %}</span>
+                    <span class="cell-quiet" style="display:block;">
+                        {% if row.rate is not none %}{{ row.rate }}% response rate
+                        {% else %}not yet invited{% endif %}
+                    </span>
+                </td>
+                <td class="num cell-quiet">n &ge; {{ c.min_reporting_n }}</td>
+                <td>
+                    {% if c.status == 'open' %}
+                    <span class="status-pill" style="background:#e7f3e2;color:var(--green);">
+                        <span class="status-dot" style="background:var(--green);"></span>Open
+                    </span>
+                    {% elif c.status == 'draft' %}
+                    <span class="status-pill status-amber">Draft</span>
+                    {% else %}
+                    <span class="status-pill" style="background:var(--border-light);color:var(--text-muted);">
+                        {{ c.status|title }}
+                    </span>
+                    {% endif %}
+                </td>
+                {#  THE STATE, AND WHAT IT IS WAITING FOR. Three states, never
+                    collapsed into "unavailable" — they are three different
+                    jobs, and "below threshold" is not a job at all. The
+                    sentence comes from the same _report_state() the Reports
+                    screen uses, so the two cannot disagree.  #}
+                <td>
+                    {% if row.state.key == 'ready' %}
+                    <span class="status-pill status-{{ 'amber' if row.state.provisional else 'green' }}">
+                        {{ 'provisional' if row.state.provisional else 'reportable' }}
+                    </span>
+                    {% elif row.state.key == 'below_threshold' %}
+                    <span class="status-pill status-suppressed">below threshold</span>
+                    {% else %}
+                    <span class="status-pill status-amber">not deployed</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}"
+                       class="btn btn-sm btn-secondary">View</a>
+                </td>
+            </tr>
+        {% endfor %}
+            <tr class="filter-empty" data-empty-for="cycle-table" style="display:none;">
+                <td colspan="8" class="table-empty">No cycle matches these filters.</td>
+            </tr>
+        </tbody>
+    </table>
     </div>
+
+    <p class="filter-count filter-count-inset" data-count-for="cycle-table"></p>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">—</div>
+    <h2>No measurement cycles yet</h2>
+    <p>A cycle is one measurement round. Create one, deploy its anonymous link,
+       then read the results once enough people have answered.</p>
+    <a href="{{ url_for('org.cycles_list') }}" class="btn btn-primary">Cycles</a>
 </div>
 {% endif %}
-
-<div class="panel">
-    <div class="panel-head">
-        <div class="panel-title">
-            {{ domain_label(OUTCOME_DOMAIN) }} — the outcome measure
-        </div>
-    </div>
-    <div class="panel-body">
-        <p class="panel-note">
-            Reported as three separate subdomains, each with its own response
-            distribution. {{ BANDS_DEFERRED_NOTE }}
-        </p>
-        <div class="domain-grid">
-            {% for domain_code, sub_code in gem_subdomains %}
-            <div class="domain-card">
-                <div class="domain-card-header">
-                    <div class="domain-card-name">{{ subdomain_label(domain_code, sub_code) }}</div>
-                </div>
-                <div class="domain-card-empty-body">
-                    <div class="domain-card-waiting-msg">Awaiting responses</div>
-                    <div class="domain-card-waiting-meta">
-                        {{ subdomain_definition(domain_code, sub_code) }}
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-
-<div class="panel">
-    <div class="panel-head">
-        <div class="panel-title">Diagnostic domains</div>
-    </div>
-    <div class="panel-body">
-        <p class="panel-note">
-            Task, Relationships and Reward Satisfaction are reported
-            <strong>in relation to</strong> {{ domain_label(OUTCOME_DOMAIN) }}.
-            {{ ASSOCIATION_CAVEAT }}
-        </p>
-        <div class="domain-grid">
-            {% for d in DIAGNOSTIC_DOMAINS %}
-            <div class="domain-card">
-                <div class="domain-card-header">
-                    <div class="domain-card-name">{{ domain_label(d) }}</div>
-                </div>
-                <div class="domain-card-empty-body">
-                    <div class="domain-card-waiting-msg">Awaiting responses</div>
-                    <div class="domain-card-waiting-meta">
-                        {{ subdomains_of(d) | length }} subdomains ·
-                        {% for s in subdomains_of(d) %}{{ subdomain_label(d, s) }}{% if not loop.last %} · {% endif %}{% endfor %}
-                    </div>
-                    {% if domain_scope_note(d) %}
-                    <div class="domain-card-waiting-meta">{{ domain_scope_note(d) }}</div>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-
-<div class="panel">
-    <div class="panel-head">
-        <div class="panel-title">Where to look first</div>
-    </div>
-    <div class="panel-body">
-        {# Investigative language, never verdict language. Phase 7 drives this
-           from the priority view: current score against strength of association
-           with the outcome domain. The quadrants are labelled "Investigate
-           first", "Monitor", "Maintain", "Lower priority" — never "Critical",
-           "Failing" or "At risk". #}
-        <p class="panel-note">
-            Once a wave has closed and the reporting threshold is met, this card
-            ranks subdomains by current score and by strength of association
-            with {{ domain_label(OUTCOME_DOMAIN) }}, as areas to investigate
-            first. {{ ASSOCIATION_CAVEAT }}
-        </p>
-        <div class="empty-state">
-            <div class="empty-icon">—</div>
-            <p>No closed wave yet.</p>
-        </div>
-    </div>
-</div>
 {% endblock %}

@@ -46,7 +46,7 @@ policy.
 
 Both methods are implemented. The constant is **frozen per cycle** on
 `measurement_cycles.scoring_method`: changing it mid-stream silently changes
-everyone's numbers and makes two waves incomparable, which is the one failure
+everyone's numbers and makes two cycles incomparable, which is the one failure
 §3.2.7 ("track changes over time") cannot survive.
 
 `tests/test_scoring_methods.py` pins a fixture in which the two methods
@@ -74,4 +74,4 @@ be introduced if validation supports its interpretation and the intended use."
 `gem_composite()` does not exist. A caller that wants one gets a raised
 exception carrying the §10.3 reason, rather than a number.
 
-**There are no band labels.** §10.5 — see `domains.BANDS_VALIDATED`.
+**There are no band labels.** §10.5 — `scoring.band()` always raises.

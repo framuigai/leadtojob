@@ -26,8 +26,8 @@ from tests.factories import (
 
 
 @pytest.fixture
-def wave(db):
-    """An org with its instrument, an open cycle and an open-link wave."""
+def deployment(db):
+    """An org with its instrument, an open cycle and an open-link deployment."""
     make_master_instrument()
     org = make_org('Kilimo Dairies')
     clone_instrument_to_org(org.id)
@@ -69,7 +69,7 @@ def _text(html):
 
 # ── No internal keys, no identity ───────────────────────────────────────────
 
-def test_no_item_code_or_subdomain_reaches_the_respondent(client, wave):
+def test_no_item_code_or_subdomain_reaches_the_respondent(client, deployment):
     """
     THE NAMED ACCEPTANCE CRITERION.
 
@@ -82,17 +82,17 @@ def test_no_item_code_or_subdomain_reaches_the_respondent(client, wave):
     carries no construct information, whereas `GEM-G-01` tells the reader
     exactly which of three subdomains is being scored.
     """
-    _begin(client, wave['slug'])
-    client.post(f'/survey/{wave["slug"]}/about-you', data={})
+    _begin(client, deployment['slug'])
+    client.post(f'/survey/{deployment["slug"]}/about-you', data={})
 
     from app.domains import SUBDOMAIN_LABELS
 
-    pages = [client.get(f'/survey/{wave["slug"]}').get_data(as_text=True),
-             client.get(f'/survey/{wave["slug"]}/about-you').get_data(as_text=True),
-             client.get(f'/survey/{wave["slug"]}/review').get_data(as_text=True)]
+    pages = [client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True),
+             client.get(f'/survey/{deployment["slug"]}/about-you').get_data(as_text=True),
+             client.get(f'/survey/{deployment["slug"]}/review').get_data(as_text=True)]
     for index in range(1, len(DOMAINS) + 1):
         pages.append(
-            client.get(f'/survey/{wave["slug"]}/section/{index}').get_data(as_text=True))
+            client.get(f'/survey/{deployment["slug"]}/section/{index}').get_data(as_text=True))
 
     for page in pages:
         for code in all_item_codes():
@@ -106,36 +106,36 @@ def test_no_item_code_or_subdomain_reaches_the_respondent(client, wave):
             assert f'"{code}"' not in page
 
 
-def test_the_form_asks_for_no_identity_at_all(client, wave):
+def test_the_form_asks_for_no_identity_at_all(client, deployment):
     """
     No name, no email, no employee number — not even optional ones. There is
     nowhere to put them (models.ResponseSession has no identity column), so a
     field here would be a field whose value is silently discarded, which is
     worse than not asking: the respondent believes they have been identified.
     """
-    _begin(client, wave['slug'])
+    _begin(client, deployment['slug'])
     for index in range(1, len(DOMAINS) + 1):
         html = client.get(
-            f'/survey/{wave["slug"]}/section/{index}').get_data(as_text=True)
+            f'/survey/{deployment["slug"]}/section/{index}').get_data(as_text=True)
         for forbidden in ('name="email"', 'name="name"', 'name="full_name"',
                           'name="employee', 'type="email"', 'autocomplete="email"'):
             assert forbidden not in html, forbidden
 
 
-def test_no_leadto_chrome_on_any_respondent_page(client, wave):
+def test_no_leadto_chrome_on_any_respondent_page(client, deployment):
     """
     No navbar, no wordmark, no product branding. A respondent is answering
     their employer's survey, not touring a vendor's product, and a branded
     shell changes what people are willing to say.
 
     Also no external script or font: a third-party request from this page would
-    hand the respondent's IP and the wave's URL to someone outside the
+    hand the respondent's IP and the deployment's URL to someone outside the
     agreement.
     """
-    _begin(client, wave['slug'])
-    pages = [client.get(f'/survey/{wave["slug"]}').get_data(as_text=True),
-             client.get(f'/survey/{wave["slug"]}/section/1').get_data(as_text=True),
-             client.get(f'/survey/{wave["slug"]}/review').get_data(as_text=True)]
+    _begin(client, deployment['slug'])
+    pages = [client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True),
+             client.get(f'/survey/{deployment["slug"]}/section/1').get_data(as_text=True),
+             client.get(f'/survey/{deployment["slug"]}/review').get_data(as_text=True)]
     for page in pages:
         assert 'LeadTO' not in page
         assert 'leadTo' not in page
@@ -148,13 +148,13 @@ def test_no_leadto_chrome_on_any_respondent_page(client, wave):
         assert 'tracked' not in page.lower()
 
 
-def test_the_session_row_holds_no_identity(client, wave):
+def test_the_session_row_holds_no_identity(client, deployment):
     """
     The guarantee is a property of the SCHEMA, not of a permission check. This
     asserts the row that was actually written is empty of identity — including
     that no IP address was recorded anywhere on it.
     """
-    _begin(client, wave['slug'])
+    _begin(client, deployment['slug'])
     session = db.session.query(ResponseSession).one()
 
     assert not hasattr(session, 'ip_address')
@@ -170,7 +170,7 @@ def test_the_session_row_holds_no_identity(client, wave):
 
 # ── The anonymity claim matches the mode ────────────────────────────────────
 
-def test_an_open_link_wave_does_not_promise_to_prevent_duplicates(client, wave):
+def test_an_open_link_deployment_does_not_promise_to_prevent_duplicates(client, deployment):
     """
     THE NAMED ACCEPTANCE CRITERION.
 
@@ -179,7 +179,7 @@ def test_an_open_link_wave_does_not_promise_to_prevent_duplicates(client, wave):
     second submission, so the page says so. A page that claimed otherwise would
     be a bug, not marketing.
     """
-    html = client.get(f'/survey/{wave["slug"]}').get_data(as_text=True)
+    html = client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True)
     assert 'cannot strictly prevent duplicate submissions' in html
     assert 'One response per code' not in html
     # And it must not overclaim in the other direction either.
@@ -187,11 +187,11 @@ def test_an_open_link_wave_does_not_promise_to_prevent_duplicates(client, wave):
     assert 'totally anonymous' not in html.lower()
 
 
-def test_a_ticketed_wave_makes_the_stronger_claim(client, db, wave):
+def test_a_ticketed_deployment_makes_the_stronger_claim(client, db, deployment):
     # Its own cycle: uq_open_deployment permits one open deployment per
-    # (org, cycle, scope), which is exactly the duplicate-wave guard working.
-    other = make_cycle(wave['org'], 'KD-2026-H2', status='open')
-    make_deployment(wave['org'], other,
+    # (org, cycle, scope), which is exactly the duplicate-deployment guard working.
+    other = make_cycle(deployment['org'], 'KD-2026-H2', status='open')
+    make_deployment(deployment['org'], other,
                     public_slug='slug-ticketed-bbb',
                     delivery_mode='ticketed', expected_respondents=40)
     db.session.commit()
@@ -202,12 +202,12 @@ def test_a_ticketed_wave_makes_the_stronger_claim(client, db, wave):
     assert 'cannot strictly prevent duplicate submissions' not in html
 
 
-def test_the_landing_page_carries_every_disclosure_spec_9_2_requires(client, wave):
-    html = _text(client.get(f'/survey/{wave["slug"]}').get_data(as_text=True))
+def test_the_landing_page_carries_every_disclosure_spec_9_2_requires(client, deployment):
+    html = _text(client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True))
     # purpose, in the org admin's own words
     assert 'what to improve' in html
     # the reporting threshold, as a number
-    assert str(wave['cycle'].min_reporting_n) in html
+    assert str(deployment['cycle'].min_reporting_n) in html
     # who sees what
     assert 'not to your manager' in html
     # non-retaliation
@@ -218,15 +218,15 @@ def test_the_landing_page_carries_every_disclosure_spec_9_2_requires(client, wav
     assert 'network address' in html
 
 
-def test_the_word_daunting_never_reaches_a_respondent(client, wave):
+def test_the_word_daunting_never_reaches_a_respondent(client, deployment):
     """
     §6.4: the mnemonic must not be read as pressure, overload or stress. The
     respondent sees the questions and the domain name, never the letter.
     """
-    _begin(client, wave['slug'])
+    _begin(client, deployment['slug'])
     for index in range(1, len(DOMAINS) + 1):
         html = client.get(
-            f'/survey/{wave["slug"]}/section/{index}').get_data(as_text=True)
+            f'/survey/{deployment["slug"]}/section/{index}').get_data(as_text=True)
         low = html.lower()
         for word in ('daunting', 'stress', 'burnout', 'overload'):
             assert word not in low, word
@@ -234,15 +234,15 @@ def test_the_word_daunting_never_reaches_a_respondent(client, wave):
 
 # ── N/A is a separate second click, and never a score ───────────────────────
 
-def test_not_applicable_is_offered_outside_the_five_point_row(client, wave):
+def test_not_applicable_is_offered_outside_the_five_point_row(client, deployment):
     """
     §9.1: N/A "should not be treated as neutral". It is rendered after the
     scale, under a rule, in quieter type — a second decision rather than a
     sixth button beside "Neither agree nor disagree", where it would become the
     cheap answer to 48 questions.
     """
-    _begin(client, wave['slug'])
-    ids, html = _items_on(client, wave['slug'], 1)
+    _begin(client, deployment['slug'])
+    ids, html = _items_on(client, deployment['slug'], 1)
 
     # Exactly five scored options per item, and exactly one N/A.
     for item_id in ids:
@@ -260,15 +260,15 @@ def test_not_applicable_is_offered_outside_the_five_point_row(client, wave):
                      _text(html))
 
 
-def test_na_is_stored_as_a_boolean_with_a_null_score(client, wave):
+def test_na_is_stored_as_a_boolean_with_a_null_score(client, deployment):
     """
     NEVER 0, 3 or 6. A sentinel reaches an AVG() eventually and corrupts a
     result silently, weeks before anyone notices the number is wrong. The
     database CHECK constraint refuses the combination outright.
     """
-    _begin(client, wave['slug'])
-    ids, _ = _items_on(client, wave['slug'], 1)
-    client.post(f'/survey/{wave["slug"]}/section/1',
+    _begin(client, deployment['slug'])
+    ids, _ = _items_on(client, deployment['slug'], 1)
+    client.post(f'/survey/{deployment["slug"]}/section/1',
                 data={f'q_{ids[0]}': 'na', f'q_{ids[1]}': '4'})
 
     rows = {str(r.item_id): r for r in db.session.query(SurveyResponse).all()}
@@ -281,125 +281,125 @@ def test_na_is_stored_as_a_boolean_with_a_null_score(client, wave):
     assert scored.score == 4
 
 
-def test_an_unanswered_question_stores_nothing(client, wave):
+def test_an_unanswered_question_stores_nothing(client, deployment):
     """
     "No answer" and "not applicable" are different facts about different
     things, and a blank must not become a zero or a 3.
     """
-    _begin(client, wave['slug'])
-    ids, _ = _items_on(client, wave['slug'], 1)
-    client.post(f'/survey/{wave["slug"]}/section/1', data={f'q_{ids[0]}': '5'})
+    _begin(client, deployment['slug'])
+    ids, _ = _items_on(client, deployment['slug'], 1)
+    client.post(f'/survey/{deployment["slug"]}/section/1', data={f'q_{ids[0]}': '5'})
     assert db.session.query(SurveyResponse).count() == 1
 
 
-def test_going_back_and_clearing_an_answer_deletes_the_row(client, wave):
-    _begin(client, wave['slug'])
-    ids, _ = _items_on(client, wave['slug'], 1)
-    client.post(f'/survey/{wave["slug"]}/section/1', data={f'q_{ids[0]}': '5'})
+def test_going_back_and_clearing_an_answer_deletes_the_row(client, deployment):
+    _begin(client, deployment['slug'])
+    ids, _ = _items_on(client, deployment['slug'], 1)
+    client.post(f'/survey/{deployment["slug"]}/section/1', data={f'q_{ids[0]}': '5'})
     assert db.session.query(SurveyResponse).count() == 1
 
-    client.post(f'/survey/{wave["slug"]}/section/1', data={})
+    client.post(f'/survey/{deployment["slug"]}/section/1', data={})
     assert db.session.query(SurveyResponse).count() == 0
 
 
 # ── Save and resume, without knowing who anyone is ─────────────────────────
 
-def test_answers_persist_across_sections_and_are_shown_back(client, wave):
-    _begin(client, wave['slug'])
-    ids, _ = _items_on(client, wave['slug'], 1)
-    client.post(f'/survey/{wave["slug"]}/section/1',
+def test_answers_persist_across_sections_and_are_shown_back(client, deployment):
+    _begin(client, deployment['slug'])
+    ids, _ = _items_on(client, deployment['slug'], 1)
+    client.post(f'/survey/{deployment["slug"]}/section/1',
                 data={f'q_{ids[0]}': '2', f'q_{ids[1]}': 'na'})
 
-    _, html = _items_on(client, wave['slug'], 1)
+    _, html = _items_on(client, deployment['slug'], 1)
     assert f'name="q_{ids[0]}" value="2"\n               checked' in html \
         or re.search(rf'q_{ids[0]}" value="2"[^>]*checked', html)
     assert re.search(rf'q_{ids[1]}" value="na"[^>]*checked', html)
 
 
-def test_a_draft_cannot_be_resumed_without_the_browser_secret(client, wave):
+def test_a_draft_cannot_be_resumed_without_the_browser_secret(client, deployment):
     """
     The browser holds an opaque secret; the server stores only its sha256.
     Presenting it proves "I started this draft" without the server knowing who
     that is. Without it — a different device, cleared cookies — the draft is
     unreachable, and the landing page says so.
     """
-    _begin(client, wave['slug'])
-    assert client.get(f'/survey/{wave["slug"]}/section/1').status_code == 200
+    _begin(client, deployment['slug'])
+    assert client.get(f'/survey/{deployment["slug"]}/section/1').status_code == 200
 
-    client.delete_cookie('jsat_resume_' + wave['slug'][:16],
-                         path=f'/survey/{wave["slug"]}')
-    assert client.get(f'/survey/{wave["slug"]}/section/1').status_code == 404
+    client.delete_cookie('jsat_resume_' + deployment['slug'][:16],
+                         path=f'/survey/{deployment["slug"]}')
+    assert client.get(f'/survey/{deployment["slug"]}/section/1').status_code == 404
 
 
-def test_a_forged_resume_secret_is_rejected(client, wave):
+def test_a_forged_resume_secret_is_rejected(client, deployment):
     """A guessed session id with the wrong secret must not open someone's draft."""
-    _begin(client, wave['slug'])
+    _begin(client, deployment['slug'])
     session = db.session.query(ResponseSession).one()
 
-    client.set_cookie('jsat_resume_' + wave['slug'][:16],
+    client.set_cookie('jsat_resume_' + deployment['slug'][:16],
                       f'{session.id}:not-the-real-secret',
-                      path=f'/survey/{wave["slug"]}')
-    assert client.get(f'/survey/{wave["slug"]}/section/1').status_code == 404
+                      path=f'/survey/{deployment["slug"]}')
+    assert client.get(f'/survey/{deployment["slug"]}/section/1').status_code == 404
 
 
-def test_the_session_is_not_created_on_a_mere_page_view(client, wave):
+def test_the_session_is_not_created_on_a_mere_page_view(client, deployment):
     """
     Corporate mail security scanners and link previewers fetch every URL in an
     all-staff email. On GET-creation each one mints a session row — none would
     ever submit, so no reported figure changes, but the started/abandoned
     counts become mostly robots, and that is the first thing anyone asks about
-    a wave.
+    a deployment.
     """
-    client.get(f'/survey/{wave["slug"]}')
-    client.get(f'/survey/{wave["slug"]}')
+    client.get(f'/survey/{deployment["slug"]}')
+    client.get(f'/survey/{deployment["slug"]}')
     assert db.session.query(ResponseSession).count() == 0
 
-    client.post(f'/survey/{wave["slug"]}/begin', data={})
+    client.post(f'/survey/{deployment["slug"]}/begin', data={})
     assert db.session.query(ResponseSession).count() == 1
 
 
-def test_beginning_twice_resumes_rather_than_starting_over(client, wave):
-    _begin(client, wave['slug'])
-    _begin(client, wave['slug'])
+def test_beginning_twice_resumes_rather_than_starting_over(client, deployment):
+    _begin(client, deployment['slug'])
+    _begin(client, deployment['slug'])
     assert db.session.query(ResponseSession).count() == 1
 
 
 # ── Submission ──────────────────────────────────────────────────────────────
 
-def test_submitting_counts_the_response_and_stamps_the_session(client, wave):
-    _begin(client, wave['slug'])
-    ids, _ = _items_on(client, wave['slug'], 1)
-    client.post(f'/survey/{wave["slug"]}/section/1', data={f'q_{ids[0]}': '4'})
-    client.post(f'/survey/{wave["slug"]}/review', data={})
+def test_submitting_counts_the_response_and_stamps_the_session(client, deployment):
+    _begin(client, deployment['slug'])
+    ids, _ = _items_on(client, deployment['slug'], 1)
+    client.post(f'/survey/{deployment["slug"]}/section/1', data={f'q_{ids[0]}': '4'})
+    client.post(f'/survey/{deployment["slug"]}/review', data={})
 
     db.session.expire_all()
     session = db.session.query(ResponseSession).one()
     assert session.submitted_at is not None
-    assert wave['deployment'].responses_received == 1
+    assert deployment['deployment'].responses_received == 1
 
 
-def test_an_incomplete_response_is_accepted(client, wave):
+def test_an_incomplete_response_is_accepted(client, deployment):
     """
     Refusing it would discard 40 real answers to force 8 more — and a
     respondent who skipped the pay questions has told you something, which is
     why coverage is reported rather than required.
     """
-    _begin(client, wave['slug'])
-    ids, _ = _items_on(client, wave['slug'], 1)
-    client.post(f'/survey/{wave["slug"]}/section/1', data={f'q_{ids[0]}': '3'})
-    res = client.post(f'/survey/{wave["slug"]}/review', data={},
+    _begin(client, deployment['slug'])
+    ids, _ = _items_on(client, deployment['slug'], 1)
+    client.post(f'/survey/{deployment["slug"]}/section/1', data={f'q_{ids[0]}': '3'})
+    res = client.post(f'/survey/{deployment["slug"]}/review', data={},
                       follow_redirects=True)
     assert 'Thank you' in res.get_data(as_text=True)
     assert db.session.query(SurveyResponse).count() == 1
 
 
-def test_a_submitted_draft_cannot_be_reopened(client, wave):
-    _begin(client, wave['slug'])
-    client.post(f'/survey/{wave["slug"]}/review', data={})
-    assert client.get(f'/survey/{wave["slug"]}/section/1').status_code == 404
+def test_a_submitted_draft_cannot_be_reopened(client, deployment):
+    _begin(client, deployment['slug'])
+    client.post(f'/survey/{deployment["slug"]}/review', data={})
+    assert client.get(f'/survey/{deployment["slug"]}/section/1').status_code == 404
 
 
-def test_submitting_freezes_the_organisations_segments(client, db, wave):
+def test_submitting_freezes_the_organisations_segments(client, db, deployment):
     """
     From the first response on, renaming an option would silently re-group
     answers given under the old meaning — and the response rows are unchanged,
@@ -408,51 +408,51 @@ def test_submitting_freezes_the_organisations_segments(client, db, wave):
     from app.models import Segment
 
     assert db.session.query(Segment).filter_by(
-        org_id=wave['org'].id).one().frozen_at is None
+        org_id=deployment['org'].id).one().frozen_at is None
 
-    _begin(client, wave['slug'])
-    client.post(f'/survey/{wave["slug"]}/review', data={})
+    _begin(client, deployment['slug'])
+    client.post(f'/survey/{deployment["slug"]}/review', data={})
 
     db.session.expire_all()
     assert db.session.query(Segment).filter_by(
-        org_id=wave['org'].id).one().frozen_at is not None
+        org_id=deployment['org'].id).one().frozen_at is not None
 
 
 # ── Segments are self-declared and optional ────────────────────────────────
 
-def test_a_declared_segment_is_stored_as_a_code(client, wave):
-    _begin(client, wave['slug'])
-    client.post(f'/survey/{wave["slug"]}/about-you', data={'department': 'FIN'})
+def test_a_declared_segment_is_stored_as_a_code(client, deployment):
+    _begin(client, deployment['slug'])
+    client.post(f'/survey/{deployment["slug"]}/about-you', data={'department': 'FIN'})
     assert db.session.query(ResponseSession).one().segment_values == {
         'department': 'FIN'}
 
 
-def test_declining_to_say_is_allowed_and_loses_nothing(client, wave):
+def test_declining_to_say_is_allowed_and_loses_nothing(client, deployment):
     """
     A respondent in a three-person department who would rather not say is right
     to be cautious. Forcing the answer would either lose their 48 responses or
     get a false one.
     """
-    _begin(client, wave['slug'])
-    client.post(f'/survey/{wave["slug"]}/about-you', data={'department': ''})
+    _begin(client, deployment['slug'])
+    client.post(f'/survey/{deployment["slug"]}/about-you', data={'department': ''})
     session = db.session.query(ResponseSession).one()
     assert session.segment_values == {}
 
-    ids, _ = _items_on(client, wave['slug'], 1)
-    client.post(f'/survey/{wave["slug"]}/section/1', data={f'q_{ids[0]}': '5'})
+    ids, _ = _items_on(client, deployment['slug'], 1)
+    client.post(f'/survey/{deployment["slug"]}/section/1', data={f'q_{ids[0]}': '5'})
     assert db.session.query(SurveyResponse).count() == 1
 
 
-def test_an_invented_segment_value_is_discarded_not_stored(client, wave):
-    _begin(client, wave['slug'])
-    client.post(f'/survey/{wave["slug"]}/about-you',
+def test_an_invented_segment_value_is_discarded_not_stored(client, deployment):
+    _begin(client, deployment['slug'])
+    client.post(f'/survey/{deployment["slug"]}/about-you',
                 data={'department': 'EXEC-BOARD'})
     assert db.session.query(ResponseSession).one().segment_values == {}
 
 
-def test_the_segment_step_says_the_questions_are_optional(client, wave):
-    _begin(client, wave['slug'])
-    html = client.get(f'/survey/{wave["slug"]}/about-you').get_data(as_text=True)
+def test_the_segment_step_says_the_questions_are_optional(client, deployment):
+    _begin(client, deployment['slug'])
+    html = client.get(f'/survey/{deployment["slug"]}/about-you').get_data(as_text=True)
     assert 'optional' in html.lower()
     assert 'Prefer not to say' in html
 
@@ -460,18 +460,20 @@ def test_the_segment_step_says_the_questions_are_optional(client, wave):
 # ── Tickets ─────────────────────────────────────────────────────────────────
 
 @pytest.fixture
-def ticketed(db, wave):
-    cycle = make_cycle(wave['org'], 'KD-2026-T1', status='open')
-    deployment = make_deployment(wave['org'], cycle,
-                                 public_slug='slug-ticketed-ccc',
-                                 delivery_mode='ticketed',
-                                 expected_respondents=10)
+def ticketed(db, deployment):
+    org = deployment['org']
+    cycle = make_cycle(org, 'KD-2026-T1', status='open')
+    ticketed_deployment = make_deployment(org, cycle,
+                                          public_slug='slug-ticketed-ccc',
+                                          delivery_mode='ticketed',
+                                          expected_respondents=10)
     code = 'ticket-one'
     db.session.add(AccessTicket(
-        deployment_id=deployment.id, org_id=wave['org'].id,
+        deployment_id=ticketed_deployment.id, org_id=org.id,
         ticket_hash=hashlib.sha256(code.encode()).hexdigest()))
     db.session.commit()
-    return {'deployment': deployment, 'slug': deployment.public_slug,
+    return {'deployment': ticketed_deployment,
+            'slug': ticketed_deployment.public_slug,
             'code': code}
 
 
@@ -523,49 +525,49 @@ def test_a_ticket_is_never_stored_in_plaintext(client, ticketed):
     assert not hasattr(row, 'issued_to')
 
 
-# ── Closed waves ───────────────────────────────────────────────────────────
+# ── Closed deployments ───────────────────────────────────────────────────────────
 
-def test_a_closed_wave_explains_itself_rather_than_404ing(client, db, wave):
+def test_a_closed_deployment_explains_itself_rather_than_404ing(client, db, deployment):
     """
     The one place the uniform-404 rule bends. A visitor here is probably a real
     employee following a real link a week late; 404ing them is unkind for no
-    gain, because the wave's existence is something they already knew.
+    gain, because the deployment's existence is something they already knew.
     """
-    wave['deployment'].closed = True
+    deployment['deployment'].closed = True
     db.session.commit()
 
-    res = client.get(f'/survey/{wave["slug"]}')
+    res = client.get(f'/survey/{deployment["slug"]}')
     assert res.status_code == 410
     assert 'has closed' in res.get_data(as_text=True)
 
 
-def test_a_wave_whose_cycle_is_not_open_is_indistinguishable_from_nothing(
-        client, db, wave):
+def test_a_deployment_whose_cycle_is_not_open_is_indistinguishable_from_nothing(
+        client, db, deployment):
     """
     A DRAFT cycle is different: nobody has been told about it yet, so
     confirming it exists would leak that this employer is preparing a survey.
     Same 404 as an unknown slug.
     """
-    wave['cycle'].status = 'draft'
+    deployment['cycle'].status = 'draft'
     db.session.commit()
-    res = client.get(f'/survey/{wave["slug"]}')
-    assert res.status_code == 410     # the wave itself is still live-looking
+    res = client.get(f'/survey/{deployment["slug"]}')
+    assert res.status_code == 410     # the deployment itself is still live-looking
 
-    # ...whereas an archived wave is simply gone.
+    # ...whereas an archived deployment is simply gone.
     from datetime import datetime, timezone
-    wave['deployment'].archived_at = datetime.now(timezone.utc)
+    deployment['deployment'].archived_at = datetime.now(timezone.utc)
     db.session.commit()
-    assert client.get(f'/survey/{wave["slug"]}').status_code == 404
+    assert client.get(f'/survey/{deployment["slug"]}').status_code == 404
 
 
-def test_a_closed_wave_accepts_no_further_answers(client, db, wave):
-    _begin(client, wave['slug'])
-    ids, _ = _items_on(client, wave['slug'], 1)
+def test_a_closed_deployment_accepts_no_further_answers(client, db, deployment):
+    _begin(client, deployment['slug'])
+    ids, _ = _items_on(client, deployment['slug'], 1)
 
-    wave['deployment'].closed = True
+    deployment['deployment'].closed = True
     db.session.commit()
 
-    res = client.post(f'/survey/{wave["slug"]}/section/1',
+    res = client.post(f'/survey/{deployment["slug"]}/section/1',
                       data={f'q_{ids[0]}': '1'})
     assert res.status_code == 410
     assert db.session.query(SurveyResponse).count() == 0
@@ -573,26 +575,26 @@ def test_a_closed_wave_accepts_no_further_answers(client, db, wave):
 
 # ── Pilot feedback ─────────────────────────────────────────────────────────
 
-def test_the_pilot_comment_box_appears_only_on_a_pilot_wave(client, db, wave):
-    _begin(client, wave['slug'])
-    html = client.get(f'/survey/{wave["slug"]}/review').get_data(as_text=True)
+def test_the_pilot_comment_box_appears_only_on_a_pilot_cycle(client, db, deployment):
+    _begin(client, deployment['slug'])
+    html = client.get(f'/survey/{deployment["slug"]}/review').get_data(as_text=True)
     assert 'pilot_comment' not in html
 
-    wave['cycle'].is_pilot = True
+    deployment['cycle'].is_pilot = True
     db.session.commit()
-    html = client.get(f'/survey/{wave["slug"]}/review').get_data(as_text=True)
+    html = client.get(f'/survey/{deployment["slug"]}/review').get_data(as_text=True)
     assert 'pilot_comment' in html
     assert 'repetitive or difficult' in html
     # It must say where it goes — and that it is not shown to the employer.
     assert 'not shown to your organisation' in html
 
 
-def test_a_pilot_comment_is_stored_against_the_anonymous_session(client, db, wave):
-    wave['cycle'].is_pilot = True
+def test_a_pilot_comment_is_stored_against_the_anonymous_session(client, db, deployment):
+    deployment['cycle'].is_pilot = True
     db.session.commit()
 
-    _begin(client, wave['slug'])
-    client.post(f'/survey/{wave["slug"]}/review',
+    _begin(client, deployment['slug'])
+    client.post(f'/survey/{deployment["slug"]}/review',
                 data={'pilot_comment': 'Questions 3 and 4 felt like the same question.'})
 
     feedback = db.session.query(PilotFeedback).one()
@@ -600,58 +602,58 @@ def test_a_pilot_comment_is_stored_against_the_anonymous_session(client, db, wav
     assert feedback.session_id == db.session.query(ResponseSession).one().id
 
 
-def test_no_pilot_comment_is_recorded_on_a_non_pilot_wave(client, wave):
-    """A posted field on a non-pilot wave is ignored, not stored."""
-    _begin(client, wave['slug'])
-    client.post(f'/survey/{wave["slug"]}/review',
+def test_no_pilot_comment_is_recorded_on_a_non_pilot_cycle(client, deployment):
+    """A posted field on a non-pilot deployment is ignored, not stored."""
+    _begin(client, deployment['slug'])
+    client.post(f'/survey/{deployment["slug"]}/review',
                 data={'pilot_comment': 'should be discarded'})
     assert db.session.query(PilotFeedback).count() == 0
 
 
 # ── Structure ──────────────────────────────────────────────────────────────
 
-def test_there_is_one_section_per_assessed_domain(client, wave):
-    _begin(client, wave['slug'])
+def test_there_is_one_section_per_assessed_domain(client, deployment):
+    _begin(client, deployment['slug'])
     for index in range(1, len(DOMAINS) + 1):
         assert client.get(
-            f'/survey/{wave["slug"]}/section/{index}').status_code == 200
+            f'/survey/{deployment["slug"]}/section/{index}').status_code == 200
     assert client.get(
-        f'/survey/{wave["slug"]}/section/{len(DOMAINS) + 1}').status_code == 404
+        f'/survey/{deployment["slug"]}/section/{len(DOMAINS) + 1}').status_code == 404
 
 
-def test_a_pulse_wave_renders_only_its_own_domains(client, db, wave):
+def test_a_pulse_cycle_renders_only_its_own_domains(client, db, deployment):
     """
-    A GEM-plus-one wave is 24 items, not 48. The sections follow
+    A GEM-plus-one deployment is 24 items, not 48. The sections follow
     `assessed_domains` — a snapshot taken at deploy time, so narrowing the
     cycle later cannot retroactively change what was asked.
     """
-    wave['deployment'].assessed_domains = ['GEM', 'TID']
+    deployment['deployment'].assessed_domains = ['GEM', 'TID']
     db.session.commit()
 
-    _begin(client, wave['slug'])
-    assert client.get(f'/survey/{wave["slug"]}/section/2').status_code == 200
-    assert client.get(f'/survey/{wave["slug"]}/section/3').status_code == 404
+    _begin(client, deployment['slug'])
+    assert client.get(f'/survey/{deployment["slug"]}/section/2').status_code == 200
+    assert client.get(f'/survey/{deployment["slug"]}/section/3').status_code == 404
 
-    html = client.get(f'/survey/{wave["slug"]}').get_data(as_text=True)
+    html = client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True)
     assert '24 questions' in html
 
 
-def test_the_url_carries_an_ordinal_not_a_domain_code(client, wave):
+def test_the_url_carries_an_ordinal_not_a_domain_code(client, deployment):
     """
     /section/2, never /section/TID. The URL is part of what a respondent sees,
     and a framework code in it tells them what they are being scored against.
     """
-    _begin(client, wave['slug'])
-    assert client.get(f'/survey/{wave["slug"]}/section/TID').status_code == 404
+    _begin(client, deployment['slug'])
+    assert client.get(f'/survey/{deployment["slug"]}/section/TID').status_code == 404
 
 
-def test_subdomains_are_interleaved_on_the_page(client, wave):
+def test_subdomains_are_interleaved_on_the_page(client, deployment):
     """
     Four near-identical autonomy questions in a row invite straight-lining: the
     respondent answers the first and pattern-matches the rest.
     """
-    _begin(client, wave['slug'])
-    ids, _ = _items_on(client, wave['slug'], 1)
+    _begin(client, deployment['slug'])
+    ids, _ = _items_on(client, deployment['slug'], 1)
     items = {str(i.id): i for i in db.session.query(SurveyItem)
              .filter(SurveyItem.id.in_(ids)).all()}
     subs = [items[i].subdomain_code for i in ids]
@@ -675,7 +677,7 @@ def test_subdomains_are_interleaved_on_the_page(client, wave):
          'only ever reported for groups']),
 ])
 def test_the_reporting_promise_matches_the_threshold_in_force(
-        client, db, wave, min_n, must_say, must_not_say):
+        client, db, deployment, min_n, must_say, must_not_say):
     """
     THE SAME DISCIPLINE AS THE DELIVERY-MODE WORDING, APPLIED TO THE THRESHOLD.
 
@@ -689,10 +691,10 @@ def test_the_reporting_promise_matches_the_threshold_in_force(
     test is what stops that convenience quietly turning the landing page into a
     lie.
     """
-    wave['cycle'].min_reporting_n = min_n
+    deployment['cycle'].min_reporting_n = min_n
     db.session.commit()
 
-    html = re.sub(r'\s+', ' ', client.get(f'/survey/{wave["slug"]}').get_data(as_text=True))
+    html = re.sub(r'\s+', ' ', client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True))
 
     for phrase in must_say:
         assert phrase in html, f'min_n={min_n} should say {phrase!r}'
@@ -701,16 +703,16 @@ def test_the_reporting_promise_matches_the_threshold_in_force(
 
 
 def test_at_a_threshold_of_one_the_form_tells_respondents_to_self_censor(
-        client, db, wave):
+        client, db, deployment):
     """
     Unpleasant, and correct. If a result can be one person's answers, the only
     honest thing to do is say so and let them decide what to put in writing —
     rather than collect candour under a promise we are not keeping.
     """
-    wave['cycle'].min_reporting_n = 1
+    deployment['cycle'].min_reporting_n = 1
     db.session.commit()
 
-    html = re.sub(r'\s+', ' ', client.get(f'/survey/{wave["slug"]}').get_data(as_text=True))
+    html = re.sub(r'\s+', ' ', client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True))
     assert 'Answer only what you are comfortable putting your name to' in html
     # And it must still say a blank costs them nothing, or the advice is a trap.
     assert 'not counted against you' in html

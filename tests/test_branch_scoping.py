@@ -6,7 +6,7 @@ Two guarantees, and they fail in different directions:
   TENANCY   — org A never sees org B. A failure here is a cross-tenant leak of
               one employer's workforce feedback to another employer.
   BRANCH    — a branch admin sees only their own branch, and never an org-wide
-              wave. A failure here is an internal leak, which is likelier and
+              deployment. A failure here is an internal leak, which is likelier and
               is the one a client will actually notice.
 
 Both are enforced by ROUTE-LEVEL SCOPED QUERIES (`_scoped()` in
@@ -31,7 +31,7 @@ from tests.factories import (
 @pytest.fixture
 def world(db):
     """
-    Two organisations. The first has two branches and one org-wide wave.
+    Two organisations. The first has two branches and one org-wide deployment.
 
         Acme            Globex
         ├─ Nairobi      └─ (no branches)
@@ -120,13 +120,13 @@ def test_a_branch_admin_sees_only_their_own_branchs_cycles(client, world):
     assert 'Mombasa only' not in body
 
 
-def test_a_branch_admin_never_sees_org_wide_waves(client, world):
+def test_a_branch_admin_never_sees_org_wide_deployments(client, world):
     """
     THE RULE THAT IS EASY TO GET BACKWARDS.
 
     An org-wide cycle has branch_id IS NULL. A naive filter —
     `branch_id == me OR branch_id IS NULL` — reads as "mine plus the shared
-    ones" and is wrong: an org-wide wave covers the whole organisation, was run
+    ones" and is wrong: an org-wide deployment covers the whole organisation, was run
     deliberately above the branch layer, and its results are not this branch's
     to read.
     """
@@ -164,7 +164,7 @@ def test_a_branch_admin_with_no_branch_sees_nothing_rather_than_everything(
 def test_dashboard_response_counts_are_branch_scoped(client, db, world):
     """
     A count is a leak too. A branch admin seeing the organisation's total
-    response count learns the size of waves they are not entitled to see —
+    response count learns the size of deployments they are not entitled to see —
     and on a small org that is enough to infer a sibling branch's participation.
     """
     make_deployment(world['acme'], world['acme_orgwide'],

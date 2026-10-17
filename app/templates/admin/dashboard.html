@@ -33,8 +33,8 @@
         <div class="stat-label">Inactive</div>
     </div>
     <div class="stat-card">
-        <div class="stat-val">{{ stats.waves }}</div>
-        <div class="stat-label">Measurement waves</div>
+        <div class="stat-val">{{ stats.deployments }}</div>
+        <div class="stat-label">Deployments</div>
     </div>
     <div class="stat-card">
         <div class="stat-val">{{ stats.responses }}</div>
@@ -47,14 +47,51 @@
     <div class="panel-head">
         <div class="panel-title">Organisation Status Board</div>
     </div>
+
+    <div class="filter-bar" data-filter-for="org-board">
+        <div class="filter-field">
+            <label for="org-status">Status</label>
+            <select id="org-status" data-key="status">
+                <option value="">All statuses</option>
+                <option value="green">Active</option>
+                <option value="amber">Needs attention</option>
+                <option value="red">Inactive</option>
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="org-industry">Industry</label>
+            <select id="org-industry" data-key="industry">
+                <option value="">All industries</option>
+                {% for i in industries %}
+                <option value="{{ i }}">{{ i }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="org-domain">Assessed domain</label>
+            <select id="org-domain" data-key="domains" data-match="contains">
+                <option value="">All domains</option>
+                {% for d in DOMAINS %}
+                <option value="{{ d }}">{{ domain_label(d) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-field filter-field-wide">
+            <label for="org-q">Search</label>
+            <input id="org-q" type="text" data-key="search" data-match="search"
+                   placeholder="Organisation name...">
+        </div>
+        <button type="button" class="filter-clear">Clear</button>
+    </div>
+
     <div class="table-scroll">
-        <table class="table">
+        <table class="table" id="org-board">
             <thead>
             <tr>
                 <th>Organisation</th>
-                <th>Industry</th>
+                <th>Assessed domains</th>
                 <th class="num">Cycles</th>
-                <th class="num">Waves</th>
+                <th class="num">Deployments</th>
                 <th class="num">Closed</th>
                 {# A RESPONSE COUNT, never a satisfaction figure.
                    A cross-client column of satisfaction scores would be a
@@ -69,11 +106,31 @@
             </thead>
             <tbody>
             {% for r in rows %}
-            <tr>
-                <td><strong>{{ r.org.name }}</strong></td>
-                <td>{{ r.org.industry or '—' }}</td>
+            <tr data-search="{{ r.org.name }}"
+                data-status="{{ r.light }}"
+                data-industry="{{ r.org.industry or '' }}"
+                data-domains="|{{ r.domains|join('|') }}|">
+                <td>
+                    <div class="org-cell">
+                        <span class="org-avatar">{{ r.org.name[:1]|upper }}</span>
+                        <span>
+                            <strong>{{ r.org.name }}</strong>
+                            <div class="muted">{{ r.org.industry or '—' }}</div>
+                        </span>
+                    </div>
+                </td>
+                <td>
+                    {% for d in r.domains[:3] %}
+                    <span class="domain-chip">{{ domain_label(d) }}</span>
+                    {% endfor %}
+                    {% if r.domains|length > 3 %}
+                    <span class="domain-chip domain-chip-more">+{{ r.domains|length - 3 }} more</span>
+                    {% elif not r.domains %}
+                    <span class="muted">—</span>
+                    {% endif %}
+                </td>
                 <td class="num">{{ r.cycles }}</td>
-                <td class="num">{{ r.waves }}</td>
+                <td class="num">{{ r.deployments }}</td>
                 <td class="num">{{ r.closed }}</td>
                 <td class="num">{{ r.responses }}</td>
                 <td>{{ r.last_deployed.strftime('%d %b %Y') if r.last_deployed else 'Never' }}</td>
@@ -86,13 +143,22 @@
                 </td>
                 <td class="row-actions">
                     {% if not r.org.setup_complete %}
-                    <span class="badge badge-outline">Setup incomplete</span>
+                    <a class="btn btn-sm btn-secondary"
+                       href="{{ url_for('admin.org_setup_confirm', org_id=r.org.id) }}">Resume setup</a>
                     {% endif %}
+                    <a class="btn btn-sm btn-secondary"
+                       href="{{ url_for('admin.reports_board', org=r.org.id) }}">View</a>
                 </td>
             </tr>
             {% endfor %}
+                <tr class="filter-empty" data-empty-for="org-board">
+                    <td colspan="9" class="muted">No organisation matches those filters.</td>
+                </tr>
             </tbody>
         </table>
+    </div>
+    <div class="panel-foot">
+        <span class="filter-count" data-count-for="org-board"></span>
     </div>
 </div>
 {% else %}

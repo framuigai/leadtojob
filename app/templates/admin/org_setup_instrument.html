@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Review instrument - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin &middot; {{ org.name }}</div>
+  <h1>Review instrument</h1>
+  <p class="muted">Version {{ version }} &mdash; {{ total }} questions, this
+    organisation's own copy. Read-only: once a cycle has run it is the record
+    of what was asked. Edit the master template to change what future clients
+    receive.</p>
+</div></div>
+
+{% include "admin/_wizard_steps.html" %}
+
+{% for domain_code, items in grouped %}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">{{ domain_label(domain_code) }}</div>
+    <span class="badge badge-outline">{{ items|length }} questions</span>
+  </div>
+  <table class="instrument-table">
+    <thead><tr>
+      <th class="col-num">#</th><th>Question text</th><th>Subdomain</th>
+    </tr></thead>
+    <tbody>
+    {% for i in items %}
+      <tr>
+        <td class="col-num">{{ i.sort_order }}</td>
+        <td>{{ i.item_text }}</td>
+        <td class="cell-sub">{{ subdomain_label(domain_code, i.subdomain_code) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="panel"><div class="panel-body">
+  <p class="muted">No instrument was cloned for this organisation.</p>
+</div></div>
+{% endfor %}
+
+<div class="wizard-actions">
+  <a class="btn btn-primary"
+     href="{{ url_for('admin.org_admin_new', org_id=org.id) }}">Continue</a>
+  <a class="btn btn-secondary"
+     href="{{ url_for('admin.org_detail', org_id=org.id) }}">Finish later</a>
+</div>
+{% endblock %}

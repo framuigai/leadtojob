@@ -10,6 +10,7 @@ client can sign in, discovered when they try).
 import pytest
 
 from app import db
+from app import domains
 from app.domains import DOMAINS, MASTER_ORG_ID
 from app.models import AuditEvent, Org, Segment, SurveyItem, User
 from app.permissions import BRANCH_ADMIN, ORG_ADMIN
@@ -45,6 +46,66 @@ def test_creating_an_org_clones_the_instrument_in_the_same_transaction(
     org = db.session.query(Org).filter_by(name='Acme Ltd').one()
     assert db.session.query(SurveyItem).filter_by(org_id=org.id).count() == 48
     assert sorted(org.active_domains) == sorted(DOMAINS)
+
+
+def test_the_four_step_wizard_runs_end_to_end(client, db, l1):
+    """
+    Details & scope -> Review instrument -> Administrator -> Confirm.
+
+    Each step is a real URL against a draft that already exists in the
+    database, so closing the tab loses nothing.
+    """
+    login(client, l1)
+
+    # 1. Details & scope — creating the draft lands on step 2.
+    res = client.post('/admin/orgs/new',
+                      data={'name': 'Wizard Ltd', 'industry': 'Logistics',
+                            'scope_submitted': '1',
+                            'domains': ['TID', 'BIT', 'PIE']})
+    org = db.session.query(Org).filter_by(name='Wizard Ltd').one()
+    assert res.status_code == 302
+    assert f'/admin/orgs/{org.id}/setup/instrument' in res.headers['Location']
+    assert org.setup_complete is False
+
+    # 2. Review instrument — the org's own 48, read-only.
+    body = client.get(f'/admin/orgs/{org.id}/setup/instrument').get_data(as_text=True)
+    assert 'Review instrument' in body
+    assert 'Overall, I am satisfied with my current job.' in body
+
+    # 4 before 3: confirm refuses to finish without an administrator.
+    body = client.get(f'/admin/orgs/{org.id}/setup/confirm').get_data(as_text=True)
+    assert 'none yet' in body
+    client.post(f'/admin/orgs/{org.id}/complete', follow_redirects=True)
+    db.session.refresh(org)
+    assert org.setup_complete is False
+
+    # 3. Administrator — creating one returns to Confirm.
+    res = client.post(f'/admin/orgs/{org.id}/admins/new',
+                      data={'email': 'l2@wizard.test', 'password': 'a-long-password',
+                            'full_name': 'Wizard Admin'})
+    assert f'/admin/orgs/{org.id}/setup/confirm' in res.headers['Location']
+
+    # 4. Confirm — now it completes.
+    client.post(f'/admin/orgs/{org.id}/complete', follow_redirects=True)
+    db.session.refresh(org)
+    assert org.setup_complete is True
+
+
+def test_the_outcome_domain_cannot_be_dropped_from_an_org(client, db, l1):
+    """§10.4: the diagnostic domains are reported in relation to GEM."""
+    login(client, l1)
+    client.post('/admin/orgs/new',
+                data={'name': 'Diagnostic Ltd', 'scope_submitted': '1',
+                      'domains': ['TID']})
+    org = db.session.query(Org).filter_by(name='Diagnostic Ltd').one()
+    assert domains.OUTCOME_DOMAIN in org.active_domains
+
+    # And GEM alone is refused: nothing to relate the outcome to.
+    body = client.post('/admin/orgs/new',
+                       data={'name': 'Outcome Only Ltd', 'scope_submitted': '1'},
+                       follow_redirects=True).get_data(as_text=True)
+    assert 'at least one diagnostic domain' in body
+    assert db.session.query(Org).filter_by(name='Outcome Only Ltd').count() == 0
 
 
 def test_a_new_org_starts_as_a_resumable_draft(client, db, l1):

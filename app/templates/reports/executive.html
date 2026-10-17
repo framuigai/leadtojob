@@ -1,7 +1,7 @@
 {% extends "reports/_base.html" %}
 {% block body %}
 
-<h2 class="sec">1. Executive summary</h2>
+<h2 class="sec"><span class="sec-num">1.</span> Executive summary</h2>
 {% if narrative.executive_summary %}
 <p>{{ narrative.executive_summary }}</p>
 {% else %}
@@ -9,7 +9,7 @@
 figure below stands on its own.</p>
 {% endif %}
 
-<h2 class="sec">2. Method and participation</h2>
+<h2 class="sec"><span class="sec-num">2.</span> Method and participation</h2>
 <table class="data">
   <tbody>
     <tr><td>Responses</td><td class="num">{{ n }}</td></tr>
@@ -29,7 +29,7 @@ figure below stands on its own.</p>
   appears anywhere in this report.
 </div>
 
-<h2 class="sec">3. Overall Satisfaction</h2>
+<h2 class="sec"><span class="sec-num">3.</span> Overall Satisfaction</h2>
 <p class="muted">Reported as three separate subdomains. There is no single
 overall satisfaction score: the three are related but not interchangeable.</p>
 {% with heading='Subdomain', rows=outcome_rows|map('list')|list %}{% endwith %}
@@ -38,12 +38,12 @@ overall satisfaction score: the three are related but not interchangeable.</p>
 {% if chart_outcome %}<img class="chart" src="data:image/png;base64,{{ chart_outcome }}">{% endif %}
 {% if chart_legend %}<img class="chart" src="data:image/png;base64,{{ chart_legend }}">{% endif %}
 
-<h2 class="sec">4. Key findings across the diagnostic domains</h2>
+<h2 class="sec"><span class="sec-num">4.</span> Key findings across the diagnostic domains</h2>
 {% if narrative.key_findings %}<p>{{ narrative.key_findings }}</p>{% endif %}
 {% include "reports/_domain_table.html" %}
 {% if chart_domains %}<img class="chart" src="data:image/png;base64,{{ chart_domains }}">{% endif %}
 
-<h2 class="sec">5. The diagnostic domains in relation to Overall Satisfaction</h2>
+<h2 class="sec"><span class="sec-num">5.</span> The diagnostic domains in relation to Overall Satisfaction</h2>
 <p class="muted">Comparing the third of respondents reporting the lowest
 General Job Satisfaction with the third reporting the highest.</p>
 {% for code, contrast in contrasts %}
@@ -57,7 +57,7 @@ General Job Satisfaction with the third reporting the highest.</p>
 <div class="callout caveat">{{ association_caveat }}</div>
 
 {% if comparisons %}
-<h2 class="sec">6. Differences across organisational groups</h2>
+<h2 class="sec"><span class="sec-num">6.</span> Differences across organisational groups</h2>
 {% for comparison in comparisons %}
 <h3 class="sub">{{ comparison.segment_label }}</h3>
 <p class="muted">Groups appear in their defined order. <strong>This is not a
@@ -85,11 +85,11 @@ spread means the organisation is not one place.</p>
 {% endif %}
 
 {% if trend %}
-<h2 class="sec">7. Change since the previous wave</h2>
+<h2 class="sec"><span class="sec-num">7.</span> Change since the previous cycle</h2>
 {% include "reports/_trend.html" %}
 {% endif %}
 
-<h2 class="sec">{{ 8 if trend else 7 }}. Where to look first</h2>
+<h2 class="sec"><span class="sec-num">{{ 8 if trend else 7 }}.</span> Where to look first</h2>
 {% if priority %}
 {% if narrative.areas_to_investigate %}<p>{{ narrative.areas_to_investigate }}</p>{% endif %}
 {% include "reports/_priority.html" %}
@@ -97,7 +97,7 @@ spread means the organisation is not one place.</p>
 <p class="suppressed">{{ priority.reason }}</p>
 {% endif %}
 
-<h2 class="sec">{{ 9 if trend else 8 }}. Possible response categories</h2>
+<h2 class="sec"><span class="sec-num">{{ 9 if trend else 8 }}.</span> Possible response categories</h2>
 <p class="muted">{{ intervention_note }}</p>
 {% include "reports/_interventions.html" %}
 

@@ -91,20 +91,65 @@ def recommendations(db_session, domain_code, subdomain_code, limit=None):
     }
 
 
-def for_priority(db_session, priority_view, limit_cells=3, limit_courses=3):
+def for_priority(db_session, priority_view, limit_cells=5, limit_courses=3):
     """
     Recommendations for the cells a priority view says to look at first.
 
     Follows the ORDER THE ENGINE PRODUCED — by size of contrast — rather than
     re-ranking here. Two places deciding what matters most is two places to
     disagree.
+
+    The `investigate_first` cells lead, then the rest of the priority order
+    fills the remaining slots. Taking ONLY that quadrant used to hide the
+    catalogue entirely on a cycle whose worst findings were all Reward: the
+    three PIE subdomains carry no course by §8.5, so two of them consumed
+    every slot and the report named no course at all while trainable cells sat
+    just below the cut. The reading order is unchanged — a Reward finding
+    still comes first when it ranks first, and still shows its §8.5 guidance
+    rather than a course.
     """
     if not priority_view or not getattr(priority_view, 'entries', None):
         return []
-    entries = [e for e in priority_view.entries
-               if e.quadrant == 'investigate_first'] or priority_view.entries
+    entries = list(priority_view.entries)
+    leading = [e for e in entries if e.quadrant == 'investigate_first']
+    rest = [e for e in entries if e not in leading]
+    ordered = (leading + rest)[:limit_cells]
     return [recommendations(db_session, *entry.diagnostic, limit=limit_courses)
-            for entry in entries[:limit_cells]]
+            | {'score': getattr(entry, 'score', None),
+               'n': getattr(entry, 'n', None)}
+            for entry in ordered]
+
+
+def for_scores(db_session, subdomain_rows, limit_cells=5, limit_courses=3):
+    """
+    THE FALLBACK WHEN THERE IS NO CONTRAST TO RANK BY.
+
+    `for_priority()` orders by the gap between the least and most satisfied
+    thirds, which needs association.contrast_floor() respondents — at least
+    12. Below that the priority view is empty, and the catalogue silently
+    produced NOTHING: a report that named no course at all, not because no
+    course applied but because the ranking input was missing. That is the
+    worst available reading of a small cycle, and it is what the client sees
+    first.
+
+    So where a contrast cannot be computed, the cells are ordered by SCORE,
+    lowest first, from the subdomain results the report already shows. It is
+    a weaker basis and the report says which basis it used — §10.5 permits
+    the relative statement "this scored lowest for this group" without any
+    band label, and permits nothing stronger.
+
+    `subdomain_rows` is build_context's list of ((domain, sub), GroupResult or
+    Suppressed). Suppressed cells are skipped: an unreportable figure must not
+    become a recommendation by the back door.
+    """
+    scored = [(pair, result) for pair, result in (subdomain_rows or [])
+              if getattr(result, 'mean', None) is not None]
+    if not scored:
+        return []
+    scored.sort(key=lambda row: (row[1].mean, row[0]))
+    return [recommendations(db_session, pair[0], pair[1], limit=limit_courses)
+            | {'score': result.mean, 'n': result.n}
+            for pair, result in scored[:limit_cells]]
 
 
 def coverage(db_session):

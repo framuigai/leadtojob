@@ -437,7 +437,7 @@ def priority_view(profiles, outcome=DEFAULT_OUTCOME, min_reporting_n=1):
         # STRICTLY above the median, and never zero.
         #
         # `>=` looks equivalent and is not. When most subdomains are flat — the
-        # ordinary case in a healthy organisation, and the case in any wave
+        # ordinary case in a healthy organisation, and the case in any cycle
         # where one issue dominates — the median contrast is 0, and `size >= 0`
         # is true for every one of them. The result was all nine subdomains
         # flagged "Investigate first", including those with a contrast of

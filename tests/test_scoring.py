@@ -56,7 +56,7 @@ def test_a_reverse_scored_item_is_six_minus_the_score():
     """
     Honoured from day one even though no supplied item is reverse-worded.
     Retrofitting this through the ladder after real data exists would silently
-    flip a subdomain for every historical wave.
+    flip a subdomain for every historical deployment.
     """
     assert sc.item_value(answer('GEM', 'G', 1, score=5, reverse=True)) == 1.0
     assert sc.item_value(answer('GEM', 'G', 1, score=1, reverse=True)) == 5.0
@@ -490,9 +490,8 @@ def test_there_is_no_function_that_returns_a_composite_by_another_name():
     assert suspicious == ['gem_composite'], suspicious
 
 
-def test_band_raises_while_bands_are_not_validated():
-    assert domains.BANDS_VALIDATED is False
-    with pytest.raises(sc.ScoringError, match='not validated'):
+def test_band_always_raises():
+    with pytest.raises(sc.ScoringError, match='not available'):
         sc.band(4.6)
 
 

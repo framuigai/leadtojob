@@ -7,7 +7,7 @@
     <div class="section-label">{{ role_label(current_user.role) }} / Deployment</div>
     <h1>{{ cycle.cycle_name if cycle else deployment.cycle_id }}</h1>
     <p class="muted">
-      {% if deployment.branch_id %}Branch wave{% else %}Organisation-wide wave{% endif %}
+      {% if deployment.branch_id %}Branch deployment{% else %}Organisation-wide deployment{% endif %}
       &middot; {{ 'open link' if deployment.delivery_mode == 'open_link' else 'ticketed' }}
       &middot; {{ 'closed' if deployment.closed else 'open' }}
     </p>
@@ -18,7 +18,7 @@
           action="{{ url_for('org.deployment_close', deployment_id=deployment.id) }}"
           style="display:inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-secondary">Close the wave</button>
+      <button type="submit" class="btn btn-secondary">Close the cycle</button>
     </form>
     {% endif %}
     <a href="{{ url_for('org.deployments_list') }}" class="btn btn-secondary">

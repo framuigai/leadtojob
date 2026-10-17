@@ -3,13 +3,14 @@ L1 master admin — cross-org.
 
 Every route here is gated on a CAPABILITY, never on a role comparison. L1 has
 no org_id, which has a consequence worth stating once: any capability L1 alone
-holds — the catalogue, the validation report, the retention purge, pilot
+holds — the catalogue, the retention purge, pilot
 feedback — must live in THIS blueprint, because every query in app/org/ is
 scoped by `current_user.org_id` and L1 can never satisfy one. The sibling
 product learned this by putting a candidate purge in the wrong blueprint and
 finding it unreachable by the only role allowed to use it.
 """
 import io
+import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -29,28 +30,30 @@ from app.admin import admin_bp
 from app import catalogue as catalogue_module
 from app.analytics import reports as report_builder
 from app.analytics import scoring
-from app.analytics import validation as validation_module
 from app.audit import (
     INSTRUMENT_EDIT, ORG_CREATE, ORG_EDIT, REPORT_DOWNLOAD, USER_CREATE,
     USER_DEACTIVATE, USER_REACTIVATE, record_audit, user_payload,
 )
 from app.auth.routes import require_capability
-from app.domains import DOMAINS, MASTER_ORG_ID, SUBDOMAINS, subdomain_label
+from app.domains import (
+    DOMAIN_LABELS, DOMAINS, MASTER_ORG_ID, OUTCOME_DOMAIN, SUBDOMAINS,
+    subdomain_label,
+)
 from app.models import (
     AiCostEvent, Analysis, AuditEvent, Branch, InterventionCatalogue,
-    InterventionCell, MeasurementCycle, Org, ReportEvent, SurveyDeployment,
-    SurveyItem, User,
+    InterventionCell, MeasurementCycle, Org, ReportEvent, Segment,
+    SurveyDeployment, SurveyItem, User,
 )
 from app.permissions import (
     CREATABLE_ROLES, EDIT_TEMPLATES, MANAGE_CATALOGUE, MANAGE_ORGS, ORG_ADMIN,
-    VIEW_AUDIT_LOG, VIEW_COSTS, VIEW_VALIDATION_REPORT,
+    VIEW_AUDIT_LOG, VIEW_COSTS,
 )
 from app.provisioning import (
     ProvisioningError, active_segments, clone_instrument_to_org,
     create_default_segments, default_active_domains, latest_version,
 )
 
-# Days since the last wave was deployed, for the status-board traffic light.
+# Days since the last deployment, for the status-board traffic light.
 # Same thresholds as the sibling boards so one operator reads all three the
 # same way.
 _AMBER_AFTER_DAYS = 60
@@ -58,7 +61,7 @@ _RED_AFTER_DAYS = 90
 
 
 def _traffic_light(last_deployed):
-    """green < 60 days since the last wave, amber 60-90, red > 90 or never."""
+    """green < 60 days since the last deployment, amber 60-90, red > 90 or never."""
     if last_deployed is None:
         return 'red'
     # Rows written before a timezone-aware default was in place can come back
@@ -122,24 +125,28 @@ def dashboard():
         )
         rows.append({
             'org': org,
+            'domains': [d for d in (org.active_domains or []) if d in DOMAINS],
             'cycles': cycles.get(org.id, 0),
-            'waves': dep['total'],
+            'deployments': dep['total'],
             'closed': dep['closed'],
             'responses': dep['responses'],
             'last_deployed': dep['last'],
             'light': _traffic_light(dep['last']),
         })
 
+    industries = sorted({r['org'].industry for r in rows if r['org'].industry})
+
     stats = {
         'organisations': len(rows),
         'active': sum(1 for r in rows if r['light'] == 'green'),
         'needs_attention': sum(1 for r in rows if r['light'] == 'amber'),
         'inactive': sum(1 for r in rows if r['light'] == 'red'),
-        'waves': sum(r['waves'] for r in rows),
+        'deployments': sum(r['deployments'] for r in rows),
         'responses': sum(r['responses'] for r in rows),
     }
 
-    return render_template('admin/dashboard.html', rows=rows, stats=stats)
+    return render_template('admin/dashboard.html', rows=rows, stats=stats,
+                           industries=industries)
 
 
 # ── Organisations ───────────────────────────────────────────────────────────
@@ -163,12 +170,32 @@ def orgs_new():
         name = (request.form.get('name') or '').strip()
         if not name:
             flash('An organisation name is required.', 'error')
-            return render_template('admin/org_form.html')
+            return render_template('admin/org_form.html', wizard_step=1)
+
+        # Scope. The outcome domain is not optional: every diagnostic domain
+        # is reported IN RELATION TO it (§10.4), so an org without GEM cannot
+        # produce a diagnostic at all. It is forced on rather than offered.
+        #
+        # `scope_submitted` distinguishes "every box was unticked" from "this
+        # caller did not render the field". An unchecked checkbox sends
+        # nothing, so without the marker the two are identical and unticking
+        # the diagnostics would silently look like a default.
+        if request.form.get('scope_submitted'):
+            chosen = [d for d in request.form.getlist('domains') if d in DOMAINS]
+            active = [d for d in DOMAINS if d == OUTCOME_DOMAIN or d in chosen]
+            if len(active) < 2:
+                flash('Choose at least one diagnostic domain. '
+                      f'{DOMAIN_LABELS[OUTCOME_DOMAIN]} on its own measures the '
+                      'outcome with nothing to relate it to, which is not a '
+                      'diagnostic.', 'error')
+                return render_template('admin/org_form.html', wizard_step=1)
+        else:
+            active = default_active_domains()
 
         org = Org(
             name=name,
             industry=(request.form.get('industry') or '').strip() or None,
-            active_domains=default_active_domains(),
+            active_domains=active,
             setup_complete=False,
             is_active=True,
         )
@@ -180,7 +207,7 @@ def orgs_new():
         except ProvisioningError as exc:
             db.session.rollback()
             flash(str(exc), 'error')
-            return render_template('admin/org_form.html')
+            return render_template('admin/org_form.html', wizard_step=1)
 
         create_default_segments(org.id)
         record_audit(ORG_CREATE, 'org', org.id,
@@ -191,9 +218,58 @@ def orgs_new():
         db.session.commit()
         flash(f'{org.name} created with its own copy of the {cloned}-item '
               'instrument.', 'success')
-        return redirect(url_for('admin.org_detail', org_id=org.id))
+        return redirect(url_for('admin.org_setup_instrument', org_id=org.id))
 
-    return render_template('admin/org_form.html')
+    return render_template('admin/org_form.html', wizard_step=1)
+
+
+@admin_bp.route('/orgs/<uuid:org_id>/setup/instrument')
+@require_capability(MANAGE_ORGS)
+def org_setup_instrument(org_id):
+    """
+    Step 2: review the instrument this client now holds.
+
+    Read-only on purpose. The clone is already made and is EVIDENCE of what
+    this client will ask; the place to change the wording is the master
+    template, before the next client is created. Showing it here is a check
+    that the right 48 items arrived, not an invitation to edit them.
+    """
+    org = _client_org_or_404(org_id)
+    version = latest_version(org.id)
+    items = (db.session.query(SurveyItem)
+             .filter_by(org_id=org.id, version=version)
+             .order_by(SurveyItem.sort_order).all())
+    assessed = org.active_domains or list(DOMAINS)
+    grouped = [(d, [i for i in items if i.domain_code == d])
+               for d in DOMAINS if d in assessed]
+    return render_template('admin/org_setup_instrument.html', org=org,
+                           grouped=grouped, total=len(items),
+                           version=version, wizard_step=2)
+
+
+@admin_bp.route('/orgs/<uuid:org_id>/setup/confirm')
+@require_capability(MANAGE_ORGS)
+def org_setup_confirm(org_id):
+    """
+    Step 4: what was set up, and the one thing that blocks finishing.
+
+    The administrator check lives in `org_complete`, not here — this screen
+    reports it so the operator sees the blocker before pressing the button,
+    but the refusal that matters is the one on the POST.
+    """
+    org = _client_org_or_404(org_id)
+    admins = (db.session.query(User)
+              .filter_by(org_id=org.id, role=ORG_ADMIN)
+              .order_by(User.email).all())
+    items = db.session.query(SurveyItem).filter_by(org_id=org.id).count()
+    # Every seeded segment, not active_segments(): a client defines the
+    # options themselves before their first cycle, so at this point none has
+    # any and active_segments() would correctly report nothing.
+    segments = (db.session.query(Segment).filter_by(org_id=org.id)
+                .order_by(Segment.sort_order, Segment.label).all())
+    return render_template('admin/org_setup_confirm.html', org=org,
+                           admins=admins, item_count=items,
+                           segments=segments, wizard_step=4)
 
 
 @admin_bp.route('/orgs/<uuid:org_id>')
@@ -253,8 +329,9 @@ def org_admin_new(org_id):
         error = _validate_new_user(email, password, ORG_ADMIN)
         if error:
             flash(error, 'error')
-            return render_template('admin/user_form.html', org=org,
-                                   role=ORG_ADMIN)
+            return render_template(
+                'admin/user_form.html', org=org, role=ORG_ADMIN,
+                wizard_step=(None if org.setup_complete else 3))
 
         user = User(org_id=org.id, branch_id=None, email=email,
                     role=ORG_ADMIN, full_name=full_name, is_active=True)
@@ -267,9 +344,12 @@ def org_admin_new(org_id):
         db.session.commit()
         flash(f'Created {email}. Give them the password directly; it is not '
               'emailed and is not recoverable from here.', 'success')
+        if not org.setup_complete:
+            return redirect(url_for('admin.org_setup_confirm', org_id=org.id))
         return redirect(url_for('admin.org_detail', org_id=org.id))
 
-    return render_template('admin/user_form.html', org=org, role=ORG_ADMIN)
+    return render_template('admin/user_form.html', org=org, role=ORG_ADMIN,
+                           wizard_step=(None if org.setup_complete else 3))
 
 
 def _client_org_or_404(org_id):
@@ -583,7 +663,7 @@ def catalogue():
 @require_capability(VIEW_COSTS)
 def usage():
     """
-    What interpretation has cost, per organisation and per wave.
+    What interpretation has cost, per organisation and per cycle.
 
     Reads `ai_cost_events`, which is deliberately SEPARATE from `report_events`:
     one records what a narrative cost and is operational, the other records that
@@ -675,51 +755,6 @@ def usage():
                            totals=totals, model=ai_service.MODEL,
                            configured=ai_service.api_key_present())
 
-
-@admin_bp.route('/validation')
-@require_capability(VIEW_VALIDATION_REPORT)
-def validation():
-    """
-    §15 and §18. Evidence about the INSTRUMENT, not about any client.
-
-    POOLED ACROSS EVERY ORGANISATION BY DEFAULT, and that is the point: the
-    question is whether these 48 questions work, and the answer does not depend
-    on whose staff answered them. Item codes are stable across every cloned
-    copy, so pooling joins like with like.
-
-    It is also why this is L1-only. Handing a client these figures invites the
-    instrument's weaknesses to be read as their organisation's — "our Trust
-    scale is unreliable" is a sentence about our questions, not about their
-    workplace, and it will not be heard that way.
-
-    `?org=<id>` narrows to one client, for checking whether a result holds in a
-    particular setting — §15's "whether the survey works appropriately across
-    different roles and organizational settings".
-    """
-    org_id = (request.args.get('org') or '').strip()
-    scope_org = None
-    if org_id:
-        scope_org = db.session.get(Org, org_id)
-        if scope_org is None or scope_org.id == MASTER_ORG_ID:
-            abort(404)
-
-    waves = (db.session.query(SurveyDeployment)
-             .filter(SurveyDeployment.archived_at.is_(None)))
-    if scope_org is not None:
-        waves = waves.filter(SurveyDeployment.org_id == scope_org.id)
-    wave_ids = [w.id for w in waves.all()]
-
-    profiles = (scoring.load_profiles(db.session, wave_ids)
-                if wave_ids else [])
-    report = validation_module.build(profiles)
-
-    orgs = (db.session.query(Org).filter(Org.id != MASTER_ORG_ID)
-            .order_by(Org.name).all())
-
-    return render_template('admin/validation.html', report=report,
-                           orgs=orgs, scope_org=scope_org,
-                           min_n=validation_module.VALIDATION_MIN_N,
-                           waves=len(wave_ids))
 
 # ── L1 report access — READ ONLY ───────────────────────────────────────────
 #
@@ -865,7 +900,7 @@ def reports_board():
 
     Both sibling products bury this inside the organisation detail page, which
     is fine when an operator is looking at one client and wrong when they are
-    supporting twelve: the question "which waves are ready to report on" cannot
+    supporting twelve: the question "which cycles are ready to report on" cannot
     be answered without opening every org in turn.
 
     Same three states as the client-facing screen — not deployed / still
@@ -875,8 +910,14 @@ def reports_board():
     Read-only, like every L1 report path. No interpret action: a narrative
     about a client's workforce is written by that client's own administrator.
     """
-    orgs = (db.session.query(Org).filter(Org.id != MASTER_ORG_ID)
-            .order_by(Org.name).all())
+    org_query = db.session.query(Org).filter(Org.id != MASTER_ORG_ID)
+    only_org = (request.args.get('org') or '').strip()
+    if only_org:
+        try:
+            org_query = org_query.filter(Org.id == uuid.UUID(only_org))
+        except ValueError:
+            abort(404)
+    orgs = org_query.order_by(Org.name).all()
     org_by_id = {o.id: o for o in orgs}
 
     cycles = (db.session.query(MeasurementCycle)
@@ -885,10 +926,10 @@ def reports_board():
               .order_by(MeasurementCycle.created_at.desc()).all()
               if org_by_id else [])
 
-    waves_by_cycle = {}
-    for wave in (db.session.query(SurveyDeployment)
+    deployments_by_cycle = {}
+    for deployment in (db.session.query(SurveyDeployment)
                  .filter(SurveyDeployment.archived_at.is_(None)).all()):
-        waves_by_cycle.setdefault(wave.cycle_id, []).append(wave)
+        deployments_by_cycle.setdefault(deployment.cycle_id, []).append(deployment)
 
     # One grouped query rather than one per cycle: a platform with forty
     # clients would otherwise issue forty queries to draw one table.
@@ -899,19 +940,48 @@ def reports_board():
 
     groups = {}
     for cycle in cycles:
-        waves = waves_by_cycle.get(cycle.id, [])
-        responses = sum(w.responses_received for w in waves)
+        deployments = deployments_by_cycle.get(cycle.id, [])
+        responses = sum(w.responses_received for w in deployments)
         groups.setdefault(cycle.org_id, []).append({
             'cycle': cycle,
-            'waves': waves,
+            'deployments': deployments,
             'responses': responses,
-            'expected': sum(w.expected_respondents for w in waves),
-            'state': _report_state(cycle, waves, responses),
+            'expected': sum(w.expected_respondents for w in deployments),
+            'state': _report_state(cycle, deployments, responses),
             'narrated': {t for (c, t) in narrated if c == cycle.id},
         })
 
-    rows = [{'org': org_by_id[org_id], 'cycles': entries}
-            for org_id, entries in groups.items()]
+    # Per-org counters for the header strip. Downloads come from report_events
+    # and interpretations from analyses; the two are never summed.
+    downloads = dict(
+        db.session.query(ReportEvent.org_id, func.count(ReportEvent.id))
+        .group_by(ReportEvent.org_id).all())
+    pdfs = dict(
+        db.session.query(ReportEvent.org_id, func.count(ReportEvent.id))
+        .filter(ReportEvent.export_format == 'pdf')
+        .group_by(ReportEvent.org_id).all())
+    narratives = dict(
+        db.session.query(Analysis.org_id, func.count(Analysis.id))
+        .group_by(Analysis.org_id).all())
+    branch_counts = dict(
+        db.session.query(Branch.org_id, func.count(Branch.id))
+        .group_by(Branch.org_id).all())
+
+    rows = []
+    for org_id, entries in groups.items():
+        all_downloads = downloads.get(org_id, 0)
+        pdf_count = pdfs.get(org_id, 0)
+        rows.append({
+            'org': org_by_id[org_id],
+            'cycles': entries,
+            'branches': branch_counts.get(org_id, 0),
+            'deployments': sum(len(c['deployments']) for c in entries),
+            'responses': sum(c['responses'] for c in entries),
+            'narratives': narratives.get(org_id, 0),
+            'downloads': all_downloads,
+            'pdf': pdf_count,
+            'excel': all_downloads - pdf_count,
+        })
     rows.sort(key=lambda r: r['org'].name)
 
     totals = {
@@ -922,26 +992,30 @@ def reports_board():
         'responses': sum(c['responses'] for r in rows for c in r['cycles']),
     }
     return render_template('admin/reports_board.html', rows=rows,
+                           single_org=(rows[0] if only_org and rows else None),
                            totals=totals,
                            report_types=report_builder.REPORT_TYPES,
                            report_title=report_builder.report_title)
 
 
-def _report_state(cycle, waves, responses):
+def _report_state(cycle, deployments, responses):
     """
     Shared with the client-facing screen in app/org/routes.py, deliberately
     duplicated rather than imported: that module defines a view called
     reports() and importing from it across blueprints is how the shadowing bug
     this project already paid for gets a second home. Three states, one
-    meaning, two short functions.
+    meaning, two short functions. A still-collecting cycle is ready and
+    provisional; it is not withheld.
     """
-    if not waves:
-        return {'key': 'not_deployed', 'needs': 'not deployed yet'}
+    if not deployments:
+        return {'key': 'not_deployed', 'provisional': False,
+                'needs': 'not deployed yet'}
     if responses < cycle.min_reporting_n:
         short = cycle.min_reporting_n - responses
-        return {'key': 'below_threshold',
+        return {'key': 'below_threshold', 'provisional': False,
                 'needs': (f'{responses} of {cycle.min_reporting_n} responses '
                           f'needed \u2014 {short} more')}
-    if any(not w.closed for w in waves):
-        return {'key': 'open', 'needs': 'still collecting \u2014 close the wave'}
-    return {'key': 'ready', 'needs': None}
+    # Still collecting does NOT withhold the reports - see the longer note
+    # on the copy in app/org/routes.py. The board marks them provisional.
+    return {'key': 'ready', 'needs': None,
+            'provisional': any(not w.closed for w in deployments)}

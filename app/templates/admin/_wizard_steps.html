@@ -1,0 +1,20 @@
+{#
+  Four-step progress bar for organisation setup.
+
+  Set `wizard_step` (1-4) before including. The steps are READ-ONLY markers,
+  not links: the org is a resumable draft in the database from step 1, so the
+  way back to an earlier step is the Back button on the step itself, and a
+  step that has not been reached cannot be jumped into.
+#}
+<div class="wizard-steps">
+  {% for n, label in [(1, 'Details & scope'), (2, 'Review instrument'),
+                      (3, 'Administrator'), (4, 'Confirm')] %}
+  <div class="wizard-step
+              {%- if n == wizard_step %} is-current
+              {%- elif n < wizard_step %} is-done{% endif %}">
+    <span class="wizard-step-num">{{ n }}</span>
+    <span class="wizard-step-label">{{ label }}</span>
+  </div>
+  {% if not loop.last %}<span class="wizard-arrow">&rarr;</span>{% endif %}
+  {% endfor %}
+</div>

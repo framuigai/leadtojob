@@ -23,7 +23,7 @@ from tests.factories import (
 
 
 @pytest.fixture
-def wave(db):
+def deployment(db):
     make_master_instrument()
     org = make_org('Kilimo Dairies')
     clone_instrument_to_org(org.id)
@@ -39,14 +39,14 @@ def _items(org_id):
             .order_by(SurveyItem.sort_order).all())
 
 
-def _respond(wave, scores_by_cell, submitted=True, void=False,
+def _respond(deployment, scores_by_cell, submitted=True, void=False,
              segment_values=None):
     """
     Write one session's answers. `scores_by_cell` maps (domain, sub) -> list of
     4 scores, where None means N/A.
     """
     session = ResponseSession(
-        deployment_id=wave['deployment'].id, org_id=wave['org'].id,
+        deployment_id=deployment['deployment'].id, org_id=deployment['org'].id,
         segment_values=segment_values or {}, is_void=void,
     )
     if submitted:
@@ -55,14 +55,14 @@ def _respond(wave, scores_by_cell, submitted=True, void=False,
     db.session.add(session)
     db.session.flush()
 
-    for item in _items(wave['org'].id):
+    for item in _items(deployment['org'].id):
         scores = scores_by_cell.get((item.domain_code, item.subdomain_code))
         if scores is None:
             continue
         score = scores[item.ordinal - 1]
         db.session.add(SurveyResponse(
-            session_id=session.id, deployment_id=wave['deployment'].id,
-            org_id=wave['org'].id, item_id=item.id,
+            session_id=session.id, deployment_id=deployment['deployment'].id,
+            org_id=deployment['org'].id, item_id=item.id,
             score=None if score is None else score,
             not_applicable=(score is None),
         ))
@@ -77,23 +77,23 @@ def _all_fours(domain='BIT'):
 
 # ── What comes out ──────────────────────────────────────────────────────────
 
-def test_a_stored_response_round_trips_into_a_profile(wave):
-    _respond(wave, _all_fours('BIT'))
+def test_a_stored_response_round_trips_into_a_profile(deployment):
+    _respond(deployment, _all_fours('BIT'))
     db.session.commit()
 
-    profiles = sc.load_profiles(db.session, [wave['deployment'].id])
+    profiles = sc.load_profiles(db.session, [deployment['deployment'].id])
     assert len(profiles) == 1
     assert profiles[0].domain_scores['BIT'] == 4.0
 
 
-def test_na_rows_survive_the_journey_as_na_and_not_as_a_score(wave):
+def test_na_rows_survive_the_journey_as_na_and_not_as_a_score(deployment):
     """
     The join is where a null score could quietly become a 0 — the single most
     consequential thing that can go wrong between the table and the engine,
     because a 0 on a 1-5 scale is worse than the worst real answer.
     """
     from app.domains import SUBDOMAINS
-    _respond(wave, {('BIT', s): [4, 4, None, None] for s in SUBDOMAINS['BIT']})
+    _respond(deployment, {('BIT', s): [4, 4, None, None] for s in SUBDOMAINS['BIT']})
     db.session.commit()
 
     answers = sc.load_answers(db.session, [
@@ -105,21 +105,21 @@ def test_na_rows_survive_the_journey_as_na_and_not_as_a_score(wave):
     assert all(a.score is None for a in na_rows)
     assert all(sc.item_value(a) is None for a in na_rows)
 
-    profiles = sc.load_profiles(db.session, [wave['deployment'].id])
+    profiles = sc.load_profiles(db.session, [deployment['deployment'].id])
     assert profiles[0].domain_scores['BIT'] == 4.0      # not 2.0, not 3.0
 
 
-def test_the_reverse_flag_travels_with_the_item(wave):
+def test_the_reverse_flag_travels_with_the_item(deployment):
     """
     `is_reverse_scored` lives on survey_items, not on the response. If the
     loader dropped it, a reverse item would score in the wrong direction and
     nothing downstream could detect it.
     """
-    item = _items(wave['org'].id)[0]
+    item = _items(deployment['org'].id)[0]
     item.is_reverse_scored = True
     db.session.flush()
 
-    _respond(wave, {(item.domain_code, item.subdomain_code): [5, 5, 5, 5]})
+    _respond(deployment, {(item.domain_code, item.subdomain_code): [5, 5, 5, 5]})
     db.session.commit()
 
     answers = sc.load_answers(db.session, [
@@ -132,78 +132,78 @@ def test_the_reverse_flag_travels_with_the_item(wave):
 
 # ── What is left out ────────────────────────────────────────────────────────
 
-def test_an_unsubmitted_draft_is_not_counted(wave):
+def test_an_unsubmitted_draft_is_not_counted(deployment):
     """
     A partial response is not a response. Counting one would move a reported
     figure every time somebody opened the form and wandered off — and a figure
     that drifts for no visible reason is one nobody can defend.
     """
-    _respond(wave, _all_fours('BIT'), submitted=False)
+    _respond(deployment, _all_fours('BIT'), submitted=False)
     db.session.commit()
-    assert sc.load_profiles(db.session, [wave['deployment'].id]) == []
+    assert sc.load_profiles(db.session, [deployment['deployment'].id]) == []
 
 
-def test_a_voided_session_is_excluded(wave):
+def test_a_voided_session_is_excluded(deployment):
     """
     That is what voiding is for — a test submission, or a straight line through
     48 items in 40 seconds. The exclusion is visible in the audit log rather
     than silently changing a count.
     """
-    _respond(wave, _all_fours('BIT'))
-    _respond(wave, _all_fours('BIT'), void=True)
+    _respond(deployment, _all_fours('BIT'))
+    _respond(deployment, _all_fours('BIT'), void=True)
     db.session.commit()
 
-    profiles = sc.load_profiles(db.session, [wave['deployment'].id])
+    profiles = sc.load_profiles(db.session, [deployment['deployment'].id])
     assert len(profiles) == 1
 
 
-def test_another_deployments_responses_do_not_leak_in(wave, db):
+def test_another_deployments_responses_do_not_leak_in(deployment, db):
     """
-    Two waves in one organisation must not pool. A cross-wave total would mix
+    Two deployments in one organisation must not pool. A cross-deployment total would mix
     two populations measured at different times and report it as one.
     """
-    other_cycle = make_cycle(wave['org'], 'KD-2026-H2', status='open')
-    other = make_deployment(wave['org'], other_cycle, public_slug='other-slug')
+    other_cycle = make_cycle(deployment['org'], 'KD-2026-H2', status='open')
+    other = make_deployment(deployment['org'], other_cycle, public_slug='other-slug')
     db.session.flush()
 
-    _respond(wave, _all_fours('BIT'))
+    _respond(deployment, _all_fours('BIT'))
     db.session.commit()
 
-    assert len(sc.load_profiles(db.session, [wave['deployment'].id])) == 1
+    assert len(sc.load_profiles(db.session, [deployment['deployment'].id])) == 1
     assert sc.load_profiles(db.session, [other.id]) == []
 
 
 # ── Through to a group result ──────────────────────────────────────────────
 
-def test_the_weighting_rule_holds_through_the_database(wave):
+def test_the_weighting_rule_holds_through_the_database(deployment):
     """
     The N/A weighting test from test_scoring.py, re-run end to end — because
     the rule could hold in the engine and still be lost in the query.
     """
     from app.domains import SUBDOMAINS
-    _respond(wave, {('PIE', s): [2, 2, 2, 2] for s in SUBDOMAINS['PIE']})
-    _respond(wave, {('PIE', s): [2, 2, None, None] for s in SUBDOMAINS['PIE']})
+    _respond(deployment, {('PIE', s): [2, 2, 2, 2] for s in SUBDOMAINS['PIE']})
+    _respond(deployment, {('PIE', s): [2, 2, None, None] for s in SUBDOMAINS['PIE']})
     db.session.commit()
 
-    profiles = sc.load_profiles(db.session, [wave['deployment'].id])
+    profiles = sc.load_profiles(db.session, [deployment['deployment'].id])
     result = sc.group_result(profiles, 'PIE', min_n=1)
     assert result.n == 2
     assert result.mean == 2.0
 
 
-def test_a_segment_breakdown_works_from_stored_declarations(wave):
+def test_a_segment_breakdown_works_from_stored_declarations(deployment):
     """
     Grouped on the stored CODE, so a later rename of the option label cannot
     re-group a historical response.
     """
     for _ in range(3):
-        _respond(wave, _all_fours('BIT'), segment_values={'department': 'FIN'})
+        _respond(deployment, _all_fours('BIT'), segment_values={'department': 'FIN'})
     for _ in range(2):
-        _respond(wave, _all_fours('BIT'), segment_values={'department': 'OPS'})
-    _respond(wave, _all_fours('BIT'), segment_values={})
+        _respond(deployment, _all_fours('BIT'), segment_values={'department': 'OPS'})
+    _respond(deployment, _all_fours('BIT'), segment_values={})
     db.session.commit()
 
-    profiles = sc.load_profiles(db.session, [wave['deployment'].id])
+    profiles = sc.load_profiles(db.session, [deployment['deployment'].id])
     out = sc.segment_breakdown(profiles, ('BIT', 'T'), 'department', min_n=1)
 
     assert out['FIN'].n == 3
@@ -211,20 +211,20 @@ def test_a_segment_breakdown_works_from_stored_declarations(wave):
     assert out[None].n == 1
 
 
-def test_suppression_bites_on_real_rows_at_a_real_threshold(wave):
+def test_suppression_bites_on_real_rows_at_a_real_threshold(deployment):
     """
     Threshold 1 is the local default, so this passes 5 explicitly — otherwise
     the suppression path would never be exercised against the database at all.
     """
     for _ in range(3):
-        _respond(wave, _all_fours('BIT'), segment_values={'department': 'FIN'})
+        _respond(deployment, _all_fours('BIT'), segment_values={'department': 'FIN'})
     for _ in range(20):
-        _respond(wave, _all_fours('BIT'), segment_values={'department': 'OPS'})
+        _respond(deployment, _all_fours('BIT'), segment_values={'department': 'OPS'})
     for _ in range(20):
-        _respond(wave, _all_fours('BIT'), segment_values={'department': 'SALES'})
+        _respond(deployment, _all_fours('BIT'), segment_values={'department': 'SALES'})
     db.session.commit()
 
-    profiles = sc.load_profiles(db.session, [wave['deployment'].id])
+    profiles = sc.load_profiles(db.session, [deployment['deployment'].id])
     out = sc.segment_breakdown(profiles, ('BIT', 'T'), 'department', min_n=5)
 
     hidden = [v for v in out.values() if isinstance(v, sc.Suppressed)]
@@ -233,20 +233,20 @@ def test_suppression_bites_on_real_rows_at_a_real_threshold(wave):
     assert sum(v.n for v in hidden) >= 5
 
 
-def test_the_cycles_frozen_scoring_method_is_what_gets_used(wave):
+def test_the_cycles_frozen_scoring_method_is_what_gets_used(deployment):
     """
-    `measurement_cycles.scoring_method` is frozen per wave and printed in every
+    `measurement_cycles.scoring_method` is frozen per deployment and printed in every
     report. The loader must honour it rather than the module default, or the
     figure and the stated method disagree.
     """
     from app.domains import SUBDOMAINS
-    _respond(wave, {('TID', 'T'): [5, 5, 5, 5], ('TID', 'I'): [5, 5, 5, 5],
+    _respond(deployment, {('TID', 'T'): [5, 5, 5, 5], ('TID', 'I'): [5, 5, 5, 5],
                     ('TID', 'D'): [1, 1, None, None]})
     db.session.commit()
 
-    by_sub = sc.load_profiles(db.session, [wave['deployment'].id],
+    by_sub = sc.load_profiles(db.session, [deployment['deployment'].id],
                               method=sc.MEAN_OF_SUBDOMAINS)
-    by_item = sc.load_profiles(db.session, [wave['deployment'].id],
+    by_item = sc.load_profiles(db.session, [deployment['deployment'].id],
                                method=sc.MEAN_OF_ITEMS)
 
     assert math.isclose(by_sub[0].domain_scores['TID'], 11 / 3)

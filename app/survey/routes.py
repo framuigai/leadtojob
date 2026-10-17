@@ -32,7 +32,7 @@ created on the explicit "Begin" POST instead, because corporate mail security
 scanners and link previewers fetch every URL in an all-staff email: on GET, each
 one mints a session row. None of them would ever submit, so no reported figure
 would change — but the draft/abandonment counts would be mostly robots, and the
-first thing anyone asks about a wave is how many people started it.
+first thing anyone asks about a cycle is how many people started it.
 """
 import hashlib
 import secrets
@@ -52,14 +52,14 @@ from app.provisioning import (
 )
 from app.survey import survey_bp
 
-# 60 days. Long enough that a wave can run over a holiday; short enough that a
+# 60 days. Long enough that a cycle can run over a holiday; short enough that a
 # shared or kiosk browser does not hand someone else's draft to the next
 # person indefinitely.
 _RESUME_COOKIE_DAYS = 60
 
 
 def _resume_cookie_name(slug):
-    # Scoped per wave so two concurrent surveys cannot read each other's draft.
+    # Scoped per deployment so two concurrent surveys cannot read each other's draft.
     # The slug is already opaque, so the cookie name reveals nothing about the
     # employer or the respondent.
     return f'jsat_resume_{slug[:16]}'
@@ -73,13 +73,13 @@ def _load_open_deployment(slug):
     """
     Resolve a slug, or 404.
 
-    ONE RESPONSE FOR EVERY FAILURE MODE — unknown slug, archived wave, closed
-    wave, cycle not open. A probe must not be able to distinguish "no such
-    wave" from "wave not open yet": the difference confirms that a particular
+    ONE RESPONSE FOR EVERY FAILURE MODE — unknown slug, archived deployment, closed
+    deployment, cycle not open. A probe must not be able to distinguish "no such
+    deployment" from "deployment not open yet": the difference confirms that a particular
     organisation is running a satisfaction survey, which is information about
     that employer nobody outside needs.
 
-    The one exception is a wave that was open and has since closed, where the
+    The one exception is a deployment that was open and has since closed, where the
     respondent may well be a real employee following a real link. That gets its
     own explanatory page — see landing().
     """
@@ -173,7 +173,7 @@ def reporting_promise(min_n):
 
       min_n <= 1  there is no group. A "result" may be one person's answers,
                   and we say that in those words. This is the local testing
-                  setting; a real wave running at 1 has to mean it.
+                  setting; a real cycle running at 1 has to mean it.
     """
     if min_n >= 3:
         return 'group'
@@ -198,7 +198,7 @@ def landing(slug):
     cycle = db.session.get(MeasurementCycle, deployment.cycle_id)
 
     if not _is_live(deployment):
-        # A real employee following a real link after the wave closed. Say so,
+        # A real employee following a real link after the deployment closed. Say so,
         # rather than 404ing someone who did nothing wrong.
         return render_template('survey/closed.html'), 410
 

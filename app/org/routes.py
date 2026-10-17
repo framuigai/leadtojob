@@ -79,7 +79,7 @@ def _scoped(query, model):
 
     L3 also never sees org-wide (branch_id IS NULL) rows: those were created
     deliberately above the branch layer, and a branch admin seeing the whole
-    organisation's wave would defeat the point of the tier.
+    organisation's deployment would defeat the point of the tier.
     """
     query = query.filter(model.org_id == current_user.org_id)
     branch_ids = visible_branch_ids(current_user)
@@ -115,30 +115,51 @@ def dashboard():
     """
     deployments = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
         .filter(SurveyDeployment.archived_at.is_(None)).all()
-    open_waves = [d for d in deployments if not d.closed and d.deployed_at]
+    open_deployments = [d for d in deployments if not d.closed and d.deployed_at]
     responses = sum(d.responses_received for d in deployments)
     expected = sum(d.expected_respondents for d in deployments)
 
     cycles = _scoped(db.session.query(MeasurementCycle), MeasurementCycle) \
         .filter(MeasurementCycle.archived_at.is_(None)) \
-        .order_by(MeasurementCycle.created_at.desc()).limit(5).all()
+        .order_by(MeasurementCycle.created_at.desc()).all()
 
-    # The floor in force for this org, shown so the number on screen is never
-    # unexplained. Cycles may raise it; none may lower it.
-    thresholds = [c.min_reporting_n for c in cycles] or [5]
+    # ONE ROW PER CYCLE, carrying what an admin can act on. The same shape the
+    # sibling product's board uses, and the same state function the Reports
+    # screen uses — two screens disagreeing about whether a cycle is ready is
+    # a support call, and this product has already had one.
+    by_cycle = {}
+    for deployment in deployments:
+        by_cycle.setdefault(deployment.cycle_id, []).append(deployment)
+
+    rows = []
+    for cycle in cycles:
+        cycle_deployments = by_cycle.get(cycle.id, [])
+        cycle_responses = sum(d.responses_received for d in cycle_deployments)
+        cycle_expected = sum(d.expected_respondents for d in cycle_deployments)
+        rows.append({
+            'cycle': cycle,
+            'deployments': cycle_deployments,
+            'open': sum(1 for d in cycle_deployments
+                        if not d.closed and d.deployed_at),
+            'responses': cycle_responses,
+            'expected': cycle_expected,
+            'rate': (round(cycle_responses / cycle_expected * 100)
+                     if cycle_expected else None),
+            'state': _report_state(cycle, cycle_deployments, cycle_responses),
+        })
 
     return render_template(
         'org/dashboard.html',
         branch_scoped=is_branch_scoped(current_user),
-        gem_subdomains=[(domains.GEM, s) for s in domains.SUBDOMAINS[domains.GEM]],
+        rows=rows,
         stats={
+            'cycles': len(cycles),
             'responses': responses,
             'expected': expected,
             'rate': round(responses / expected * 100) if expected else None,
-            'open_waves': len(open_waves),
-            'min_n': min(thresholds),
+            'open_deployments': len(open_deployments),
+            'ready': sum(1 for r in rows if r['state']['key'] == 'ready'),
         },
-        cycles=cycles,
     )
 
 
@@ -252,21 +273,21 @@ def cycles_list():
     cycles = _scoped(db.session.query(MeasurementCycle), MeasurementCycle) \
         .filter(MeasurementCycle.archived_at.is_(None)) \
         .order_by(MeasurementCycle.created_at.desc()).all()
-    waves = dict(
+    deployments = dict(
         db.session.query(SurveyDeployment.cycle_id, func.count(SurveyDeployment.id))
         .filter(SurveyDeployment.org_id == current_user.org_id)
         .group_by(SurveyDeployment.cycle_id).all()
     )
-    return render_template('org/cycles.html', cycles=cycles, waves=waves)
+    return render_template('org/cycles.html', cycles=cycles, deployments=deployments)
 
 
 @org_bp.route('/cycles/new', methods=['GET', 'POST'])
 @require_capability(MANAGE_CYCLES)
 def cycle_new():
     """
-    Create a measurement wave.
+    Create a measurement cycle.
 
-    The cycle is a WAVE, not a person and not a position — the sibling
+    The cycle is a MEASUREMENT ROUND, not a person and not a position — the sibling
     products' cycles are both. "Employee Satisfaction Survey 2026 H1".
     """
     previous = _scoped(db.session.query(MeasurementCycle), MeasurementCycle) \
@@ -317,11 +338,11 @@ def cycle_new():
 @require_role_any(*_ORG_TIERS)
 def cycle_detail(cycle_id):
     cycle = _cycle_or_404(cycle_id)
-    waves = (db.session.query(SurveyDeployment)
+    deployments = (db.session.query(SurveyDeployment)
              .filter_by(cycle_id=cycle.id, org_id=current_user.org_id)
              .order_by(SurveyDeployment.deployed_at.desc().nullslast()).all())
-    return render_template('org/cycle_detail.html', cycle=cycle, waves=waves,
-                           responses=sum(w.responses_received for w in waves))
+    return render_template('org/cycle_detail.html', cycle=cycle, deployments=deployments,
+                           responses=sum(w.responses_received for w in deployments))
 
 
 @org_bp.route('/cycles/<cycle_id>/edit', methods=['GET', 'POST'])
@@ -333,10 +354,10 @@ def cycle_edit(cycle_id):
     TWO FIELDS FREEZE ONCE A RESPONSE EXISTS: `assessed_domains` and
     `scoring_method`.
 
-    Narrowing the domains mid-wave makes the two halves of one wave
+    Narrowing the domains mid-cycle makes the two halves of one cycle
     incomparable and breaks the trend section, which would rather refuse than
     plot a missing domain as a drop. Changing the scoring method silently
-    changes every figure already reported from this wave. Neither failure is
+    changes every figure already reported from this cycle. Neither failure is
     visible in the data afterwards, which is why they are blocked here rather
     than warned about.
     """
@@ -388,10 +409,10 @@ def cycle_status(cycle_id):
     """
     draft -> open -> closed. One direction only.
 
-    Reopening a closed wave is deliberately absent. The retention clock starts
-    at close (§13.8), a closed wave's figures have been reported, and letting
+    Reopening a closed cycle is deliberately absent. The retention clock starts
+    at close (§13.8), a closed cycle's figures have been reported, and letting
     new responses arrive afterwards changes a number somebody has already acted
-    on. Run a new wave and link it with `previous_cycle_id` instead — which is
+    on. Run a new cycle and link it with `previous_cycle_id` instead — which is
     also what makes it a trend rather than a revision.
     """
     cycle = _cycle_or_404(cycle_id)
@@ -401,7 +422,7 @@ def cycle_status(cycle_id):
     if target == 'open' and cycle.status == 'draft':
         if not _org_segments_ready():
             flash('Define at least one reporting segment with options, or '
-                  'deactivate them all, before opening a wave. Segments freeze '
+                  'deactivate them all, before opening a cycle. Segments freeze '
                   'on the first response.', 'error')
             return redirect(url_for('org.cycle_detail', cycle_id=cycle.id))
         cycle.status = 'open'
@@ -433,14 +454,14 @@ def cycle_archive(cycle_id):
     deleted, so its reports and cost events keep their parent.
     """
     cycle = _cycle_or_404(cycle_id)
-    waves = (db.session.query(SurveyDeployment)
+    deployments = (db.session.query(SurveyDeployment)
              .filter_by(cycle_id=cycle.id).count())
     cycle.archived_at = datetime.now(timezone.utc)
     cycle.archived_by = current_user.id
     record_audit(CYCLE_ARCHIVE, 'cycle', cycle.id,
                  f'Archived cycle {cycle.cycle_name}',
                  org_id=current_user.org_id, branch_id=cycle.branch_id,
-                 payload=cycle_payload(cycle, deployment_count=waves))
+                 payload=cycle_payload(cycle, deployment_count=deployments))
     db.session.commit()
     flash(f'Archived {cycle.cycle_name}.', 'success')
     return redirect(url_for('org.cycles_list'))
@@ -472,7 +493,7 @@ def _org_segments_ready():
 
     An active segment with no options is a dropdown with nothing in it on the
     survey form — and because segments freeze on the first response, it cannot
-    be fixed once the wave is running.
+    be fixed once the cycle is running.
     """
     segments = (db.session.query(Segment)
                 .filter_by(org_id=current_user.org_id, is_active=True).all())
@@ -541,8 +562,8 @@ def _validate_cycle(form, creating):
     # NOT NULL in the schema, and for a reason worth repeating at the point of
     # entry: specification §9.2 requires respondents be told the purpose, how
     # results will be used, and that there will be no retaliation, BEFORE the
-    # first question. This text is what the survey landing page renders. A wave
-    # that opens with nothing to say is the wave whose answers are not worth
+    # first question. This text is what the survey landing page renders. A cycle
+    # that opens with nothing to say is the cycle whose answers are not worth
     # having.
     if len(form['purpose_statement']) < 40:
         return ('Write a purpose statement of at least 40 characters. '
@@ -561,7 +582,7 @@ def _validate_cycle(form, creating):
         # the product degenerates into three unanchored scores.
         return (f'{domains.DOMAIN_LABELS[domains.OUTCOME_DOMAIN]} is the '
                 'outcome measure that the other domains are reported in '
-                'relation to. A wave without it cannot produce a diagnostic.')
+                'relation to. A cycle without it cannot produce a diagnostic.')
 
     floor = current_app.config['MIN_REPORTING_N']
     if form['min_reporting_n'] < floor:
@@ -608,7 +629,7 @@ def segment_detail(segment_id):
             # after responses exist silently re-groups answers given under the
             # old meaning, and the response rows themselves are unchanged, so
             # nothing in the data would ever reveal it.
-            flash('This segment is frozen: a wave has already collected '
+            flash('This segment is frozen: a cycle has already collected '
                   'responses against its options. Renaming one now would '
                   'silently re-group answers that were given under the old '
                   'meaning.', 'error')
@@ -722,7 +743,7 @@ def instrument():
 @org_bp.route('/deployments')
 @require_role_any(*_ORG_TIERS)
 def deployments_list():
-    """Every wave this user may see, newest first."""
+    """Every deployment this user may see, newest first."""
     deployments = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
         .filter(SurveyDeployment.archived_at.is_(None)) \
         .order_by(SurveyDeployment.deployed_at.desc().nullslast()).all()
@@ -738,23 +759,23 @@ def deployments_list():
 @require_capability(DEPLOY_SURVEYS)
 def deploy(cycle_id):
     """
-    Deploy a wave: ONE cycle, ONE audience, ONE anonymous link.
+    Deploy: ONE cycle, ONE audience, ONE anonymous link.
 
     The link is minted here and is the only way a respondent ever reaches the
     survey. `secrets.token_urlsafe(32)` gives ~256 bits — this is a bearer
     credential for a whole workforce's feedback, and an enumerable slug would
-    let anyone walk the space and read (or stuff) any client's open wave.
+    let anyone walk the space and read (or stuff) any client's open deployment.
 
     WHO MAY TARGET WHAT is the one deliberately non-cumulative rule in
     permissions.py: L2 deploys org-wide, L3 deploys to its own branch, and L2
-    does not originate a branch-targeted wave. Two tiers targeting one branch
-    produce two concurrent waves over one population, with no way to tell which
+    does not originate a branch-targeted deployment. Two tiers targeting one branch
+    produce two concurrent deployments over one population, with no way to tell which
     is authoritative and a response-rate denominator that means nothing.
     """
     cycle = _cycle_or_404(cycle_id)
 
     if cycle.status != 'open':
-        flash(f'{cycle.cycle_name} is {cycle.status}. Open the wave before '
+        flash(f'{cycle.cycle_name} is {cycle.status}. Open the cycle before '
               'deploying it — the link would otherwise be live before '
               'respondents have been told anything.', 'error')
         return redirect(url_for('org.cycle_detail', cycle_id=cycle.id))
@@ -773,7 +794,7 @@ def deploy(cycle_id):
         # A nicer error than the database's. uq_open_deployment is the real
         # guard — two admins pressing Deploy at once is a race this check
         # cannot win.
-        flash('This wave is already deployed for that audience.', 'error')
+        flash('This cycle is already deployed for that audience.', 'error')
         return redirect(url_for('org.deployment_detail',
                                 deployment_id=existing.id))
 
@@ -812,7 +833,7 @@ def deploy(cycle_id):
                      org_id=current_user.org_id, branch_id=branch_id,
                      payload=deployment_payload(deployment))
         db.session.commit()
-        flash('The wave is live. Copy the link below — it is the only way in, '
+        flash('The deployment is live. Copy the link below — it is the only way in, '
               'and it is not recoverable from anywhere else.', 'success')
         return redirect(url_for('org.deployment_detail',
                                 deployment_id=deployment.id))
@@ -862,11 +883,11 @@ def issue_tickets(deployment_id):
     """
     deployment = _deployment_or_404(deployment_id)
     if deployment.delivery_mode != 'ticketed':
-        flash('This wave uses an open link; it has no tickets.', 'error')
+        flash('This cycle uses an open link; it has no tickets.', 'error')
         return redirect(url_for('org.deployment_detail',
                                 deployment_id=deployment.id))
     if deployment.closed:
-        flash('This wave is closed.', 'error')
+        flash('This cycle is closed.', 'error')
         return redirect(url_for('org.deployment_detail',
                                 deployment_id=deployment.id))
 
@@ -901,9 +922,9 @@ def issue_tickets(deployment_id):
 @require_capability(EDIT_DEPLOYMENT)
 def deployment_close(deployment_id):
     """
-    Close a wave. The link dies immediately.
+    Close a cycle. The link dies immediately.
 
-    Deliberately one-way, like the cycle status. A reopened wave accepts
+    Deliberately one-way, like the cycle status. A reopened cycle accepts
     responses after its figures have been reported, and the whole point of the
     retention clock is that it starts somewhere definite.
     """
@@ -915,7 +936,7 @@ def deployment_close(deployment_id):
 
     deployment.closed = True
     record_audit(DEPLOYMENT_CLOSE, 'deployment', deployment.id,
-                 f'Closed the wave ({deployment.responses_received} responses)',
+                 f'Closed the cycle ({deployment.responses_received} responses)',
                  org_id=deployment.org_id, branch_id=deployment.branch_id,
                  payload=deployment_payload(deployment))
     db.session.commit()
@@ -943,10 +964,14 @@ def reports():
     THREE STATES, NOT TWO — trainiq's compute_impact_missing pattern with one
     addition:
 
-        not deployed          -> deploy the wave
+        not deployed          -> deploy the cycle
         awaiting responses    -> wait, or chase participation
         below the threshold   -> n is under the reporting threshold, and no
                                  amount of waiting fixes it
+
+    A cycle that is still collecting is READY, and its reports are marked
+    provisional. Waiting for a close was this product's own invention and
+    neither sibling does it.
 
     They need different actions, which is why they are not collapsed into
     "unavailable". The third is specific to this product and is NOT A FAILURE:
@@ -959,52 +984,53 @@ def reports():
 
     rows = []
     for cycle in cycles:
-        waves = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
+        deployments = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
             .filter(SurveyDeployment.cycle_id == cycle.id) \
             .filter(SurveyDeployment.archived_at.is_(None)).all()
-        responses = sum(w.responses_received for w in waves)
+        responses = sum(w.responses_received for w in deployments)
         rows.append({
             'cycle': cycle,
-            'waves': waves,
+            'deployments': deployments,
             'responses': responses,
-            'expected': sum(w.expected_respondents for w in waves),
-            'state': _report_state(cycle, waves, responses),
+            'expected': sum(w.expected_respondents for w in deployments),
+            'state': _report_state(cycle, deployments, responses),
         })
 
     return render_template('org/reports.html', rows=rows,
                            branch_scoped=is_branch_scoped(current_user))
 
 
-def _report_state(cycle, waves, responses):
+def _report_state(cycle, deployments, responses):
     """
     What this cycle is waiting for, as a state and a sentence.
 
     The sentence is the point. "Unavailable" tells an admin nothing; "needs 3
-    more responses" and "deploy the wave" are different jobs, and the third
+    more responses" and "deploy the cycle" are different jobs, and the third
     state is not a job at all.
+
+    `provisional` is set on a ready cycle that is still collecting. It is a
+    qualification on the report, not a state of its own: the reports are
+    generatable either way.
     """
-    if not waves:
-        return {'key': 'not_deployed',
-                'needs': 'not deployed yet — deploy the wave to collect responses'}
+    if not deployments:
+        return {'key': 'not_deployed', 'provisional': False,
+                'needs': 'not deployed yet — deploy the cycle to collect responses'}
 
     if responses < cycle.min_reporting_n:
         shortfall = cycle.min_reporting_n - responses
-        return {'key': 'below_threshold',
+        return {'key': 'below_threshold', 'provisional': False,
                 'needs': (f'{responses} of the {cycle.min_reporting_n} responses '
                           f'needed before any result can be shown — '
                           f'{shortfall} more')}
 
-    if any(not w.closed for w in waves):
-        # Reportable, but still collecting. Phase 8 generates reports from a
-        # CLOSED wave: two reports of the same group at different n give up
-        # the difference between them by subtraction, and no amount of
-        # in-report suppression prevents that.
-        return {'key': 'open',
-                'needs': ('still collecting — close the wave to generate a '
-                          'report, so the figures cannot shift underneath one '
-                          'that has already been read')}
-
-    return {'key': 'ready', 'needs': None}
+    # STILL COLLECTING IS NOT A BLOCK. It was, and it made this product
+    # disagree with its two siblings, which gate on responses and never on
+    # deployment state. An open cycle is reportable and the report is stamped
+    # PROVISIONAL on its cover — the honest treatment of a figure that will
+    # move, rather than withholding numbers the client can already see on the
+    # analysis screen.
+    return {'key': 'ready', 'needs': None,
+            'provisional': any(not w.closed for w in deployments)}
 
 
 @org_bp.route('/cycles/<cycle_id>/analysis')
@@ -1018,12 +1044,12 @@ def analysis(cycle_id):
     caveat from the result object itself rather than from this template.
     """
     cycle = _cycle_or_404(cycle_id)
-    waves = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
+    deployments = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
         .filter(SurveyDeployment.cycle_id == cycle.id) \
         .filter(SurveyDeployment.archived_at.is_(None)).all()
 
     profiles = scoring.load_profiles(
-        db.session, [w.id for w in waves], method=cycle.scoring_method)
+        db.session, [w.id for w in deployments], method=cycle.scoring_method)
 
     min_n = cycle.min_reporting_n
     outcome_results = [
@@ -1046,7 +1072,7 @@ def analysis(cycle_id):
             profiles, (domains.GEM, 'G'), segment, min_reporting_n=min_n))
 
     return render_template(
-        'org/analysis.html', cycle=cycle, waves=waves,
+        'org/analysis.html', cycle=cycle, deployments=deployments,
         respondents=len(profiles),
         outcome_results=outcome_results,
         diagnostic_results=diagnostic_results,
@@ -1067,27 +1093,27 @@ def _report_inputs(cycle, scope_branch=None):
     are filtered on the SESSION's branch_id — the branch recorded when the
     response was given — not on anything declared later.
     """
-    waves = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
+    deployments = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
         .filter(SurveyDeployment.cycle_id == cycle.id) \
         .filter(SurveyDeployment.archived_at.is_(None)).all()
     if scope_branch is not None:
-        waves = [w for w in waves if w.branch_id == scope_branch.id]
+        deployments = [w for w in deployments if w.branch_id == scope_branch.id]
 
     profiles = scoring.load_profiles(
-        db.session, [w.id for w in waves], method=cycle.scoring_method)
+        db.session, [w.id for w in deployments], method=cycle.scoring_method)
 
     previous = None
     if cycle.previous_cycle_id:
         earlier = db.session.get(MeasurementCycle, cycle.previous_cycle_id)
         if earlier is not None and earlier.org_id == cycle.org_id:
-            earlier_waves = (db.session.query(SurveyDeployment)
+            earlier_deployments = (db.session.query(SurveyDeployment)
                              .filter_by(cycle_id=earlier.id, org_id=cycle.org_id)
                              .filter(SurveyDeployment.archived_at.is_(None)).all())
             if scope_branch is not None:
-                earlier_waves = [w for w in earlier_waves
+                earlier_deployments = [w for w in earlier_deployments
                                  if w.branch_id == scope_branch.id]
             earlier_profiles = scoring.load_profiles(
-                db.session, [w.id for w in earlier_waves],
+                db.session, [w.id for w in earlier_deployments],
                 method=earlier.scoring_method)
             if earlier_profiles:
                 previous = (earlier_profiles,
@@ -1097,15 +1123,15 @@ def _report_inputs(cycle, scope_branch=None):
     actions = (db.session.query(ImprovementActions)
                .filter_by(org_id=cycle.org_id, cycle_id=cycle.id).all())
 
-    return waves, profiles, previous, actions
+    return deployments, profiles, previous, actions
 
 
 def _build_report(cycle, report_type, scope_branch=None, with_charts=True):
     """Gate, then build the shared context. Raises ReportNotAvailable."""
-    waves, profiles, previous, actions = _report_inputs(cycle, scope_branch)
+    deployments, profiles, previous, actions = _report_inputs(cycle, scope_branch)
     scope_label = scope_branch.name if scope_branch else 'Whole organisation'
 
-    report_builder.require_reportable(report_type, cycle, waves, profiles, scope_label)
+    report_builder.require_reportable(report_type, cycle, deployments, profiles, scope_label)
 
     analysis_row = (db.session.query(Analysis)
                     .filter_by(org_id=cycle.org_id, cycle_id=cycle.id,
@@ -1117,12 +1143,18 @@ def _build_report(cycle, report_type, scope_branch=None, with_charts=True):
     context = report_builder.build_context(
         report_type=report_type,
         org=db.session.get(Org, cycle.org_id),
-        cycle=cycle, deployments=waves, profiles=profiles,
+        cycle=cycle, deployments=deployments, profiles=profiles,
         branch=scope_branch, scope_label=scope_label,
         segments=active_segments(cycle.org_id),
         previous=previous, improvement_actions=actions,
         narrative=(analysis_row.payload if analysis_row else None),
     )
+    # The courses. Attached through the SHARED helper rather than inline, so
+    # this builder and the L1 board's assemble() cannot disagree about what a
+    # report recommends - they did, and the client-facing one was the one
+    # missing them.
+    report_builder.attach_catalogue(db.session, context)
+
     if with_charts:
         report_builder.add_charts(context)
     return context
@@ -1231,7 +1263,7 @@ def report_interpret(cycle_id, report_type):
     """
     MANUAL TRIGGER ONLY. One human, one button, one report.
 
-    Never auto-dispatched when a response threshold is crossed: a wave that
+    Never auto-dispatched when a response threshold is crossed: a cycle that
     fills up overnight must not spend money, or write a characterisation of a
     workforce's morale, while nobody is watching.
     """
@@ -1246,6 +1278,19 @@ def report_interpret(cycle_id, report_type):
                                 with_charts=False)
     except report_builder.ReportNotAvailable as exc:
         flash(str(exc), 'error')
+        return redirect(url_for('org.report_preview', cycle_id=cycle.id,
+                                report_type=report_type))
+
+    if context['provisional']:
+        # The ONE thing an open cycle does not get. A narrative is a confident
+        # sentence about a finding that may reverse next week, and it is the
+        # text that gets quoted in a board paper long after the n it rested on
+        # has been forgotten. Figures may be read early; prose may not.
+        flash('This cycle is still collecting, so its figures will move. An '
+              'interpretation is written once, read as settled and quoted '
+              'later, so it is generated only after the cycle closes. The '
+              'reports themselves are available now, marked provisional.',
+              'error')
         return redirect(url_for('org.report_preview', cycle_id=cycle.id,
                                 report_type=report_type))
 
@@ -1295,7 +1340,7 @@ def report_interpret(cycle_id, report_type):
 # §16 asks the system to measure organisational value, including "completion of
 # agreed improvement actions", and §12.3 ends the Management Report with
 # "follow-up commitments and progress monitoring". Neither can be rendered from
-# survey rows: both need state that persists BETWEEN waves.
+# survey rows: both need state that persists BETWEEN cycles.
 #
 # Without this the product is a score generator, which §16's closing sentence
 # says it is not: "The system's value lies in enabling a more disciplined

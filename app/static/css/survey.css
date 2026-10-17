@@ -11,7 +11,7 @@
    where restraint matters.
 
    No web fonts and no external requests of any kind: a font fetch from this
-   page would hand the respondent's IP and the wave's URL to a third party.
+   page would hand the respondent's IP and the deployment's URL to a third party.
 
    Everything here is prefixed .sv- so the two files can never collide.
    ─────────────────────────────────────────────────────────────────────────── */

@@ -44,8 +44,8 @@ group computed at n=5 and n=6 give up respondent 6's entire profile by
 subtraction, and no amount of in-report suppression prevents that.
 
 The mitigation is a policy, not arithmetic: reports are generated from a CLOSED
-wave, and every result carries the `n` it was computed at so a report can state
-it. `GroupResult.n` exists for that reason. Phase 8 enforces the closed-wave
+cycle, and every result carries the `n` it was computed at so a report can state
+it. `GroupResult.n` exists for that reason. Phase 8 enforces the closed-cycle
 rule at the point of report generation.
 """
 import math
@@ -254,7 +254,7 @@ def item_value(answer):
     the 48 supplied items is currently reverse-worded. Pilot validation (§15)
     is the likeliest reason to introduce one, and retrofitting a reverse flag
     through the ladder after real data exists silently flips a subdomain for
-    every historical wave.
+    every historical cycle.
     """
     if answer.not_applicable or answer.score is None:
         return None
@@ -555,32 +555,25 @@ def gem_composite(*_args, **_kwargs):
         'Expectations - to be reported SEPARATELY, because they are related '
         'but not interchangeable: an employee may consider the job a good fit '
         'and still experience frequent frustration. A composite may only be '
-        'introduced once pilot validation supports its interpretation (§15), '
-        'and the Validation Report is what would recommend it.'
+        'introduced once pilot validation supports its interpretation (§15).'
     )
 
 
 def band(*_args, **_kwargs):
     """
-    ALWAYS RAISES while domains.BANDS_VALIDATED is False.
+    ALWAYS RAISES. This instrument has no score bands.
 
     Spec §10.5: "Universal score bands should not be treated as validated
     merely because the scale ranges from 1 to 5." Same reasoning as
     gem_composite: a `if score > 4: return 'Strength'` is one line and looks
     harmless, and both sibling products have exactly that function.
     """
-    if not domains.BANDS_VALIDATED:
-        raise ScoringError(
-            'Score bands are not validated for this instrument. '
-            'Specification §10.5 requires labels such as low, moderate or '
-            'high to be developed through pilot evidence and psychometric '
-            'evaluation first. Report the score, the distribution and the '
-            'comparison instead; colour encodes the response anchors, never a '
-            'judgement of the score.'
-        )
     raise ScoringError(
-        'BANDS_VALIDATED is True but no band table has been seeded from pilot '
-        'evidence. Do not guess the thresholds.'
+        'Score bands are not available for this instrument. Specification '
+        '§10.5 requires labels such as low, moderate or high to be developed '
+        'through pilot evidence and psychometric evaluation first. Report the '
+        'score, the distribution and the comparison instead; colour encodes '
+        'the response anchors, never a judgement of the score.'
     )
 
 

@@ -442,7 +442,7 @@ body {
 }
 
 /* Status-pill colours.
-   NOTE these describe an OPERATIONAL state — a wave open / a cycle closed / an
+   NOTE these describe an OPERATIONAL state — a deployment open / a cycle closed / an
    organisation overdue for a measurement. They NEVER encode a satisfaction
    score. Score bands are not validated for this instrument (specification
    §10.5), so no result is ever coloured green-is-good / red-is-bad. Scores are
@@ -1385,6 +1385,190 @@ a.group-card-title:hover { color: var(--blue); }
 .audit-actor { font-size: .875rem; }
 .audit-role { color: var(--text-muted); font-size: .8rem; margin-top: .1rem; }
 .table .cell-sub { color: var(--text-muted); }
+
+
+/* ── Org status board cells ─────────────────────────────────── */
+.org-cell { display: flex; align-items: center; gap: .75rem; }
+.org-avatar {
+    width: 2.1rem;
+    height: 2.1rem;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background: var(--blue);
+    color: #fff;
+    font-weight: 700;
+    font-size: .9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.org-cell .muted { font-size: .8rem; margin-top: .1rem; }
+.domain-chip {
+    display: inline-block;
+    padding: .22rem .6rem;
+    margin: .1rem .15rem .1rem 0;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: #f7f8fb;
+    font-size: .75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.domain-chip-more { background: var(--blue-light); color: var(--blue); border-color: var(--blue-light); }
+.filter-field-wide { flex: 1 1 16rem; }
+.panel-foot {
+    padding: .7rem 1.25rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: .8rem;
+}
+
+
+
+/* ── Reports board ──────────────────────────────────────────
+   A collapsible card per cycle, its three reports inside. The toolbar and the
+   toggle are shared with any other board that groups rows this way. */
+.org-meta {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    flex-wrap: wrap;
+    margin-top: .6rem;
+    color: var(--text-muted);
+    font-size: .85rem;
+}
+.report-breakdown {
+    color: var(--text-muted);
+    font-size: .85rem;
+    margin: -.35rem 0 0;
+}
+.report-breakdown span { color: var(--text); font-weight: 600; }
+.reports-section-label { margin-top: 2rem; }
+.reports-org-name {
+    font-weight: 700;
+    color: var(--navy);
+    font-size: .95rem;
+    margin: 1.5rem 0 .6rem;
+}
+.board-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 0 0 .9rem;
+}
+
+.cycle-card { margin-bottom: .9rem; transition: box-shadow .15s; }
+.cycle-card.is-open { box-shadow: var(--shadow-md, 0 4px 14px rgba(16,24,40,.08)); }
+.cycle-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.1rem 1.25rem;
+    flex-wrap: wrap;
+}
+.cycle-title-row { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+.cycle-title-row + .cycle-title-row { margin-top: .4rem; }
+.cycle-title-row strong { font-size: 1.05rem; color: var(--navy); }
+.cycle-title-row .muted { font-size: .8rem; }
+
+.cycle-metrics { display: flex; align-items: center; gap: 1.75rem; flex-wrap: wrap; }
+.cycle-metric { text-align: center; }
+.cycle-metric-val { font-weight: 700; font-size: 1rem; color: var(--navy); }
+.cycle-metric-label {
+    font-size: .65rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-muted);
+    margin-top: .15rem;
+}
+.collapse-toggle {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    width: 2rem;
+    height: 2rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background .15s, color .15s, transform .15s;
+}
+.collapse-toggle:hover { background: var(--blue-faint); color: var(--navy); }
+.cycle-card.is-open .collapse-toggle { transform: rotate(180deg); }
+
+.cycle-body { border-top: 1px solid var(--border); }
+.report-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: .85rem 1.25rem;
+    border-bottom: 1px solid var(--border-light);
+    flex-wrap: wrap;
+}
+.report-row:last-child { border-bottom: none; }
+.report-row:nth-child(odd) { background: #fbfcfe; }
+.report-row-name { font-weight: 600; color: var(--navy); font-size: .9rem; }
+.report-row-name.muted { font-weight: 400; }
+.report-row-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+
+/* ── Setup wizard steps ──────────────────────────────────────
+   Markers, not links. The org is a resumable draft from step 1, so progress
+   is real state in the database rather than something the bar remembers. */
+.wizard-steps {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+.wizard-step { display: flex; align-items: center; gap: .55rem; }
+.wizard-step-num {
+    width: 1.6rem;
+    height: 1.6rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .8rem;
+    font-weight: 700;
+    background: #eef0f4;
+    color: var(--text-subtle);
+}
+.wizard-step-label { font-size: .9rem; color: var(--text-muted); }
+.wizard-step.is-current .wizard-step-num { background: var(--orange); color: #fff; }
+.wizard-step.is-current .wizard-step-label { color: var(--orange); font-weight: 700; }
+.wizard-step.is-done .wizard-step-num { background: var(--navy); color: #fff; }
+.wizard-step.is-done .wizard-step-label { color: var(--navy); font-weight: 600; }
+.wizard-arrow { color: var(--text-subtle); font-size: .95rem; }
+.wizard-actions {
+    display: flex;
+    gap: .625rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 1.25rem;
+}
+.domain-choice {
+    display: flex;
+    gap: .6rem;
+    align-items: flex-start;
+    padding: .7rem .9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: .5rem;
+}
+.domain-choice input { margin-top: .2rem; }
+.domain-choice-name { font-weight: 600; color: var(--navy); font-size: .9rem; }
+.domain-choice-note { color: var(--text-muted); font-size: .8rem; margin-top: .1rem; }
+.domain-choice.is-fixed { background: #fbfcfe; }
 
 /* ── Table overflow ──────────────────────────────────────────────────────
    A data table inside a column that can be narrower than its content must

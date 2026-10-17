@@ -1,10 +1,14 @@
 {% extends "base.html" %}
 {% block title %}New administrator - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
 {% block content %}
 <div class="page-header"><div class="page-header-left">
   <div class="section-label">Master Admin / {{ org.name }}</div>
   <h1>New {{ role_label(role) }}</h1>
 </div></div>
+
+{% if wizard_step %}{% include "admin/_wizard_steps.html" %}{% endif %}
+
 <div class="panel"><div class="panel-body">
   <p class="panel-note">
     The password is set here and shown to nobody afterwards. Pass it to the

@@ -185,7 +185,7 @@ def test_a_clone_is_independent_of_the_master(db):
     """
     THE POINT OF CLONING AT ALL.
 
-    A client's instrument is evidence: once a wave has run, "what did this
+    A client's instrument is evidence: once a deployment has run, "what did this
     question say?" has exactly one correct answer. Editing the master must
     never reach an org that already cloned it, or 300 people's answers silently
     become answers to a different question.

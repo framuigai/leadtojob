@@ -2,14 +2,41 @@
 {% block title %}Reports - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
+
+{% if single_org %}
+<a class="back-link" href="{{ url_for('admin.dashboard') }}">&larr; All organisations</a>
 <div class="page-header"><div class="page-header-left">
-  <div class="section-label">Master Admin</div>
+  <div class="section-label">Master Admin &middot; Read-only</div>
+  <h1>{{ single_org.org.name }}</h1>
+  <div class="org-meta">
+    <span class="status-pill status-{{ 'green' if single_org.org.is_active else 'suppressed' }}">
+      {{ 'Active' if single_org.org.is_active else 'Inactive' }}</span>
+    {% if single_org.org.industry %}<span>{{ single_org.org.industry }}</span>{% endif %}
+    <span>Created {{ single_org.org.created_at.strftime('%d %b %Y') if single_org.org.created_at else '-' }}</span>
+    <span>{{ single_org.branches }} branch{{ '' if single_org.branches == 1 else 'es' }}</span>
+  </div>
+</div></div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-val">{{ single_org.cycles|length }}</div>
+    <div class="stat-label">Cycles</div></div>
+  <div class="stat-card"><div class="stat-val">{{ single_org.deployments }}</div>
+    <div class="stat-label">Deployments</div></div>
+  <div class="stat-card"><div class="stat-val">{{ single_org.responses }}</div>
+    <div class="stat-label">Responses</div></div>
+  <div class="stat-card"><div class="stat-val">{{ single_org.narratives }}</div>
+    <div class="stat-label">Interpretations</div></div>
+  <div class="stat-card"><div class="stat-val">{{ single_org.downloads }}</div>
+    <div class="stat-label">Report downloads</div></div>
+</div>
+<p class="report-breakdown">Report breakdown &mdash;
+  <span>{{ single_org.pdf }} PDF</span> &middot;
+  <span>{{ single_org.excel }} Excel</span></p>
+
+{% else %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin &middot; Read-only</div>
   <h1>Reports</h1>
-  <p class="muted">
-    Every client's measurement waves, grouped by organisation. Read-only:
-    reports are opened and downloaded here, never written. Each download is
-    recorded in the audit log.
-  </p>
 </div></div>
 
 <div class="stats-row">
@@ -22,75 +49,135 @@
   <div class="stat-card"><div class="stat-val">{{ totals.responses }}</div>
     <div class="stat-label">Responses</div></div>
 </div>
+{% endif %}
 
-{% for row in rows %}
-<div class="panel">
-  <div class="panel-head">
-    <div class="panel-title">{{ row.org.name }}</div>
-    <a href="{{ url_for('admin.org_detail', org_id=row.org.id) }}"
-       class="btn btn-sm btn-secondary">Organisation</a>
-  </div>
-  <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Cycle</th><th class="num">Responses</th>
-        <th>Threshold</th><th>Status</th><th>Reports</th></tr></thead>
-      <tbody>
-      {% for entry in row.cycles %}
-        <tr>
-          <td><strong>{{ entry.cycle.cycle_name }}</strong><br>
-            <code class="muted">{{ entry.cycle.id }}</code>
-            {% if entry.cycle.is_pilot %}
-            <span class="badge badge-outline">pilot</span>{% endif %}</td>
-          <td class="num">{{ entry.responses }}
-            {%- if entry.expected %} / {{ entry.expected }}{% endif %}</td>
-          <td>n &ge; {{ entry.cycle.min_reporting_n }}</td>
-          <td>
-            <span class="status-pill status-{{ 'green' if entry.state.key == 'ready'
-                else 'suppressed' if entry.state.key == 'below_threshold'
-                else 'amber' }}">
-              {% if entry.state.key == 'ready' %}ready
-              {% elif entry.state.key == 'below_threshold' %}below threshold
-              {% elif entry.state.key == 'open' %}collecting
-              {% else %}not deployed{% endif %}
-            </span>
-            {% if entry.state.needs %}<br>
-            <span class="muted">{{ entry.state.needs }}</span>{% endif %}
-          </td>
-          <td class="row-actions">
-            {% if entry.state.key == 'ready' %}
-              {% for report_type in report_types %}
-              <a href="{{ url_for('admin.org_report', org_id=row.org.id,
-                                  cycle_id=entry.cycle.id,
-                                  report_type=report_type) }}"
-                 class="btn btn-sm btn-secondary">
-                {{ report_title(report_type).replace(' Report', '')
-                                            .replace('HR and Organisational Development',
-                                                     'HR &amp; OD') | safe }}
-                {%- if report_type in entry.narrated %} &middot;
-                <span class="muted">interpreted</span>{% endif %}
-              </a>
-              {% endfor %}
-            {% else %}
-              <span class="muted">&mdash;</span>
-            {% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+{% if rows %}
+<div class="section-label reports-section-label">Reports by cycle</div>
+<div class="board-toolbar">
+  <span class="muted">{{ totals.cycles }} cycle{{ '' if totals.cycles == 1 else 's' }} &middot; read-only</span>
+  <div class="page-actions">
+    <button type="button" class="btn btn-sm btn-secondary" data-expand-all>Expand All</button>
+    <button type="button" class="btn btn-sm btn-secondary" data-collapse-all>Collapse All</button>
   </div>
 </div>
+{% endif %}
+
+{% for row in rows %}
+  {% if not single_org %}
+  <div class="reports-org-name">{{ row.org.name }}</div>
+  {% endif %}
+
+  {% for entry in row.cycles %}
+  <div class="panel cycle-card" data-collapsible>
+    <div class="cycle-head">
+      <div class="cycle-identity">
+        <div class="cycle-title-row">
+          <span class="badge badge-orange">
+            {{ 'Branch' if entry.cycle.branch_id else 'Organisation-wide' }}</span>
+          <strong>{{ entry.cycle.cycle_name }}</strong>
+        </div>
+        <div class="cycle-title-row">
+          <span class="status-pill status-{{ 'amber' if entry.state.provisional
+              else 'green' if entry.state.key == 'ready'
+              else 'suppressed' if entry.state.key == 'below_threshold'
+              else 'amber' }}">
+            {% if entry.state.key == 'ready' %}{{ 'provisional' if entry.state.provisional else 'ready' }}
+            {% elif entry.state.key == 'below_threshold' %}below threshold
+            {% else %}not deployed{% endif %}
+          </span>
+          <code class="muted">{{ entry.cycle.id }}</code>
+          <span class="muted">n &ge; {{ entry.cycle.min_reporting_n }}</span>
+          {% if entry.cycle.is_pilot %}<span class="badge badge-outline">pilot</span>{% endif %}
+        </div>
+      </div>
+      <div class="cycle-metrics">
+        <div class="cycle-metric"><div class="cycle-metric-val">{{ entry.deployments|length }}</div>
+          <div class="cycle-metric-label">Deployments</div></div>
+        <div class="cycle-metric"><div class="cycle-metric-val">{{ entry.responses }}</div>
+          <div class="cycle-metric-label">Responses</div></div>
+        <div class="cycle-metric"><div class="cycle-metric-val">{{ entry.narrated|length }}</div>
+          <div class="cycle-metric-label">Interpreted</div></div>
+        <button type="button" class="collapse-toggle" data-toggle
+                aria-expanded="false" aria-label="Show reports">&#9662;</button>
+      </div>
+    </div>
+
+    <div class="cycle-body" hidden>
+      {% if entry.state.key == 'ready' %}
+        {% if entry.state.provisional %}
+        <div class="report-row">
+          <div class="report-row-name muted">
+            Still collecting &mdash; these reports are generated as provisional
+            and say so on their cover. No interpretation until the cycle closes.
+          </div>
+        </div>
+        {% endif %}
+        {% for report_type in report_types %}
+        <div class="report-row">
+          <div class="report-row-name">{{ report_title(report_type) }}
+            {% if report_type in entry.narrated %}
+            <span class="badge badge-ai">interpreted</span>{% endif %}
+          </div>
+          <div class="report-row-actions">
+            <a class="btn btn-sm btn-primary"
+               href="{{ url_for('admin.org_report', org_id=row.org.id,
+                                cycle_id=entry.cycle.id,
+                                report_type=report_type) }}">More info</a>
+            <a class="btn btn-sm btn-secondary"
+               href="{{ url_for('admin.org_report_download', org_id=row.org.id,
+                                cycle_id=entry.cycle.id,
+                                report_type=report_type, fmt='pdf') }}">PDF</a>
+            <a class="btn btn-sm btn-secondary"
+               href="{{ url_for('admin.org_report_download', org_id=row.org.id,
+                                cycle_id=entry.cycle.id,
+                                report_type=report_type, fmt='xlsx') }}">Excel</a>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="report-row">
+          <div class="report-row-name muted">
+            No report yet{% if entry.state.needs %} &mdash; {{ entry.state.needs }}{% endif %}.
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
 {% else %}
 <div class="empty-state">
   <div class="empty-icon">&mdash;</div>
   <h2>No client organisations yet</h2>
-  <p>Reports appear here once a client has run a measurement wave.</p>
+  <p>Reports appear here once a client has run a measurement cycle.</p>
 </div>
 {% endfor %}
 
-<p class="muted">
-  A wave below its reporting threshold produces no report at all, and no amount
-  of waiting changes that &mdash; it is the threshold working as designed, not a
-  fault to clear.
-</p>
+<script>
+(function () {
+    'use strict';
+    function setOpen(card, open) {
+        var body = card.querySelector('.cycle-body');
+        var btn = card.querySelector('[data-toggle]');
+        if (!body || !btn) { return; }
+        body.hidden = !open;
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        card.classList.toggle('is-open', open);
+    }
+    function all(open) {
+        Array.prototype.forEach.call(
+            document.querySelectorAll('[data-collapsible]'),
+            function (card) { setOpen(card, open); });
+    }
+    document.addEventListener('click', function (e) {
+        var toggle = e.target.closest('[data-toggle]');
+        if (toggle) {
+            var card = toggle.closest('[data-collapsible]');
+            setOpen(card, card.querySelector('.cycle-body').hidden);
+            return;
+        }
+        if (e.target.closest('[data-expand-all]')) { all(true); }
+        if (e.target.closest('[data-collapse-all]')) { all(false); }
+    });
+}());
+</script>
 {% endblock %}

@@ -6,7 +6,7 @@
   <div class="page-header-left">
     <div class="section-label">{{ role_label(current_user.role) }}</div>
     <h1>Measurement Cycles</h1>
-    <p class="muted">A cycle is a measurement wave - "Employee Satisfaction
+    <p class="muted">A cycle is one measurement round - "Employee Satisfaction
       Survey 2026 H1" - not a person and not a position.</p>
   </div>
   <div class="page-actions">
@@ -19,7 +19,7 @@
 <div class="panel"><div class="table-scroll">
   <table class="table">
     <thead><tr><th>Reference</th><th>Name</th><th>Domains</th><th>Status</th>
-      <th class="num">Waves</th><th>Threshold</th><th>Retention</th><th></th></tr></thead>
+      <th class="num">Deployments</th><th>Threshold</th><th>Retention</th><th></th></tr></thead>
     <tbody>
     {% for c in cycles %}
       <tr>
@@ -31,7 +31,7 @@
         <td>{{ (c.assessed_domains or [])|length }} of 4</td>
         <td><span class="status-pill status-{{ 'green' if c.status == 'open'
              else 'amber' if c.status == 'draft' else 'red' }}">{{ c.status }}</span></td>
-        <td class="num">{{ waves.get(c.id, 0) }}</td>
+        <td class="num">{{ deployments.get(c.id, 0) }}</td>
         <td>n &ge; {{ c.min_reporting_n }}</td>
         <td>{{ c.retention_months }} months</td>
         <td class="row-actions">

@@ -17,7 +17,7 @@ What must not leak is different, and narrower:
   * no `item_code`, `subdomain_code` or `domain_code` on the ANONYMOUS SURVEY
     FORM — the respondent must not be able to infer which construct an item
     serves, and nothing on that page carries leadTo chrome (plan §8);
-  * no band or verdict label anywhere while BANDS_VALIDATED is False (§10.5);
+  * no band or verdict label anywhere (§10.5);
   * `Daunting` never rendered or narrated as pressure, overload or stress
     (§6.4).
 
@@ -301,19 +301,15 @@ def anchor_label_map(anchor_type: str) -> dict:
 # So while this is False — v1, and until the §15 pilot produces evidence:
 #
 #   * reports show score + distribution + comparison to the org mean and to the
-#     previous wave, and NO word like Low / Moderate / High / Critical / Gap;
+#     previous cycle, and NO word like Low / Moderate / High / Critical / Gap;
 #   * colour encodes the RESPONSE CATEGORY (the 1-5 anchors, on a diverging
 #     unfavourable-to-favourable ramp), never a judgement of the score. This
 #     keeps the visual language of the sibling products while refusing the one
 #     thing the spec forbids;
-#   * the eye is directed at RELATIVE comparison — this group vs org, this wave
+#   * the eye is directed at RELATIVE comparison — this group vs org, this cycle
 #     vs last — because relative statements are defensible before validation
 #     and absolute ones are not.
 #
-# Flipping this to True turns on a band table seeded FROM THAT EVIDENCE. Build
-# the switch; do not guess the thresholds.
-BANDS_VALIDATED = False
-
 BANDS_DEFERRED_NOTE = (
     'Score bands have not been validated for this instrument. Results are '
     'presented as scores and response distributions, with comparisons, rather '
@@ -347,6 +343,20 @@ TREND_CAVEAT = (
     'Improvement after an intervention does not by itself prove that the '
     'intervention caused the change. Consider other explanations, timing, '
     'sample composition and the strength of the evidence.'
+)
+
+
+# A cycle may be reported while it is still collecting — trainiq's
+# `is_provisional` band, adopted here for consistency across the three
+# products. The figures are real but not settled, and the note says so on the
+# cover of every PDF and in every spreadsheet header, because a PDF outlives
+# the screen that explained it.
+PROVISIONAL_NOTE = (
+    'This cycle is still collecting responses. The figures are correct as at '
+    'the date above and will change as more people answer, so this report is '
+    'an interim read rather than the record of the cycle. Do not circulate it '
+    'as a final result, and do not compare two interim reads of the same '
+    'group: the difference between them is not a change of opinion.'
 )
 
 

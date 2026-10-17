@@ -76,7 +76,7 @@ Do not resurrect trainiq's dropped `email_hash`. It is a re-identification
 vector with a small, enumerable input space, and it is tempting because it
 looks like anonymisation.
 
-### 2. No band labels while `BANDS_VALIDATED` is False (§10.5)
+### 2. No band labels, ever (§10.5)
 
 > "Universal score bands should not be treated as validated merely because the
 > scale ranges from 1 to 5."
@@ -256,9 +256,8 @@ corrupts a result silently.
 - **Reports never mention AI, Claude or Anthropic.** The section is
   "Interpretation".
 - Four prompt rules are load-bearing: never assert causation; never apply a
-  band label while `BANDS_VALIDATED` is False; never read low `(TID, 'D')` as
-  stress or overload; never present training as a response to a compensation
-  finding.
+  band label; never read low `(TID, 'D')` as stress or overload; never present
+  training as a response to a compensation finding.
 - Confirm the model string in `app/ai_service.py` before assuming it is
   unchanged — do not hardcode from memory.
 
@@ -315,7 +314,7 @@ corrupts a result silently.
   is a race the route cannot win; `uq_open_deployment` is the fix and the route
   check is only a nicer error message.
 - **L1 has no `org_id`**, so any capability L1 alone holds — the catalogue, the
-  validation report, pilot feedback, the retention purge — cannot live in a
+  pilot feedback, the retention purge — cannot live in a
   blueprint whose every query is scoped by `current_user.org_id`. Put it in
   `app/admin/`.
 - **`ProductionConfig` reads `os.environ` at class-body evaluation**, once, at

@@ -52,7 +52,6 @@ def test_login_rejects_a_bad_password_without_saying_which_part_was_wrong(db, cl
     '/admin/users',
     '/admin/usage',
     '/admin/audit',
-    '/admin/validation',
     '/admin/orgs/new',
     '/org/',
     '/org/cycles',
@@ -77,13 +76,13 @@ def test_every_admin_route_bounces_an_anonymous_visitor_to_login(client, path):
 
 def test_an_unknown_survey_slug_is_a_plain_404(db, client):
     """
-    An unknown slug, an archived wave and a wave whose cycle is not open all
+    An unknown slug, an archived deployment and a deployment whose cycle is not open all
     return the SAME 404. A probe must never be able to distinguish "no such
-    wave" from "wave not open yet": the difference confirms that a particular
+    deployment" from "deployment not open yet": the difference confirms that a particular
     organisation is running a satisfaction survey, which is information about
     that employer nobody outside needs.
 
-    (A wave that WAS open and has since closed is the one exception — see
+    (A deployment that WAS open and has since closed is the one exception — see
     tests/test_survey_form.py. There the visitor is probably a real employee
     following a real link, and 404ing them is unkind for no gain.)
 
@@ -170,7 +169,7 @@ def test_production_refuses_to_boot_without_a_database_url(monkeypatch):
 def test_production_refuses_a_localhost_survey_base_url(monkeypatch):
     """
     The failure this prevents is not a crash. It is survey links pointing at
-    localhost, pasted into an all-staff email, surfacing days later as a wave
+    localhost, pasted into an all-staff email, surfacing days later as a deployment
     with a zero response rate that nobody can explain.
     """
     with pytest.raises(RuntimeError, match='SURVEY_BASE_URL'):

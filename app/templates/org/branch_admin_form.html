@@ -8,8 +8,8 @@
 <div class="panel"><div class="panel-body">
   <p class="panel-note">
     A branch admin sees only {{ branch.name }}. They never see sibling branches
-    or organisation-wide waves, and they cannot define reporting segments -
-    those are the organisation's vocabulary, frozen before a wave opens.
+    or organisation-wide deployments, and they cannot define reporting segments -
+    those are the organisation's vocabulary, frozen before a deployment opens.
   </p>
   <form method="post" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

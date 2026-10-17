@@ -1,14 +1,14 @@
 """
-Change between waves — spec §3.2.7 and §16.
+Change between cycles — spec §3.2.7 and §16.
 
-A trend section appears once a cycle has a `previous_cycle_id` and both waves
+A trend section appears once a cycle has a `previous_cycle_id` and both cycles
 measured the domain in question.
 
 ────────────────────────────────────────────────────────────────────────────────
-THE RULE THAT MATTERS: A DOMAIN ABSENT FROM EITHER WAVE IS REFUSED, NOT PLOTTED
+THE RULE THAT MATTERS: A DOMAIN ABSENT FROM EITHER CYCLE IS REFUSED, NOT PLOTTED
 ────────────────────────────────────────────────────────────────────────────────
-A pulse wave may legitimately run Overall Satisfaction plus one diagnostic
-domain. Comparing that against a previous full wave gives three domains with a
+A pulse cycle may legitimately run Overall Satisfaction plus one diagnostic
+domain. Comparing that against a previous full cycle gives three domains with a
 figure last time and nothing this time.
 
 Plotted naively, a missing domain renders as zero, or as a line stopping, or as
@@ -16,7 +16,7 @@ an arrow pointing down — and "Reward Satisfaction fell from 3.4 to 0" is a
 catastrophic finding that did not happen. The organisation did not get worse;
 it asked fewer questions.
 
-So a domain not measured in BOTH waves produces NotComparable with the reason,
+So a domain not measured in BOTH cycles produces NotComparable with the reason,
 and the report prints the reason.
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -27,8 +27,8 @@ intervention caused the change. Organizations should consider other
 explanations, timing, sample composition and the strength of the evidence."
 
 Every trend output carries domains.TREND_CAVEAT, and composition is reported
-beside the change rather than left implicit: a wave answered by 40 people and a
-wave answered by 120 are not the same population measured twice, and the
+beside the change rather than left implicit: a cycle answered by 40 people and a
+cycle answered by 120 are not the same population measured twice, and the
 difference between them is not necessarily a change in anybody's opinion.
 """
 from dataclasses import dataclass, field
@@ -40,7 +40,7 @@ from app.analytics import scoring as sc
 @dataclass(frozen=True)
 class NotComparable:
     """
-    Why two waves cannot be compared on this measure. Rendered as the reason.
+    Why two cycles cannot be compared on this measure. Rendered as the reason.
 
     A distinct type rather than a None or a zero — see the module docstring.
     """
@@ -53,10 +53,10 @@ class NotComparable:
 @dataclass(frozen=True)
 class Change:
     """
-    One measure, two waves.
+    One measure, two cycles.
 
     `composition` carries both response counts, printed beside the change
-    rather than buried: a shift of 0.3 between a wave of 40 and a wave of 120
+    rather than buried: a shift of 0.3 between a cycle of 40 and a cycle of 120
     may be a change of opinion, or may be a different set of people answering,
     and the report is not in a position to say which.
     """
@@ -103,12 +103,12 @@ class Change:
 
     def sentence(self):
         if not self.comparable:
-            return f'{self.measure_label}: not comparable between these waves.'
+            return f'{self.measure_label}: not comparable between these cycles.'
         return (
             f'{self.measure_label} moved from {self.previous.mean:.2f} to '
             f'{self.current.mean:.2f} ({self.difference:+.2f}). '
             f'Agreement moved {self.favourable_shift:+.0f} percentage points. '
-            f'Previous wave n={self.previous_n}; this wave n={self.current_n}.'
+            f'Previous cycle n={self.previous_n}; this cycle n={self.current_n}.'
         )
 
 
@@ -123,7 +123,7 @@ class TrendReport:
     @property
     def composition_note(self):
         """
-        Said plainly whenever the two waves differ materially in size.
+        Said plainly whenever the two cycles differ materially in size.
 
         20% is a judgement, not a specification requirement, and it is stated
         as a prompt to think rather than as a threshold with meaning.
@@ -134,7 +134,7 @@ class TrendReport:
         smaller = min(self.previous_n, self.current_n)
         if larger and (larger - smaller) / larger >= 0.2:
             return (
-                f'These two waves were answered by noticeably different '
+                f'These two cycles were answered by noticeably different '
                 f'numbers of people ({self.previous_n} then {self.current_n}). '
                 'A different set of respondents is not the same population '
                 'measured twice, so part of any change may reflect who '
@@ -150,7 +150,7 @@ def compare(previous_profiles, current_profiles, previous_domains,
     Build the trend section.
 
     `previous_domains` / `current_domains` are the `assessed_domains` of each
-    wave — the snapshot taken at deploy time, so narrowing a cycle afterwards
+    cycle — the snapshot taken at deploy time, so narrowing a cycle afterwards
     cannot retroactively change what is comparable.
     """
     if measures is None:
@@ -170,7 +170,7 @@ def compare(previous_profiles, current_profiles, previous_domains,
             absent = 'the previous' if domain_code not in previous_set else 'this'
             changes.append((measure, NotComparable(
                 f'{domains.DOMAIN_LABELS.get(domain_code, domain_code)} was not '
-                f'measured in {absent} wave, so there is nothing to compare. '
+                f'measured in {absent} cycle, so there is nothing to compare. '
                 'It is shown as not comparable rather than as a change, '
                 'because a domain that was not asked about is not a domain '
                 'that fell.'
@@ -181,8 +181,8 @@ def compare(previous_profiles, current_profiles, previous_domains,
         current = sc.group_result(current_profiles, measure, min_reporting_n)
 
         if not isinstance(previous, sc.GroupResult) or not isinstance(current, sc.GroupResult):
-            which = ('the previous wave' if not isinstance(previous, sc.GroupResult)
-                     else 'this wave')
+            which = ('the previous cycle' if not isinstance(previous, sc.GroupResult)
+                     else 'this cycle')
             changes.append((measure, NotComparable(
                 f'Too few responses in {which} to report this measure, so the '
                 'two cannot be compared.'
