@@ -151,6 +151,13 @@ def _register_template_globals(app):
         INTERVENTION_MAP_NOTE=domains.INTERVENTION_MAP_NOTE,
         intervention_map_entry=lambda d, s: domains.intervention_entry(
             d, s).get('categories', ''),
+        # The §11 type vocabulary and the §8.5 prohibition, for the catalogue
+        # editor. `allows_training` is exported rather than restated as a
+        # template condition on PIE: the rule has one home in domains.py, and
+        # a second copy in a template is how the two drift apart.
+        INTERVENTION_TYPES=domains.INTERVENTION_TYPES,
+        INTERVENTION_TYPE_LABELS=domains.INTERVENTION_TYPE_LABELS,
+        allows_training=domains.allows_training,
     )
 
 

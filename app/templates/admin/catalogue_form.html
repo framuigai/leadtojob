@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if row else 'New' }} topic - leadTo{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('admin.catalogue') }}">&larr; Development Catalogue</a>
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">Master Admin &middot; Development Catalogue</div>
+  <h1>{{ 'Edit topic' if row else 'New topic' }}</h1>
+</div></div>
+
+<div class="flash flash-warning">
+  <strong>This catalogue is shared by every client.</strong> It carries no
+  organisation id, so one change here alters what every report offers. For
+  loading a whole curriculum use <code>seed_catalogue.py</code> and its
+  reviewable JSON &mdash; a file diffs in git, this screen does not.
+</div>
+
+<div class="panel"><div class="panel-body">
+<form method="post" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-group">
+    <label for="intervention_code">Code</label>
+    <input type="text" id="intervention_code" name="intervention_code" required
+           {% if not row %}autofocus{% endif %}
+           placeholder="PO-EPS-T01" value="{{ form.intervention_code }}">
+    <small class="muted">The stable join key, and what a report prints beside
+      the topic. Letters, numbers, hyphens and underscores.</small>
+  </div>
+
+  <div class="form-group">
+    <label for="title">Topic</label>
+    <input type="text" id="title" name="title" required
+           {% if row %}autofocus{% endif %}
+           placeholder="Goal Clarity and Alignment" value="{{ form.title }}">
+  </div>
+
+  <div class="form-group">
+    <label for="description">Description <span class="muted">(optional)</span></label>
+    <textarea id="description" name="description" rows="3">{{ form.description }}</textarea>
+  </div>
+
+  <div class="form-group">
+    <label for="intervention_type">Intervention type</label>
+    <select id="intervention_type" name="intervention_type" required>
+      <option value="">Choose one...</option>
+      {% for t in INTERVENTION_TYPES %}
+      <option value="{{ t }}"
+        {% if form.intervention_type == t %}selected{% endif %}>
+        {{ INTERVENTION_TYPE_LABELS[t] }}</option>
+      {% endfor %}
+    </select>
+    <small class="muted">
+      Reports surface this, so a reader can see that the suggested response is
+      a pay-equity review rather than a course. <strong>Capability development
+      cannot be mapped to any Reward Satisfaction area</strong> &mdash;
+      specification &sect;8.5, training is not a substitute for addressing a
+      compensation problem.
+    </small>
+  </div>
+
+  <div class="form-group">
+    <label for="source_programme">Programme <span class="muted">(optional)</span></label>
+    <input type="text" id="source_programme" name="source_programme"
+           placeholder="Performance Optimisation" value="{{ form.source_programme }}">
+    <small class="muted">Where the topic comes from, so a report can say so.</small>
+  </div>
+
+  <div class="form-group">
+    <label for="actionable_by">Who can act on it</label>
+    <select id="actionable_by" name="actionable_by">
+      <option value="org" {% if form.actionable_by == 'org' %}selected{% endif %}>
+        The organisation</option>
+      <option value="manager" {% if form.actionable_by == 'manager' %}selected{% endif %}>
+        A line manager</option>
+      <option value="both" {% if form.actionable_by == 'both' %}selected{% endif %}>
+        Either</option>
+    </select>
+    <small class="muted">A Management Report filters to what a manager can
+      change. A manager cannot fix a pay structure, and offering it as
+      &ldquo;your action&rdquo; is worse than silence.</small>
+  </div>
+
+  <div class="form-group">
+    <label>Capability areas</label>
+    {#
+      ONE TOPIC MAY SERVE SEVERAL CELLS — PO-EPS-T01 legitimately answers both
+      (GEM, M) and (TID, I). A topic with none reaches no report at all, which
+      is why the route refuses to save one.
+
+      The Reward Satisfaction areas are rendered with a data attribute so the
+      script below can grey them out the moment the type is capability
+      development. The server refuses them regardless; this only means the
+      operator finds out before pressing Save.
+    #}
+    <div class="cell-picker">
+      {% for d in DOMAINS %}
+      <div class="cell-picker-group">
+        <div class="cell-picker-domain">{{ domain_label(d) }}</div>
+        {% for sub in subdomains_of(d) %}
+        {% set key = d ~ ':' ~ sub %}
+        <label class="cell-picker-option"
+               data-training-allowed="{{ '1' if allows_training(d, sub) else '0' }}">
+          <input type="checkbox" name="cells" value="{{ key }}"
+                 {% if key in form.cells %}checked{% endif %}>
+          {{ subdomain_label(d, sub) }}
+        </label>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    <small class="muted">At least one. A topic with no capability area is
+      never recommended to anyone.</small>
+  </div>
+
+  <button type="submit" class="btn btn-primary">
+    {{ 'Save' if row else 'Add topic' }}</button>
+  <a href="{{ url_for('admin.catalogue') }}" class="btn btn-secondary">Cancel</a>
+</form>
+</div></div>
+
+{% if row %}
+<div class="panel">
+  <div class="panel-danger">
+    <div class="panel-danger-title">
+      {{ 'Restore this topic' if not row.is_active else 'Remove from the catalogue' }}
+    </div>
+    <p class="rail-copy">
+      {% if row.is_active %}
+      It stops being offered in every client's report at once. The row is kept,
+      so this is reversible and the code stays reserved.
+      {% else %}
+      This topic is currently removed and appears in no report.
+      {% endif %}
+    </p>
+    <form method="post"
+          action="{{ url_for('admin.catalogue_status', intervention_id=row.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="restore" value="{{ '1' if not row.is_active else '0' }}">
+      <button type="submit" class="btn btn-sm {{ 'btn-primary' if not row.is_active else 'btn-danger' }}">
+        {{ 'Restore' if not row.is_active else 'Remove' }}</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<script>
+/* §8.5 made visible at the point of entry. The SERVER refuses the combination
+   either way — see _validate_catalogue — this only saves the operator a round
+   trip to find out. */
+(function () {
+    'use strict';
+    var type = document.getElementById('intervention_type');
+    if (!type) { return; }
+    function sync() {
+        var isTraining = type.value === 'training';
+        document.querySelectorAll('.cell-picker-option').forEach(function (opt) {
+            if (opt.dataset.trainingAllowed === '1') { return; }
+            var box = opt.querySelector('input');
+            opt.classList.toggle('is-barred', isTraining);
+            box.disabled = isTraining;
+            if (isTraining) { box.checked = false; }
+            opt.title = isTraining
+                ? 'Specification 8.5: training is not a substitute for ' +
+                  'addressing a compensation or structural reward problem.'
+                : '';
+        });
+    }
+    type.addEventListener('change', sync);
+    sync();
+}());
+</script>
+{% endblock %}

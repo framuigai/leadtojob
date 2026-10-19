@@ -1867,3 +1867,45 @@ a.group-card-title:hover { color: var(--blue); }
     .group-card-head-right { width: 100%; justify-content: space-between; }
     .report-progress { flex: 1; }
 }
+
+/* ── Catalogue cell picker ────────────────────────────────────────────────
+   One topic may serve several (domain, subdomain) cells, so this is a grid of
+   checkboxes grouped by domain rather than a select. `.is-barred` is §8.5
+   made visible: capability development cannot reach a Reward Satisfaction
+   area, and the option says so before Save rather than after. */
+.cell-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: .75rem;
+    margin-bottom: .5rem;
+}
+.cell-picker-group {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .7rem .8rem;
+    background: #fbfcfe;
+}
+.cell-picker-domain {
+    font-size: .7rem;
+    font-weight: 700;
+    color: var(--orange);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    margin-bottom: .5rem;
+}
+.cell-picker-option {
+    display: flex;
+    align-items: flex-start;
+    gap: .45rem;
+    font-size: .83rem;
+    font-weight: 400;
+    color: var(--text);
+    padding: .2rem 0;
+    cursor: pointer;
+}
+.cell-picker-option input { margin-top: .15rem; flex: 0 0 auto; }
+.cell-picker-option.is-barred {
+    color: var(--text-subtle);
+    cursor: not-allowed;
+    text-decoration: line-through;
+}

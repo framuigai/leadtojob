@@ -2,10 +2,17 @@
 {% block title %}Development Catalogue - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
-<div class="page-header"><div class="page-header-left">
-  <div class="section-label">Master Admin &middot; Development Catalogue</div>
-  <h1>Development Catalogue</h1>
-</div></div>
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">Master Admin &middot; Development Catalogue</div>
+    <h1>Development Catalogue</h1>
+    <p class="muted">One catalogue, shared by every client. An edit here
+      changes what every report offers.</p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('admin.catalogue_new') }}" class="btn btn-primary">+ New topic</a>
+  </div>
+</div>
 
 {% if gaps %}
 <div class="flash flash-warning">
@@ -89,7 +96,7 @@
   <table class="table" id="course-list">
     <thead><tr>
       <th>Code</th><th>Topic</th><th>Programme</th><th>Type</th>
-      <th>Domain</th><th>Capability area</th>
+      <th>Domain</th><th>Capability area</th><th></th>
     </tr></thead>
     <tbody>
     {% for c in courses %}
@@ -107,15 +114,59 @@
         <td class="cell-sub">
           {% for d, label in c.cells %}{{ label }}<br>{% endfor %}
         </td>
+        <td class="row-actions">
+          <a class="btn btn-sm btn-secondary"
+             href="{{ url_for('admin.catalogue_edit', intervention_id=c.id) }}">Edit</a>
+        </td>
       </tr>
     {% endfor %}
       <tr class="filter-empty" data-empty-for="course-list">
-        <td colspan="6" class="muted">No topic matches those filters.</td>
+        <td colspan="7" class="muted">No topic matches those filters.</td>
       </tr>
     </tbody>
   </table>
   </div>
 </div>
+
+{% if retired %}
+{#
+  REMOVED TOPICS ARE SHOWN, NOT HIDDEN. A topic that silently vanished is one
+  an operator re-creates under a second code — and then both appear in every
+  report. Keeping the row also keeps its code reserved, which is what makes
+  "already in use by a removed topic" a useful error rather than a puzzle.
+#}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">Removed from the catalogue</div>
+    <span class="panel-note">Offered in no report. Restorable.</span>
+  </div>
+  <div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>Code</th><th>Topic</th><th>Programme</th><th>Type</th><th></th></tr></thead>
+    <tbody>
+    {% for r in retired %}
+      <tr>
+        <td class="cell-meta"><code>{{ r.code }}</code></td>
+        <td>{{ r.title }}</td>
+        <td class="cell-sub">{{ r.programme }}</td>
+        <td class="cell-sub">{{ r.type }}</td>
+        <td class="row-actions">
+          <form method="post" style="display:inline"
+                action="{{ url_for('admin.catalogue_status', intervention_id=r.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="restore" value="1">
+            <button type="submit" class="btn btn-sm btn-secondary">Restore</button>
+          </form>
+          <a class="btn btn-sm btn-secondary"
+             href="{{ url_for('admin.catalogue_edit', intervention_id=r.id) }}">Edit</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
 
 <div class="panel"><div class="panel-body">
   <p class="panel-note">

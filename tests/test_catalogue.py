@@ -19,8 +19,20 @@ import json
 import pytest
 
 from app import catalogue, db, domains
+from app.domains import (
+    POLICY_OR_STRUCTURAL, TRAINING, WORK_DESIGN,
+)
 from app.models import InterventionCatalogue, InterventionCell
 from seed_catalogue import CatalogueError, read_catalogue, seed
+from tests.conftest import login
+from tests.factories import make_master_admin, make_org, make_org_admin
+
+
+@pytest.fixture
+def l1(db):
+    admin = make_master_admin(email='l1-cat@leadto.test')
+    db.session.commit()
+    return admin
 
 
 @pytest.fixture
@@ -360,3 +372,182 @@ def test_the_catalogue_screen_is_l1_only(client, seeded):
 
     login(client, admin)
     assert client.get('/admin/catalogue').status_code == 302
+
+
+# ── Editing the catalogue through the screen ──────────────────────
+
+def _topic_form(**over):
+    data = {
+        'intervention_code': 'PO-NEW-T01',
+        'title': 'Goal Clarity and Alignment',
+        'description': 'A short description.',
+        'intervention_type': WORK_DESIGN,
+        'actionable_by': 'org',
+        'source_programme': 'Performance Optimisation',
+        'cells': ['GEM:M'],
+    }
+    data.update(over)
+    return data
+
+
+def test_l1_can_add_a_topic_to_the_catalogue(client, db, l1):
+    login(client, l1)
+    client.post('/admin/catalogue/new', data=_topic_form(),
+                follow_redirects=True)
+
+    row = db.session.query(InterventionCatalogue).filter_by(
+        intervention_code='PO-NEW-T01').one()
+    assert row.is_active is True
+    assert row.intervention_type == WORK_DESIGN
+    cells = db.session.query(InterventionCell).filter_by(
+        intervention_id=row.id).all()
+    assert [(c.domain_code, c.subdomain_code) for c in cells] == [('GEM', 'M')]
+
+
+def test_a_topic_may_serve_several_cells(client, db, l1):
+    """
+    PO-EPS-T01 in the supplied curriculum answers both (GEM, M) and (TID, I).
+    That is correct content, not a data error, which is why the cells are a
+    separate table.
+    """
+    login(client, l1)
+    client.post('/admin/catalogue/new',
+                data=_topic_form(cells=['GEM:M', 'TID:I']),
+                follow_redirects=True)
+
+    row = db.session.query(InterventionCatalogue).filter_by(
+        intervention_code='PO-NEW-T01').one()
+    cells = db.session.query(InterventionCell).filter_by(
+        intervention_id=row.id).all()
+    assert sorted((c.domain_code, c.subdomain_code) for c in cells) == [
+        ('GEM', 'M'), ('TID', 'I')]
+
+
+def test_training_cannot_be_mapped_to_a_reward_area(client, db, l1):
+    """
+    SPECIFICATION §8.5, THE ONE EXPLICIT PROHIBITION: "Training should not be
+    treated as a substitute for addressing substantiated compensation
+    inequities or structural reward problems."
+
+    app/catalogue.py already filters it out at read time. This is the other
+    half: a row that could never legally be recommended must not be storable
+    in the first place, because a stored one looks like an oversight to the
+    next operator who reads the table.
+    """
+    login(client, l1)
+    res = client.post('/admin/catalogue/new',
+                      data=_topic_form(intervention_type=TRAINING,
+                                       cells=['PIE:P']),
+                      follow_redirects=True)
+
+    assert '8.5' in res.get_data(as_text=True)
+    assert db.session.query(InterventionCatalogue).filter_by(
+        intervention_code='PO-NEW-T01').first() is None
+
+
+def test_a_non_training_topic_may_serve_a_reward_area(client, db, l1):
+    """
+    The prohibition is on TRAINING, not on the Reward domain. A pay-equity
+    review is exactly what belongs there, and refusing it would leave the
+    domain with no response at all.
+    """
+    login(client, l1)
+    client.post('/admin/catalogue/new',
+                data=_topic_form(intervention_type=POLICY_OR_STRUCTURAL,
+                                 cells=['PIE:P']),
+                follow_redirects=True)
+
+    row = db.session.query(InterventionCatalogue).filter_by(
+        intervention_code='PO-NEW-T01').one()
+    assert row.intervention_type == POLICY_OR_STRUCTURAL
+
+
+def test_a_topic_with_no_capability_area_is_refused(client, db, l1):
+    """
+    InterventionCell's own docstring: a topic with no row there reaches no
+    report. Saving one stores something that can never be recommended, with
+    nothing on screen to say so.
+    """
+    login(client, l1)
+    res = client.post('/admin/catalogue/new', data=_topic_form(cells=[]),
+                      follow_redirects=True)
+
+    assert 'at least one capability area' in res.get_data(as_text=True)
+    assert db.session.query(InterventionCatalogue).filter_by(
+        intervention_code='PO-NEW-T01').first() is None
+
+
+def test_a_duplicate_code_is_refused(client, db, l1):
+    login(client, l1)
+    client.post('/admin/catalogue/new', data=_topic_form(),
+                follow_redirects=True)
+    res = client.post('/admin/catalogue/new',
+                      data=_topic_form(title='Something else'),
+                      follow_redirects=True)
+
+    assert 'already in use' in res.get_data(as_text=True)
+    assert db.session.query(InterventionCatalogue).filter_by(
+        intervention_code='PO-NEW-T01').count() == 1
+
+
+def test_editing_replaces_the_cells_rather_than_adding_to_them(client, db, l1):
+    login(client, l1)
+    client.post('/admin/catalogue/new',
+                data=_topic_form(cells=['GEM:M', 'TID:I']),
+                follow_redirects=True)
+    row = db.session.query(InterventionCatalogue).filter_by(
+        intervention_code='PO-NEW-T01').one()
+
+    client.post(f'/admin/catalogue/{row.id}/edit',
+                data=_topic_form(cells=['BIT:B'], title='Renamed'),
+                follow_redirects=True)
+
+    db.session.refresh(row)
+    assert row.title == 'Renamed'
+    cells = db.session.query(InterventionCell).filter_by(
+        intervention_id=row.id).all()
+    assert [(c.domain_code, c.subdomain_code) for c in cells] == [('BIT', 'B')]
+
+
+def test_removing_a_topic_is_reversible_and_hides_it_everywhere(
+        client, db, l1):
+    """
+    SOFT, NOT A DELETE. coverage() and every report filter on is_active, so a
+    removal stops the topic being offered everywhere at once - which is what
+    "remove" has to mean for data shared by every tenant. The row is kept so
+    the code stays reserved and an operator who removes the wrong one does not
+    need a database restore.
+    """
+    login(client, l1)
+    client.post('/admin/catalogue/new', data=_topic_form(),
+                follow_redirects=True)
+    row = db.session.query(InterventionCatalogue).filter_by(
+        intervention_code='PO-NEW-T01').one()
+
+    client.post(f'/admin/catalogue/{row.id}/status', data={'restore': '0'},
+                follow_redirects=True)
+    db.session.refresh(row)
+    assert row.is_active is False
+
+    body = client.get('/admin/catalogue').get_data(as_text=True)
+    assert 'Removed from the catalogue' in body
+
+    client.post(f'/admin/catalogue/{row.id}/status', data={'restore': '1'},
+                follow_redirects=True)
+    db.session.refresh(row)
+    assert row.is_active is True
+
+
+def test_the_catalogue_editor_is_l1_only(client, db, l1):
+    """
+    It carries no org_id, so one edit changes every client's reports. An L2
+    admin must not reach it.
+    """
+    org = make_org('Acme Ltd')
+    l2 = make_org_admin(org, email='l2-cat@acme.test')
+    db.session.commit()
+
+    login(client, l2)
+    for path in ('/admin/catalogue', '/admin/catalogue/new'):
+        res = client.get(path, follow_redirects=True)
+        assert 'New topic' not in res.get_data(as_text=True), path

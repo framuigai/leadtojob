@@ -10,6 +10,7 @@ product learned this by putting a candidate purge in the wrong blueprint and
 finding it unreachable by the only role allowed to use it.
 """
 import io
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -23,16 +24,22 @@ from sqlalchemy import func
 from app import db
 from app import ai_service
 from app.admin import admin_bp
+
+# Catalogue codes are a stable JOIN KEY and appear in generated reports, so
+# they are constrained to something safe in a filename and readable in an
+# email - the same discipline as a cycle reference.
+_CATALOGUE_CODE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{2,49}$')
 # Imported as report_builder, not reports: app/org/routes.py defines a view
 # called reports() and the two blueprints are read side by side. Keeping one
 # name for the module everywhere is cheaper than remembering which file is
 # safe.
 from app import catalogue as catalogue_module
+from app import domains
 from app.analytics import reports as report_builder
 from app.analytics import scoring
 from app.audit import (
-    INSTRUMENT_EDIT, ORG_CREATE, ORG_EDIT, REPORT_DOWNLOAD, USER_CREATE,
-    USER_DEACTIVATE, USER_REACTIVATE, record_audit, user_payload,
+    CATALOGUE_EDIT, INSTRUMENT_EDIT, ORG_CREATE, ORG_EDIT, REPORT_DOWNLOAD,
+    USER_CREATE, USER_DEACTIVATE, USER_REACTIVATE, record_audit, user_payload,
 )
 from app.auth.routes import require_capability
 from app.domains import (
@@ -645,6 +652,7 @@ def catalogue():
                           InterventionCatalogue.intervention_code).all()):
         pairs = sorted(cells_by_topic.get(row.id, []))
         courses.append({
+            'id': row.id,
             'code': row.intervention_code,
             'title': row.title,
             'programme': row.source_programme or 'Unassigned',
@@ -657,8 +665,235 @@ def catalogue():
         for name in sorted({c['programme'] for c in courses})
     ]
 
+    # Removed topics are shown in their own section rather than hidden. A
+    # topic that silently vanished is one an operator re-creates under a
+    # second code, and then both appear in every report.
+    retired = [
+        {'id': row.id, 'code': row.intervention_code, 'title': row.title,
+         'programme': row.source_programme or 'Unassigned',
+         'type': row.intervention_type}
+        for row in (db.session.query(InterventionCatalogue)
+                    .filter_by(is_active=False)
+                    .order_by(InterventionCatalogue.intervention_code).all())
+    ]
+
     return render_template('admin/catalogue.html', gaps=gaps, grid=grid,
-                           by_programme=by_programme, courses=courses)
+                           by_programme=by_programme, courses=courses,
+                           retired=retired)
+
+
+# ── Editing the catalogue (L1 only) ─────────────────────────────────────────
+#
+# It is shared reference data with no org_id, so one edit here changes what
+# EVERY client's report offers. That is why these routes are L1-only, why a
+# removal is reversible, and why seed_catalogue.py still exists: a bulk import
+# belongs in a reviewable JSON file that diffs in git. These screens are for
+# the single correction, not for loading a curriculum.
+
+
+def _catalogue_or_404(intervention_id):
+    row = db.session.get(InterventionCatalogue, intervention_id)
+    if row is None:
+        abort(404)
+    return row
+
+
+def _catalogue_form_values(form):
+    return {
+        'intervention_code': (form.get('intervention_code') or '').strip().upper(),
+        'title': (form.get('title') or '').strip(),
+        'description': (form.get('description') or '').strip() or None,
+        'intervention_type': (form.get('intervention_type') or '').strip(),
+        'actionable_by': (form.get('actionable_by') or 'org').strip(),
+        'source_programme': (form.get('source_programme') or '').strip() or None,
+        'cells': form.getlist('cells'),
+    }
+
+
+def _validate_catalogue(values, existing=None):
+    """
+    Returns an error string, or None.
+
+    THE ONE RULE THAT IS NOT HOUSEKEEPING is the last one. Everything above it
+    keeps the row usable; §8.5 keeps the product honest.
+    """
+    if not _CATALOGUE_CODE_RE.match(values['intervention_code']):
+        return ('The code must be 3-50 characters of letters, numbers, hyphens '
+                'or underscores - it is the stable join key and appears in '
+                'reports. For example PO-EPS-T01.')
+    clash = (db.session.query(InterventionCatalogue)
+             .filter_by(intervention_code=values['intervention_code']).first())
+    if clash is not None and (existing is None or clash.id != existing.id):
+        return (f'{values["intervention_code"]} is already in use'
+                + (' by a removed topic - restore it instead.'
+                   if not clash.is_active else '.'))
+
+    if not values['title']:
+        return 'A topic needs a title. It is what the report prints.'
+    if values['intervention_type'] not in domains.INTERVENTION_TYPES:
+        return 'Choose an intervention type.'
+    if values['actionable_by'] not in ('org', 'manager', 'both'):
+        return 'Choose who can act on this.'
+
+    cells = []
+    for raw in values['cells']:
+        parts = raw.split(':')
+        if len(parts) != 2:
+            return 'Unrecognised capability area.'
+        domain_code, subdomain_code = parts
+        if subdomain_code not in domains.SUBDOMAINS.get(domain_code, []):
+            return f'Unrecognised capability area: {raw}.'
+        cells.append((domain_code, subdomain_code))
+
+    if not cells:
+        # Not a nicety: InterventionCell's own docstring says a topic with no
+        # row there reaches no report. Saving one is saving something that
+        # cannot ever be recommended, with nothing on screen to say so.
+        return ('Map the topic to at least one capability area. A topic with '
+                'no area reaches no report at all.')
+
+    # §8.5, THE SPECIFICATION'S ONE EXPLICIT PROHIBITION: "Training should not
+    # be treated as a substitute for addressing substantiated compensation
+    # inequities or structural reward problems." Enforced here as well as in
+    # app/catalogue.py, because a row that cannot legally be recommended
+    # should never be storable in the first place.
+    if values['intervention_type'] == domains.TRAINING:
+        banned = [f'{DOMAIN_LABELS.get(d, d)} - {subdomain_label(d, sub)}'
+                  for d, sub in cells if not domains.allows_training(d, sub)]
+        if banned:
+            return ('Specification §8.5: a capability-development topic cannot '
+                    'be mapped to ' + '; '.join(banned) + '. Training is not a '
+                    'substitute for addressing a compensation or structural '
+                    'reward problem. Choose another intervention type, or '
+                    'another capability area.')
+
+    values['parsed_cells'] = cells
+    return None
+
+
+def _write_cells(row, cells):
+    """Replace a topic's cells wholesale. Simpler than diffing, and the
+    unique index on (intervention_id, domain, subdomain) stays satisfied."""
+    db.session.query(InterventionCell).filter_by(intervention_id=row.id).delete(
+        synchronize_session=False)
+    for domain_code, subdomain_code in cells:
+        db.session.add(InterventionCell(
+            intervention_id=row.id, domain_code=domain_code,
+            subdomain_code=subdomain_code))
+
+
+@admin_bp.route('/catalogue/new', methods=['GET', 'POST'])
+@require_capability(MANAGE_CATALOGUE)
+def catalogue_new():
+    if request.method == 'POST':
+        values = _catalogue_form_values(request.form)
+        error = _validate_catalogue(values)
+        if error:
+            flash(error, 'error')
+            return render_template('admin/catalogue_form.html', row=None,
+                                   form=values)
+
+        row = InterventionCatalogue(
+            intervention_code=values['intervention_code'],
+            title=values['title'],
+            description=values['description'],
+            intervention_type=values['intervention_type'],
+            actionable_by=values['actionable_by'],
+            source_programme=values['source_programme'],
+            is_active=True,
+        )
+        db.session.add(row)
+        db.session.flush()
+        _write_cells(row, values['parsed_cells'])
+        record_audit(CATALOGUE_EDIT, 'intervention', row.id,
+                     f'Added catalogue topic {row.intervention_code}',
+                     payload={'code': row.intervention_code,
+                              'type': row.intervention_type,
+                              'cells': [f'{d}:{s}' for d, s
+                                        in values['parsed_cells']]})
+        db.session.commit()
+        flash(f'Added {row.intervention_code}. It is now offered to every '
+              'client whose report reaches one of its capability areas.',
+              'success')
+        return redirect(url_for('admin.catalogue'))
+
+    return render_template('admin/catalogue_form.html', row=None, form={
+        'intervention_code': '', 'title': '', 'description': '',
+        'intervention_type': '', 'actionable_by': 'org',
+        'source_programme': '', 'cells': [],
+    })
+
+
+@admin_bp.route('/catalogue/<uuid:intervention_id>/edit', methods=['GET', 'POST'])
+@require_capability(MANAGE_CATALOGUE)
+def catalogue_edit(intervention_id):
+    row = _catalogue_or_404(intervention_id)
+
+    if request.method == 'POST':
+        values = _catalogue_form_values(request.form)
+        error = _validate_catalogue(values, existing=row)
+        if error:
+            flash(error, 'error')
+            return render_template('admin/catalogue_form.html', row=row,
+                                   form=values)
+
+        row.intervention_code = values['intervention_code']
+        row.title = values['title']
+        row.description = values['description']
+        row.intervention_type = values['intervention_type']
+        row.actionable_by = values['actionable_by']
+        row.source_programme = values['source_programme']
+        _write_cells(row, values['parsed_cells'])
+        record_audit(CATALOGUE_EDIT, 'intervention', row.id,
+                     f'Edited catalogue topic {row.intervention_code}',
+                     payload={'code': row.intervention_code,
+                              'type': row.intervention_type,
+                              'cells': [f'{d}:{s}' for d, s
+                                        in values['parsed_cells']]})
+        db.session.commit()
+        flash(f'Saved {row.intervention_code}.', 'success')
+        return redirect(url_for('admin.catalogue'))
+
+    cells = [f'{c.domain_code}:{c.subdomain_code}' for c in
+             db.session.query(InterventionCell)
+             .filter_by(intervention_id=row.id).all()]
+    return render_template('admin/catalogue_form.html', row=row, form={
+        'intervention_code': row.intervention_code,
+        'title': row.title,
+        'description': row.description or '',
+        'intervention_type': row.intervention_type,
+        'actionable_by': row.actionable_by,
+        'source_programme': row.source_programme or '',
+        'cells': cells,
+    })
+
+
+@admin_bp.route('/catalogue/<uuid:intervention_id>/status', methods=['POST'])
+@require_capability(MANAGE_CATALOGUE)
+def catalogue_status(intervention_id):
+    """
+    Remove a topic from the catalogue, or put it back.
+
+    SOFT, NOT A DELETE. `coverage()` and every report filter on is_active, so
+    a removed topic stops being offered everywhere at once — which is what
+    "remove" has to mean for data shared by every tenant. It is kept because
+    the code is a stable join key that has appeared in generated reports, and
+    because an operator who removes the wrong row at 17:00 should not need a
+    database restore.
+    """
+    row = _catalogue_or_404(intervention_id)
+    restore = request.form.get('restore') == '1'
+    row.is_active = restore
+    record_audit(CATALOGUE_EDIT, 'intervention', row.id,
+                 f'{"Restored" if restore else "Removed"} catalogue topic '
+                 f'{row.intervention_code}',
+                 payload={'code': row.intervention_code,
+                          'is_active': row.is_active})
+    db.session.commit()
+    flash(f'{row.intervention_code} '
+          + ('is back in the catalogue.' if restore
+             else 'is no longer offered in any report.'), 'success')
+    return redirect(url_for('admin.catalogue'))
 
 
 @admin_bp.route('/usage')
