@@ -248,3 +248,92 @@ def test_another_orgs_analysis_is_not_reachable(client, db, org):
 
     login(client, org['admin'])
     assert client.get('/org/cycles/GBX-A/analysis').status_code == 404
+
+
+# ── The board shell: shared components, not a private copy ───────────
+
+def test_every_report_type_is_offered_with_both_formats(client, org):
+    """
+    THE FOUR THINGS A READY CYCLE OFFERS: three report types, each with a
+    preview and both downloads, plus the on-screen analysis.
+
+    They used to sit behind a single "View the analysis" button, so the thing
+    the page is named after took a click to find.
+    """
+    cycle = make_cycle(org['org'], 'KD-1', status='open', min_reporting_n=1)
+    deployment = make_deployment(org['org'], cycle, expected_respondents=20)
+    for _ in range(3):
+        _respond(org['org'].id, deployment, 4, 4)
+    db.session.commit()
+
+    login(client, org['admin'])
+    body = client.get('/org/reports').get_data(as_text=True)
+
+    for report_type in ('executive', 'hr_od', 'management'):
+        assert f'/report/{report_type}' in body, report_type
+        assert f'/report/{report_type}/pdf' in body, report_type
+        assert f'/report/{report_type}/xlsx' in body, report_type
+    assert f'/org/cycles/{cycle.id}/analysis' in body
+
+
+def test_the_board_uses_the_shared_collapse_and_filter_contracts(client, org):
+    """
+    NOT A PRIVATE COPY. filters.js names this page in its own header as one of
+    the lists it serves, and collapse.js is the one implementation of
+    expand/collapse. A hand-rolled third copy is how the filter bar drifted
+    before it was centralised.
+    """
+    cycle = make_cycle(org['org'], 'KD-1', status='open', min_reporting_n=1)
+    deployment = make_deployment(org['org'], cycle, expected_respondents=20)
+    for _ in range(3):
+        _respond(org['org'].id, deployment, 4, 4)
+    db.session.commit()
+
+    login(client, org['admin'])
+    body = client.get('/org/reports').get_data(as_text=True)
+
+    # filters.js contract
+    assert 'data-filter-for="reports-board"' in body
+    assert 'data-filter-item' in body
+    assert 'filter-clear' in body
+    # collapse.js contract
+    assert 'data-collapse-scope="reports"' in body
+    assert 'data-collapse-toggle' in body
+    assert f'data-collapse-key="{cycle.id}"' in body
+    assert 'data-expand-all="reports"' in body
+
+
+def test_the_response_meter_cannot_overflow_its_track(client, org):
+    """
+    `expected_respondents` is a number an admin types. If it is smaller than
+    the responses received - a typo, or a headcount corrected downward - the
+    bar must stop at 100% rather than running past its track.
+    """
+    cycle = make_cycle(org['org'], 'KD-1', status='open', min_reporting_n=1)
+    deployment = make_deployment(org['org'], cycle, expected_respondents=2)
+    for _ in range(5):
+        _respond(org['org'].id, deployment, 4, 4)
+    db.session.commit()
+
+    login(client, org['admin'])
+    body = client.get('/org/reports').get_data(as_text=True)
+    assert 'width:100%' in body
+    assert 'width:250%' not in body
+
+
+def test_a_cycle_below_the_threshold_offers_no_report_links(client, org):
+    """
+    The state wording is covered above; this is the part that matters for
+    privacy. Nothing below the threshold may offer a way to open a report.
+    """
+    cycle = make_cycle(org['org'], 'KD-1', status='open', min_reporting_n=5)
+    deployment = make_deployment(org['org'], cycle, expected_respondents=20)
+    for _ in range(2):
+        _respond(org['org'].id, deployment, 4, 4)
+    db.session.commit()
+
+    login(client, org['admin'])
+    body = client.get('/org/reports').get_data(as_text=True)
+    for report_type in ('executive', 'hr_od', 'management'):
+        assert f'/report/{report_type}' not in body, report_type
+    assert f'/org/cycles/{cycle.id}/analysis' not in body

@@ -2,96 +2,231 @@
 {% block title %}Reports - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
-<div class="page-header"><div class="page-header-left">
-  <div class="section-label">{{ role_label(current_user.role) }}</div>
-  <h1>Reports</h1>
-  <p class="muted">Grouped by measurement cycle.</p>
-  {% if branch_scoped %}
-  <p class="muted">Showing results for
-    {{ current_user.branch.name if current_user.branch else 'your branch' }} only.</p>
-  {% endif %}
-</div></div>
 
-{% for row in rows %}
-<div class="panel">
-  <div class="panel-head">
-    <div class="panel-title">
-      {{ row.cycle.cycle_name }}
-      <span class="muted">&middot; <code>{{ row.cycle.id }}</code></span>
-    </div>
-    <span class="status-pill status-{{ 'amber' if row.state.provisional
-        else 'green' if row.state.key == 'ready'
-        else 'suppressed' if row.state.key == 'below_threshold' else 'amber' }}">
-      {% if row.state.key == 'ready' %}{{ 'provisional' if row.state.provisional else 'ready' }}
-      {% elif row.state.key == 'below_threshold' %}below threshold
-      {% else %}not deployed{% endif %}
-    </span>
-  </div>
-  <div class="panel-body">
-    <div class="stats-row">
-      <div class="stat-card"><div class="stat-val">{{ row.responses }}</div>
-        <div class="stat-label">Responses</div></div>
-      <div class="stat-card"><div class="stat-val">{{ row.expected }}</div>
-        <div class="stat-label">Invited</div></div>
-      <div class="stat-card"><div class="stat-val">{{ row.deployments|length }}</div>
-        <div class="stat-label">Deployments</div></div>
-    </div>
+{#
+  THE L2/L3 REPORTS BOARD.
 
-    {#
-      THE "NEEDS" LINE. Three states, never collapsed into "unavailable" -
-      they are three different jobs, and the third is not a job at all.
-    #}
-    {% if row.state.provisional %}
-    <p class="panel-note"><strong>Provisional.</strong> This cycle is still
-      collecting, so these figures will move as more people answer. The
-      reports carry that note on their cover. Close the cycle for the
-      settled read.</p>
-    {% endif %}
+  Built on the SHARED components, not a private copy of them: `.group-card`
+  with the collapse.js contract (data-collapse-scope / -toggle / -body), the
+  filter-bar contract from filters.js, and `.report-row` from the L1 board.
+  filters.js names this page in its own header as one of the lists it serves.
 
-    {% if row.state.needs %}
-      {% if row.state.key == 'below_threshold' %}
-      <div class="flash flash-info">
-        <strong>Nothing can be shown yet.</strong> {{ row.state.needs }}.
-        This is the reporting threshold doing its job, not a fault: a result
-        from fewer people than this could be traced back to them.
-      </div>
-      {% else %}
-      <p class="panel-note"><strong>Needs:</strong> {{ row.state.needs }}.</p>
+  Three things the old version did that this one does not:
+    - repeated "Each report opens as a preview with PDF and Excel downloads"
+      under every card, where once at the top does the same job
+    - spent three stat cards on Responses / Invited / Deployments, two of
+      which are the same fact; a progress bar says it in one line
+    - buried the three report types behind a single "View the analysis"
+      button, so the thing the page is named after took a click to find
+#}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="section-label">{{ role_label(current_user.role) }}</div>
+    <h1>Reports</h1>
+    <div class="meta-row">
+      <span>Grouped by measurement cycle.</span>
+      {% if branch_scoped %}
+      <span class="meta-sep">&bull;</span>
+      <span class="badge pill-branch">{{ current_user.branch.name
+        if current_user.branch else 'your branch' }}</span>
       {% endif %}
-    {% endif %}
-
-    <div class="page-actions">
-      {% if row.state.key == 'ready' %}
-      <a href="{{ url_for('org.analysis', cycle_id=row.cycle.id) }}"
-         class="btn btn-primary">View the analysis</a>
-      {% endif %}
-      {% if row.state.key == 'ready' %}
-      <a href="{{ url_for('org.report_preview', cycle_id=row.cycle.id,
-                          report_type='executive') }}"
-         class="btn btn-secondary">Executive</a>
-      <a href="{{ url_for('org.report_preview', cycle_id=row.cycle.id,
-                          report_type='hr_od') }}"
-         class="btn btn-secondary">HR &amp; OD</a>
-      <a href="{{ url_for('org.report_preview', cycle_id=row.cycle.id,
-                          report_type='management') }}"
-         class="btn btn-secondary">Management</a>
-      {% endif %}
-      <a href="{{ url_for('org.cycle_detail', cycle_id=row.cycle.id) }}"
-         class="btn btn-secondary">Cycle</a>
     </div>
-
-    <p class="muted" style="margin-top:1rem">
-      Each report opens as a preview with PDF and Excel downloads. The analysis
-      view shows the same figures on screen.
-    </p>
   </div>
 </div>
+
+{% if rows %}
+{% set ready = rows | selectattr('state.key', 'equalto', 'ready') | list %}
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-val">{{ rows | length }}</div>
+    <div class="stat-label">Cycles</div></div>
+  <div class="stat-card"><div class="stat-val">{{ ready | length }}</div>
+    <div class="stat-label">Reportable</div></div>
+  <div class="stat-card"><div class="stat-val">{{ rows | sum(attribute='responses') }}</div>
+    <div class="stat-label">Responses</div></div>
+  <div class="stat-card"><div class="stat-val">{{ rows | sum(attribute='expected') }}</div>
+    <div class="stat-label">Invited</div></div>
+</div>
+
+<div class="filter-bar" data-filter-for="reports-board">
+  {% if branches %}
+  <div class="filter-field">
+    <label for="f-branch">Branch</label>
+    <select id="f-branch" data-key="branch">
+      <option value="">All branches</option>
+      <option value="org">Organisation-wide</option>
+      {% for b in branches %}
+      <option value="{{ b.id }}">{{ b.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="filter-field">
+    <label for="f-status">Status</label>
+    <select id="f-status" data-key="status">
+      <option value="">All statuses</option>
+      <option value="ready">Ready</option>
+      <option value="provisional">Provisional</option>
+      <option value="below_threshold">Below threshold</option>
+      <option value="not_deployed">Not deployed</option>
+    </select>
+  </div>
+  <div class="filter-field filter-grow">
+    <label for="f-q">Search</label>
+    <input id="f-q" type="search" data-key="name" data-match="search"
+           placeholder="Cycle name or reference...">
+  </div>
+  <div class="filter-field">
+    <label for="f-sort">Sort</label>
+    <select id="f-sort" class="filter-sort" data-sort-for="reports-board">
+      <option value="created:-1" data-type="number">Newest first</option>
+      <option value="created:1" data-type="number">Oldest first</option>
+      <option value="responses:-1" data-type="number">Most responses</option>
+      <option value="name:1">Name A-Z</option>
+    </select>
+  </div>
+  <button type="button" class="filter-clear btn btn-sm btn-secondary">Clear</button>
+</div>
+
+<div class="board-toolbar">
+  <span class="muted filter-count" data-count-for="reports-board"></span>
+  <div class="page-actions">
+    <button type="button" class="btn btn-sm btn-secondary"
+            data-expand-all="reports">Expand all</button>
+    <button type="button" class="btn btn-sm btn-secondary"
+            data-collapse-all="reports">Collapse all</button>
+  </div>
+</div>
+
+<div id="reports-board">
+{% for row in rows %}
+  {% set c = row.cycle %}
+  <div class="group-card" data-filter-item data-collapse-scope="reports"
+       data-name="{{ c.cycle_name }} {{ c.id }}"
+       data-status="{{ row.status }}"
+       data-branch="{{ c.branch_id or 'org' }}"
+       data-responses="{{ row.responses }}"
+       data-created="{{ c.created_at.timestamp() | int if c.created_at else 0 }}"
+       data-expand="[data-collapse-key='{{ c.id }}']">
+
+    <div class="group-card-head">
+      <div class="group-card-head-left">
+        <div class="group-card-title">
+          <span class="badge badge-orange">{{ 'Branch' if c.branch_id
+            else 'Organisation-wide' }}</span>
+          {{ c.cycle_name }}
+        </div>
+        <div class="group-card-meta">
+          <span class="status-pill status-{{ 'green' if row.status == 'ready'
+              else 'suppressed' if row.status == 'below_threshold' else 'amber' }}">
+            {% if row.status == 'ready' %}ready
+            {% elif row.status == 'provisional' %}provisional
+            {% elif row.status == 'below_threshold' %}below threshold
+            {% else %}not deployed{% endif %}
+          </span>
+          <code>{{ c.id }}</code>
+          <span>n &ge; {{ c.min_reporting_n }}</span>
+          {% if c.is_pilot %}<span class="badge badge-outline">pilot</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="group-card-head-right">
+        <div class="report-progress">
+          <div class="report-progress-nums">
+            <strong>{{ row.responses }}</strong> / {{ row.expected }}
+            <span class="muted">&middot; {{ row.rate }}%</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" style="width:{{ row.rate }}%"></div>
+          </div>
+        </div>
+        <button type="button" class="cycle-toggle-btn" data-collapse-toggle
+                aria-expanded="true" title="Collapse">
+          <span class="toggle-chevron">&#9662;</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card-body-wrap" data-collapse-body data-collapse-key="{{ c.id }}">
+      <div class="card-body-inner">
+
+        {% if row.state.key == 'ready' %}
+          {% if row.state.provisional %}
+          <p class="report-state-note">
+            <strong>Provisional.</strong> This cycle is still collecting, so
+            these figures move as more people answer. The reports say so on
+            their cover.
+          </p>
+          {% endif %}
+
+          {% for report_type in report_types %}
+          <div class="report-row">
+            <div class="report-row-name">
+              {{ report_title(report_type) }}
+              {% if report_type in row.narrated %}
+              <span class="badge badge-ai">interpreted</span>{% endif %}
+            </div>
+            <div class="report-row-actions">
+              <a class="btn btn-sm btn-primary"
+                 href="{{ url_for('org.report_preview', cycle_id=c.id,
+                                  report_type=report_type) }}">More info</a>
+              <a class="btn btn-sm btn-secondary"
+                 href="{{ url_for('org.report_download', cycle_id=c.id,
+                                  report_type=report_type, fmt='pdf') }}">PDF</a>
+              <a class="btn btn-sm btn-secondary"
+                 href="{{ url_for('org.report_download', cycle_id=c.id,
+                                  report_type=report_type, fmt='xlsx') }}">Excel</a>
+            </div>
+          </div>
+          {% endfor %}
+
+          <div class="report-row">
+            <div class="report-row-name">On-screen analysis
+              <span class="muted report-row-sub">The same figures, interactive</span>
+            </div>
+            <div class="report-row-actions">
+              <a class="btn btn-sm btn-primary"
+                 href="{{ url_for('org.analysis', cycle_id=c.id) }}">View the analysis</a>
+              <a class="btn btn-sm btn-secondary"
+                 href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">Cycle</a>
+            </div>
+          </div>
+
+        {% elif row.state.key == 'below_threshold' %}
+          <div class="report-blocked">
+            <div class="report-blocked-title">Nothing can be shown yet</div>
+            <p>{{ row.state.needs }}. This is the reporting threshold doing
+              its job, not a fault - a result from fewer people than this
+              could be traced back to them.</p>
+            <a class="btn btn-sm btn-secondary"
+               href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">Cycle</a>
+          </div>
+
+        {% else %}
+          <div class="report-blocked">
+            <div class="report-blocked-title">No report yet</div>
+            <p>{{ row.state.needs }}.</p>
+            <a class="btn btn-sm btn-primary"
+               href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">Cycle</a>
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+{% endfor %}
+</div>
+
+<p class="muted board-footnote">
+  Each report opens as a preview with PDF and Excel downloads.
+</p>
+
 {% else %}
 <div class="empty-state">
-  <div class="empty-icon">-</div>
-  <h2>No cycles yet</h2>
-  <p>Create a measurement cycle and deploy it to collect responses.</p>
+  <p class="empty-state-title">No cycles yet</p>
+  <p class="empty-state-note">Create a measurement cycle and deploy it to
+    collect responses. Reports appear here once a cycle is reportable.</p>
   <a href="{{ url_for('org.cycles_list') }}" class="btn btn-primary">Cycles</a>
 </div>
-{% endfor %}
+{% endif %}
 {% endblock %}

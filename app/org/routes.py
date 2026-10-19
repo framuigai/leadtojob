@@ -1085,22 +1085,56 @@ def reports():
         .filter(MeasurementCycle.archived_at.is_(None)) \
         .order_by(MeasurementCycle.created_at.desc()).all()
 
+    # ONE GROUPED QUERY, not one per cycle — the same shape the L1 board uses.
+    # Which report types already carry an interpretation, so the card can badge
+    # them instead of making the admin open each one to find out.
+    narrated = {
+        (row[0], row[1])
+        for row in db.session.query(Analysis.cycle_id, Analysis.report_type)
+        .filter(Analysis.org_id == current_user.org_id).all()
+    }
+
     rows = []
     for cycle in cycles:
         deployments = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
             .filter(SurveyDeployment.cycle_id == cycle.id) \
             .filter(SurveyDeployment.archived_at.is_(None)).all()
         responses = sum(w.responses_received for w in deployments)
+        expected = sum(w.expected_respondents for w in deployments)
+        state = _report_state(cycle, deployments, responses)
         rows.append({
             'cycle': cycle,
             'deployments': deployments,
             'responses': responses,
-            'expected': sum(w.expected_respondents for w in deployments),
-            'state': _report_state(cycle, deployments, responses),
+            'expected': expected,
+            # Capped at 100: a response rate over the invited headcount is a
+            # typo in the headcount, not a reason to draw a bar past its track.
+            'rate': min(100, round(responses / expected * 100)) if expected else 0,
+            'state': state,
+            'narrated': {t for (c, t) in narrated if c == cycle.id},
+            # Flattened for filters.js, which tests data-* attributes on the
+            # card and cannot reach into a nested dict.
+            'status': ('provisional' if state['provisional']
+                       else state['key']),
         })
 
     return render_template('org/reports.html', rows=rows,
+                           report_types=report_builder.REPORT_TYPES,
+                           report_title=report_builder.report_title,
+                           branches=_visible_branches(),
                            branch_scoped=is_branch_scoped(current_user))
+
+
+def _visible_branches():
+    """
+    The branches this user may filter by. Empty for L3, which sees one branch
+    and therefore needs no branch filter at all.
+    """
+    if is_branch_scoped(current_user):
+        return []
+    return (db.session.query(Branch)
+            .filter_by(org_id=current_user.org_id, is_active=True)
+            .order_by(Branch.name).all())
 
 
 def _report_state(cycle, deployments, responses):
