@@ -64,7 +64,11 @@
         <button type="submit" class="btn btn-primary">Open the cycle</button>
       </form>
       {% elif cycle.status == 'open' %}
-      {% if not deployments %}
+      {# `can_deploy` comes from the route and follows uq_open_deployment:
+         an archived or closed deployment frees the slot, so the button comes
+         back. Gating on "has any deployment" was stricter than the index and
+         left no way to redo a deployment made with the wrong headcount. #}
+      {% if can_deploy %}
       <a href="{{ url_for('org.deploy', cycle_id=cycle.id) }}"
          class="btn btn-primary">Deploy</a>
       {% endif %}
@@ -192,7 +196,8 @@
           Deploy this cycle to mint its anonymous survey link.
         {% endif %}
       </p>
-      {% if cycle.status == 'open' and can(current_user, 'deploy_surveys') %}
+      {% if cycle.status == 'open' and can_deploy
+            and can(current_user, 'deploy_surveys') %}
       <a href="{{ url_for('org.deploy', cycle_id=cycle.id) }}"
          class="btn btn-primary">Deploy</a>
       {% endif %}

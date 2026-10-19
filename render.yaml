@@ -45,6 +45,25 @@ services:
         value: 'True'
       - key: LOG_LEVEL
         value: INFO
+      # ── The two privacy constants, DECLARED rather than left to the code
+      # default. Both have working defaults in config.py, so this changes no
+      # behaviour — it makes the values visible in Render > Environment
+      # instead of knowable only by reading the source. MIN_REPORTING_N is the
+      # single most consequential setting in the product and should not be
+      # implicit.
+      #
+      # MIN_REPORTING_N = 1 MEANS NO SUPPRESSION. A group of one reports, so a
+      # breakdown containing a single person shows that person's own answers
+      # to whoever reads the report. app/__init__.py logs a warning on every
+      # boot while this is below 3; that warning is expected, not a fault.
+      # Raising it here is the one-line way to turn suppression back on.
+      - key: MIN_REPORTING_N
+        value: '1'
+      # The independent floor for ANY association output. NOT affected by
+      # MIN_REPORTING_N: contrast_floor() takes max(ASSOCIATION_MIN_N,
+      # 3 x min_reporting_n), so this still binds at 12 either way.
+      - key: ASSOCIATION_MIN_N
+        value: '12'
       # Secrets: set in the Render dashboard, never in this file.
       - key: FLASK_SECRET_KEY
         sync: false

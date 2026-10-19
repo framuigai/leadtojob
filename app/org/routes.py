@@ -151,6 +151,8 @@ def dashboard():
     for deployment in deployments:
         by_cycle.setdefault(deployment.cycle_id, []).append(deployment)
 
+    _settle_cycles([(c, by_cycle.get(c.id, [])) for c in cycles])
+
     rows = []
     for cycle in cycles:
         cycle_deployments = by_cycle.get(cycle.id, [])
@@ -370,6 +372,10 @@ def cycles_list():
                        .filter(SurveyDeployment.archived_at.is_(None)).all()):
         by_cycle.setdefault(deployment.cycle_id, []).append(deployment)
 
+    # Settle before building the rows, so the status pill and the response
+    # figures on one page cannot describe two different moments.
+    _settle_cycles([(c, by_cycle.get(c.id, [])) for c in cycles])
+
     rows = []
     for cycle in cycles:
         found = by_cycle.get(cycle.id, [])
@@ -470,9 +476,16 @@ def cycle_detail(cycle_id):
     sites and any bookmark an admin already has still resolve.
     """
     cycle = _cycle_or_404(cycle_id)
+    # ARCHIVED DEPLOYMENTS ARE NOT LISTED. Archiving kills the public link, so
+    # showing one here offers a survey link that no longer works - and the
+    # route's own duplicate check ignores them too, so listing them made the
+    # page disagree with the button.
     deployments = (db.session.query(SurveyDeployment)
              .filter_by(cycle_id=cycle.id, org_id=current_user.org_id)
+             .filter(SurveyDeployment.archived_at.is_(None))
              .order_by(SurveyDeployment.deployed_at.desc().nullslast()).all())
+
+    _settle_cycles([(cycle, deployments)])
 
     rows = []
     for deployment in deployments:
@@ -493,8 +506,24 @@ def cycle_detail(cycle_id):
             'unused': unused,
         })
 
+    # THE DEPLOY BUTTON FOLLOWS uq_open_deployment, NOT "has any deployment".
+    #
+    # The template used to gate on `not deployments`, which is stricter than
+    # both the index and the route. Archiving a deployment deliberately frees
+    # the slot SO IT CAN BE REMADE - that is what the partial unique index is
+    # for - and the old gate then refused to offer the button, with nothing on
+    # screen to explain why. An admin who deployed with the wrong headcount had
+    # no way back.
+    #
+    # Computed here rather than in Jinja so it says the same thing as the
+    # `existing` check inside deploy(); two copies of this rule in two
+    # languages is how they drift.
+    can_deploy = not any(
+        not d.closed and d.archived_at is None for d in deployments)
+
     return render_template('org/cycle_detail.html', cycle=cycle,
                            deployments=deployments, rows=rows,
+                           can_deploy=can_deploy,
                            responses=sum(w.responses_received for w in deployments))
 
 
@@ -1094,11 +1123,21 @@ def reports():
         .filter(Analysis.org_id == current_user.org_id).all()
     }
 
+    by_cycle = {}
+    for deployment in (_scoped(db.session.query(SurveyDeployment),
+                               SurveyDeployment)
+                       .filter(SurveyDeployment.archived_at.is_(None)).all()):
+        by_cycle.setdefault(deployment.cycle_id, []).append(deployment)
+
+    # A cycle reported as "provisional" because it is still collecting, when
+    # in fact every deployment closed a month ago, is the exact disagreement
+    # _settle_cycles exists to remove - and this is the page where it would be
+    # read as a qualification on the numbers.
+    _settle_cycles([(c, by_cycle.get(c.id, [])) for c in cycles])
+
     rows = []
     for cycle in cycles:
-        deployments = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
-            .filter(SurveyDeployment.cycle_id == cycle.id) \
-            .filter(SurveyDeployment.archived_at.is_(None)).all()
+        deployments = by_cycle.get(cycle.id, [])
         responses = sum(w.responses_received for w in deployments)
         expected = sum(w.expected_respondents for w in deployments)
         state = _report_state(cycle, deployments, responses)
@@ -1135,6 +1174,73 @@ def _visible_branches():
     return (db.session.query(Branch)
             .filter_by(org_id=current_user.org_id, is_active=True)
             .order_by(Branch.name).all())
+
+
+def _deployment_finished(deployment):
+    """
+    Whether this deployment has stopped collecting.
+
+    MIRRORS survey.routes._is_live(), deliberately and in the same order: a
+    deployment is finished when it is closed, archived, or past closes_at. The
+    survey link already refuses responses on exactly these conditions, so any
+    other rule here would let the admin side and the respondent side disagree
+    about whether a deployment is still running.
+
+    `closes_at` is normalised to UTC before comparing: a naive datetime read
+    back from Postgres raises on comparison with an aware one, and the raise
+    would happen inside a page load rather than anywhere obvious.
+    """
+    if deployment.closed or deployment.archived_at is not None:
+        return True
+    if deployment.closes_at is None:
+        return False
+    closes_at = deployment.closes_at
+    if closes_at.tzinfo is None:
+        closes_at = closes_at.replace(tzinfo=timezone.utc)
+    return closes_at < datetime.now(timezone.utc)
+
+
+def _settle_cycles(pairs):
+    """
+    Close any open cycle whose deployments have all finished.
+
+    WHY THIS EXISTS. Collection already stops by itself — _is_live() evaluates
+    closes_at on every survey request — but `cycle.status` only ever moved when
+    an admin pressed Close. So a cycle whose deadline had passed showed OPEN on
+    the board indefinitely while its link was already refusing responses, and
+    the two halves of the product disagreed about whether it was running.
+
+    That also quietly defeated §13.8: the retention clock starts at
+    `closed_at`, so a cycle nobody closed never started its clock, which is the
+    indefinite retention the specification forbids arriving by the back door.
+
+    LAZY, NOT SCHEDULED. There is no background worker in this product and one
+    is not being added — `_is_live` already uses exactly this pattern, settling
+    state at request time. The close stays irreversible and audited; all that
+    changed is who notices the deadline passed.
+
+    A cycle with NO deployments is never settled. "Every deployment has
+    finished" is vacuously true of an empty list, and auto-closing a cycle
+    nobody has deployed yet would destroy it before it was used.
+    """
+    changed = []
+    for cycle, deployments in pairs:
+        if cycle.status != 'open' or not deployments:
+            continue
+        if not all(_deployment_finished(d) for d in deployments):
+            continue
+        cycle.status = 'closed'
+        cycle.closed_at = datetime.now(timezone.utc)
+        changed.append(cycle)
+        record_audit(
+            CYCLE_CLOSE, 'cycle', cycle.id,
+            f'{cycle.cycle_name} closed automatically — every deployment had '
+            f'finished collecting. The retention clock starts now.',
+            org_id=cycle.org_id, branch_id=cycle.branch_id,
+            payload=cycle_payload(cycle))
+    if changed:
+        db.session.commit()
+    return changed
 
 
 def _report_state(cycle, deployments, responses):

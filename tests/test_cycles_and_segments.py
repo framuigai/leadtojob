@@ -9,13 +9,17 @@ PHASE 4'S ACCEPTANCE TEST.
 pressing Deploy at the same moment is a race the route check cannot win: both
 read, both see nothing open, both write. Only a unique index decides.
 """
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.domains import DOMAINS, GEM, OUTCOME_DOMAIN
 from app.org.routes import _CYCLE_ID_RE
-from app.models import MeasurementCycle, Segment, SegmentOption, SurveyDeployment
+from app.models import (
+    AuditEvent, MeasurementCycle, Segment, SegmentOption, SurveyDeployment,
+)
 from app.provisioning import freeze_segments, validate_segment_values
 from tests.conftest import login
 from tests.factories import (
@@ -848,3 +852,155 @@ def test_a_closed_deployment_does_not_show_its_link(client, db, org_world):
     login(client, org_world['admin'])
     html = client.get(f'/org/cycles/{cycle.id}').get_data(as_text=True)
     assert 'slug-closed-aaa' not in html
+
+
+# ── Redeploying after an archive ──────────────────────────────
+
+def test_an_archived_deployment_frees_the_slot_and_the_button_returns(
+        client, db, org_world):
+    """
+    uq_open_deployment is a PARTIAL index on closed = false, so archiving
+    deliberately frees the slot in order that the deployment can be remade.
+
+    The page used to gate its Deploy button on "has any deployment", which is
+    stricter than both the index and the route's own check - so an admin who
+    deployed with the wrong headcount had no way back and nothing on screen to
+    say why.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-REDEP', status='open')
+    deployment = make_deployment(org_world['org'], cycle,
+                                 public_slug='slug-redep-aaa',
+                                 expected_respondents=40)
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    html = client.get(f'/org/cycles/{cycle.id}').get_data(as_text=True)
+    assert f'/org/cycles/{cycle.id}/deploy' not in html   # one is live
+
+    deployment.closed = True
+    deployment.archived_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    html = client.get(f'/org/cycles/{cycle.id}').get_data(as_text=True)
+    assert f'/org/cycles/{cycle.id}/deploy' in html       # the slot is free
+    # And the dead link is no longer offered for copying.
+    assert 'slug-redep-aaa' not in html
+
+    # The redeploy itself succeeds rather than tripping the unique index.
+    client.post(f'/org/cycles/{cycle.id}/deploy',
+                data={'expected_respondents': '25'}, follow_redirects=True)
+    live = (db.session.query(SurveyDeployment)
+            .filter_by(cycle_id=cycle.id, closed=False)
+            .filter(SurveyDeployment.archived_at.is_(None)).all())
+    assert len(live) == 1
+    assert live[0].expected_respondents == 25
+
+
+# ── A finished cycle settles itself ─────────────────────────
+
+def test_a_cycle_closes_itself_once_every_deployment_has_finished(
+        client, db, org_world):
+    """
+    Collection already stopped by itself - _is_live() evaluates closes_at on
+    every survey request - but cycle.status only ever moved when an admin
+    pressed Close. So the board said OPEN while the link refused responses.
+
+    It also defeated §13.8 quietly: the retention clock starts at closed_at, so
+    a cycle nobody closed never started its clock.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-SETTLE', status='open')
+    make_deployment(org_world['org'], cycle, public_slug='slug-settle-aaa',
+                    closed=True)
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.get(f'/org/cycles/{cycle.id}')
+
+    db.session.refresh(cycle)
+    assert cycle.status == 'closed'
+    assert cycle.closed_at is not None      # the retention clock has started
+
+
+def test_a_cycle_settles_on_a_passed_deadline_not_only_on_an_explicit_close(
+        client, db, org_world):
+    """
+    THE CASE THAT MATTERS. A deployment nobody closed, whose closes_at has
+    passed, is already refusing respondents - _deployment_finished mirrors
+    _is_live precisely so the two sides cannot disagree.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-PAST', status='open')
+    make_deployment(org_world['org'], cycle, public_slug='slug-past-aaa',
+                    closes_at=datetime.now(timezone.utc) - timedelta(days=3))
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.get('/org/cycles')
+
+    db.session.refresh(cycle)
+    assert cycle.status == 'closed'
+
+
+def test_a_cycle_still_collecting_is_left_open(client, db, org_world):
+    """The complement. One live deployment keeps the whole cycle open."""
+    cycle = make_cycle(org_world['org'], 'ACME-LIVE', status='open')
+    make_deployment(org_world['org'], cycle, public_slug='slug-live-a',
+                    closed=True)
+    make_deployment(org_world['org'], cycle, public_slug='slug-live-b',
+                    branch=org_world['branch'])
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.get(f'/org/cycles/{cycle.id}')
+
+    db.session.refresh(cycle)
+    assert cycle.status == 'open'
+
+
+def test_a_cycle_with_no_deployments_is_never_settled(client, db, org_world):
+    """
+    "Every deployment has finished" is VACUOUSLY TRUE of an empty list, so
+    without the guard this would close every cycle the moment it was opened,
+    before anyone could deploy it.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-EMPTY', status='open')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.get(f'/org/cycles/{cycle.id}')
+    client.get('/org/cycles')
+    client.get('/org/reports')
+
+    db.session.refresh(cycle)
+    assert cycle.status == 'open'
+
+
+def test_a_draft_cycle_is_never_settled(client, db, org_world):
+    """draft -> closed would skip `open` entirely and is not a transition."""
+    cycle = make_cycle(org_world['org'], 'ACME-DRAFT', status='draft')
+    make_deployment(org_world['org'], cycle, public_slug='slug-draft-a',
+                    closed=True)
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.get(f'/org/cycles/{cycle.id}')
+
+    db.session.refresh(cycle)
+    assert cycle.status == 'draft'
+
+
+def test_the_automatic_close_is_audited(client, db, org_world):
+    """
+    It destroys nothing, but it is irreversible - reopening a closed cycle is
+    deliberately absent - so it leaves a trace saying it was automatic.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-AUDIT', status='open')
+    make_deployment(org_world['org'], cycle, public_slug='slug-audit-a',
+                    closed=True)
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.get(f'/org/cycles/{cycle.id}')
+
+    rows = (db.session.query(AuditEvent)
+            .filter_by(target_type='cycle', target_id=cycle.id).all())
+    assert any('automatically' in (r.summary or '') for r in rows)

@@ -300,9 +300,10 @@ org-wide cycles. The schema still permits one org-wide deployment alongside one
 per branch (`uq_open_deployment` keys on scope, not on cycle), so the page must
 not start lying if that policy changes.
 
-Note `cycle_detail.html` still gates its Deploy button on `{% if not
-deployments %}` — stricter than both the schema and the capability table, and it
-blocks the legitimate remake-after-archive case.
+The Deploy button follows `uq_open_deployment`, not "has any deployment":
+`cycle_detail()` computes `can_deploy` in Python so it says the same thing as
+the `existing` check inside `deploy()`. Archiving frees the slot and the button
+returns. Archived deployments are not listed — their link is dead.
 
 ---
 
@@ -324,6 +325,35 @@ L1** — weakening suppression must be a code change and a review, not an
 afternoon's decision under client pressure. Suppression also defends against
 **differencing**: when one cell in a breakdown is suppressed, the next-smallest
 is suppressed too.
+
+---
+
+## A cycle closes itself when its deployments finish
+
+`_settle_cycles()` in `app/org/routes.py` closes any **open** cycle whose
+deployments have **all** finished, and is called from `cycle_detail`,
+`cycles_list`, `dashboard` and `reports` — every view that already loads a
+cycle's deployments.
+
+**Why it is not a scheduled job.** There is no background worker and one is not
+being added. `survey.routes._is_live()` already settles state at request time;
+`_deployment_finished()` mirrors it condition for condition (closed, archived,
+or past `closes_at`) so the admin side and the respondent side cannot disagree
+about whether a deployment is still running.
+
+**What it fixes.** Collection always stopped by itself, but `cycle.status` only
+moved when an admin pressed Close — so a finished cycle showed `open`
+indefinitely while its link refused responses. That also defeated §13.8
+quietly: the retention clock starts at `closed_at`, so a cycle nobody closed
+never started its clock.
+
+**Two guards that are not optional.** A cycle with **no** deployments is never
+settled — "every deployment has finished" is vacuously true of an empty list,
+and without the guard every cycle would close the moment it opened. And only
+`open` cycles settle; `draft → closed` would skip a state. Both are tested.
+
+The close stays irreversible and audited, and the audit line says it was
+automatic.
 
 ---
 
