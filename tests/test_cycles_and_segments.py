@@ -549,26 +549,30 @@ def test_a_cycle_moves_draft_to_open_to_closed_and_no_further(client, db, org_wo
     assert db.session.get(MeasurementCycle, 'JS-2026-H1').status == 'closed'
 
 
-def test_a_deployment_cannot_open_while_an_active_segment_has_no_options(
-        client, db, org_world):
+def test_a_cycle_opens_without_any_segment_setup(client, db, org_world):
     """
-    An active segment with no options renders an empty dropdown on the survey
-    form — and because segments freeze on the first response, it cannot be
-    repaired once the deployment is running.
+    THE GATE THAT WENT WITH THE SEGMENTS.
+
+    Opening a cycle used to be refused while an active segment had no options,
+    because that is an empty dropdown on the survey form - and since segments
+    froze on the first response, it could not be fixed once the cycle was
+    running. It was also the single most confusing thing a new admin met:
+    a setup step they had to get right before anything could start.
+
+    With segments gone there is nothing to configure first, so draft -> open
+    succeeds on a cycle that has had no setup beyond its own creation.
     """
-    make_segment(org_world['org'], 'department', 'Department', options=())
-    make_cycle(org_world['org'], 'JS-2026-H1', status='draft')
+    cycle = make_cycle(org_world['org'], 'ACME-OPEN', status='draft')
     db.session.commit()
 
     login(client, org_world['admin'])
-    res = client.post('/org/cycles/JS-2026-H1/status', data={'status': 'open'},
-                      follow_redirects=True)
-    assert 'at least one reporting segment' in res.get_data(as_text=True)
-    db.session.expire_all()
-    assert db.session.get(MeasurementCycle, 'JS-2026-H1').status == 'draft'
+    client.post(f'/org/cycles/{cycle.id}/status', data={'status': 'open'},
+                follow_redirects=True)
 
+    db.session.refresh(cycle)
+    assert cycle.status == 'open'
+    assert cycle.opened_at is not None
 
-# ── Segments ───────────────────────────────────────────────────────────────
 
 def test_a_segment_key_is_unique_per_org(db, org_world):
     make_segment(org_world['org'], 'department', 'Department')
@@ -605,48 +609,10 @@ def test_freezing_stamps_only_active_segments(db, org_world):
     assert dormant.frozen_at is None
 
 
-def test_a_frozen_segment_rejects_a_new_option_through_the_screen(
-        client, db, org_world):
-    """
-    THE NAMED ACCEPTANCE CRITERION.
+# Two tests lived here on the segment freeze: that a frozen segment refused a
+# new option through the screen, and that an unfrozen one accepted it. Both
+# described screens that no longer exist.
 
-    After the freeze, renaming or adding an option silently re-groups answers
-    given under the old meaning — and the response rows themselves are
-    unchanged, so nothing in the data would ever reveal it.
-    """
-    segment = make_segment(org_world['org'], 'department', 'Department',
-                           [('FIN', 'Finance')])
-    db.session.commit()
-    freeze_segments(org_world['org'].id)
-    db.session.commit()
-
-    login(client, org_world['admin'])
-    res = client.post(f'/org/segments/{segment.id}',
-                      data={'action': 'add_option', 'option_code': 'OPS',
-                            'option_label': 'Operations'},
-                      follow_redirects=True)
-    assert 'frozen' in res.get_data(as_text=True).lower()
-    assert db.session.query(SegmentOption).filter_by(
-        segment_id=segment.id, option_code='OPS').first() is None
-
-
-def test_an_unfrozen_segment_accepts_options(client, db, org_world):
-    segment = make_segment(org_world['org'], 'department', 'Department')
-    db.session.commit()
-
-    login(client, org_world['admin'])
-    client.post(f'/org/segments/{segment.id}',
-                data={'action': 'add_option', 'option_code': 'ops',
-                      'option_label': 'Operations'},
-                follow_redirects=True)
-    option = db.session.query(SegmentOption).filter_by(
-        segment_id=segment.id).one()
-    # Codes are upper-cased on entry: 'ops' and 'OPS' typed by two admins must
-    # not become two groups, neither of which reaches the threshold.
-    assert option.option_code == 'OPS'
-
-
-# ── Self-declared segment values ───────────────────────────────────────────
 
 def test_a_valid_declaration_is_kept(db, org_world):
     make_segment(org_world['org'], 'department', 'Department',
@@ -795,9 +761,43 @@ def test_the_cycle_page_carries_the_survey_link_and_the_invited_count(
     html = client.get(f'/org/cycles/{cycle.id}').get_data(as_text=True)
 
     assert 'slug-merge-aaa' in html          # the survey link itself
-    assert 'The survey link' in html
-    assert 'Close this deployment' in html
+    assert 'Survey link' in html
     assert str(deployment.expected_respondents) in html
+
+    # The copy button, and the wrapper copy.js reads its input from. The
+    # wrapper is the contract: ids would collide across N deployments.
+    assert 'data-copy' in html
+    assert 'link-copy' in html
+
+
+def test_the_purpose_statement_panel_offers_an_edit_link(client, db, org_world):
+    """
+    It is the one thing on this page an admin routinely needs to change, and
+    it used to be reachable only through the cycle's general Edit button.
+    The anchor lands on the field itself.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-EDITLINK', status='open')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    html = client.get(f'/org/cycles/{cycle.id}').get_data(as_text=True)
+    assert f'/org/cycles/{cycle.id}/edit#purpose_statement' in html
+
+
+def test_a_branch_admin_sees_no_edit_link_it_cannot_use(client, db, org_world):
+    """A button that 403s is worse than no button."""
+    cycle = make_cycle(org_world['org'], 'ACME-L3VIEW', status='open',
+                       branch=org_world['branch'])
+    db.session.commit()
+
+    l3 = make_branch_admin(org_world['org'], org_world['branch'],
+                           email='l3-view@acme.test')
+    db.session.commit()
+
+    login(client, l3)
+    html = client.get(f'/org/cycles/{cycle.id}').get_data(as_text=True)
+    # L3 DOES hold manage_cycles, so it keeps the Edit link on its own cycle.
+    assert f'/org/cycles/{cycle.id}/edit#purpose_statement' in html
 
 
 def test_the_old_deployment_url_redirects_to_the_cycle_page(

@@ -23,14 +23,7 @@
           </td></tr>
       <tr><td>Instrument</td>
           <td>{{ item_count }} questions, this organisation's own copy</td></tr>
-      <tr><td>Reporting segments</td>
-          <td>
-            {% if segments %}
-              {% for s in segments %}{{ s.label }}{% if not loop.last %}, {% endif %}{% endfor %}
-              <div class="muted">Options are defined by the client before
-                their first cycle opens.</div>
-            {% else %}—{% endif %}
-          </td></tr>
+
       <tr><td>Administrator</td>
           <td>
             {% if admins %}

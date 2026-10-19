@@ -118,19 +118,24 @@ def test_pilot_feedback_is_not_a_client_deliverable():
 
 # ── Segments are the org's vocabulary ───────────────────────────────────────
 
-def test_only_l2_and_l1_define_segments():
+def test_no_role_defines_segments(self=None):
     """
-    If two branches could each add their own options, 'Finance', 'finance' and
-    'Fin.' become three groups and none of them reaches the reporting
-    threshold. The data is not wrong — it is simply gone, and nothing in the
-    system would report that it had been lost.
+    SEGMENTS WERE REMOVED, SO MANAGE_SEGMENTS IS HELD BY NOBODY.
+
+    It used to be L1 and L2, with L3 able to view but not add - two branches
+    each adding their own spelling of one department produces two groups,
+    neither of which reaches the reporting threshold.
+
+    The constant is kept rather than deleted so this table records a feature
+    that is OFF, which is different from a feature nobody thought about. Same
+    shape as LOWER_MIN_N, for a different reason.
     """
-    assert p.can(L1, p.MANAGE_SEGMENTS)
-    assert p.can(L2, p.MANAGE_SEGMENTS)
-    assert not p.can(L3, p.MANAGE_SEGMENTS)
+    from app.permissions import (BRANCH_ADMIN, MANAGE_SEGMENTS, MASTER_ADMIN,
+                                 ORG_ADMIN, _CAPABILITIES)
 
+    for role in (MASTER_ADMIN, ORG_ADMIN, BRANCH_ADMIN):
+        assert MANAGE_SEGMENTS not in _CAPABILITIES[role], role
 
-# ── Templates ───────────────────────────────────────────────────────────────
 
 def test_templates_are_editable_by_l1_and_viewable_by_the_rest():
     assert p.can(L1, p.EDIT_TEMPLATES)

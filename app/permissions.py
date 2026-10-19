@@ -88,10 +88,17 @@ MANAGE_ORG_SETTINGS  = 'manage_org_settings'
 # ── Measurement work ────────────────────────────────────────────────────────
 
 MANAGE_CYCLES      = 'manage_cycles'       # create measurement cycles
-# Define and FREEZE the reporting dimensions (department, function, location,
-# tenure band). L2 only: options are a controlled vocabulary set before the
-# cycle opens, because two spellings of "Finance" become two groups and neither
-# reaches the reporting threshold. L3 views them.
+# SEGMENTS WERE REMOVED FROM THE PRODUCT. Held by NO ROLE, like LOWER_MIN_N.
+#
+# It used to define and FREEZE the reporting dimensions (department, function,
+# location, tenure band) as a controlled vocabulary, L2 only. The routes, the
+# admin screens and the respondent's self-declaration step are all gone; the
+# tables remain, unused.
+#
+# The constant is KEPT rather than deleted so that this table records a feature
+# that is OFF, which is different from a feature nobody thought about — and so
+# that `can(user, MANAGE_SEGMENTS)` keeps answering False instead of raising a
+# NameError in anything that still asks.
 MANAGE_SEGMENTS    = 'manage_segments'
 DEPLOY_SURVEYS     = 'deploy_surveys'      # deploy into an existing cycle
 DEPLOY_ORG_WIDE    = 'deploy_org_wide'     # deploy with branch_id = NULL (HQ)
@@ -151,7 +158,7 @@ _CAPABILITIES = {
         MANAGE_CATALOGUE, VIEW_PILOT_FEEDBACK,
         MANAGE_BRANCHES, MANAGE_BRANCH_ADMINS, VIEW_ALL_BRANCHES,
         MANAGE_ORG_SETTINGS,
-        MANAGE_CYCLES, MANAGE_SEGMENTS, DEPLOY_SURVEYS,
+        MANAGE_CYCLES, DEPLOY_SURVEYS,
         DEPLOY_ORG_WIDE, DEPLOY_TO_BRANCH, ISSUE_TICKETS,
         RUN_ANALYSIS, VIEW_REPORTS, MANAGE_ACTIONS,
         EDIT_DEPLOYMENT, ARCHIVE_DEPLOYMENT, DELETE_DEPLOYMENT,
@@ -168,7 +175,7 @@ _CAPABILITIES = {
         VIEW_TEMPLATES,
         MANAGE_BRANCHES, MANAGE_BRANCH_ADMINS, VIEW_ALL_BRANCHES,
         MANAGE_ORG_SETTINGS,
-        MANAGE_CYCLES, MANAGE_SEGMENTS, ISSUE_TICKETS,
+        MANAGE_CYCLES, ISSUE_TICKETS,
         # Deploys ORG-WIDE ONLY. Not DEPLOY_TO_BRANCH — see its definition.
         DEPLOY_SURVEYS, DEPLOY_ORG_WIDE,
         RUN_ANALYSIS, VIEW_REPORTS, MANAGE_ACTIONS,

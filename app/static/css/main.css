@@ -1689,15 +1689,16 @@ a.group-card-title:hover { color: var(--blue); }
     .link-copy { min-width: 0; flex-direction: column; }
 }
 
-/* ── Deployment blocks on the cycle page ──────────────────────────────────
-   The deployment detail page was merged into the cycle page, so one cycle
-   now renders N deployment blocks in a single panel. The separator is what
-   keeps two deployments from reading as one list. */
-.deployment-block { padding: .25rem 0 .5rem; }
+/* ── The cycle detail page ────────────────────────────────────────────────
+   The deployment detail page was merged into it, so one cycle renders N
+   deployment blocks in a single panel, and the survey link moved to the top
+   because on an open cycle it is the only thing anyone comes here to copy. */
+
+.deployment-block { padding: .1rem 0 .25rem; }
 .deployment-block-sep {
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 1.25rem;
-    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 1.4rem;
+    padding-bottom: 1.4rem;
 }
 .deployment-head {
     display: flex;
@@ -1705,5 +1706,109 @@ a.group-card-title:hover { color: var(--blue); }
     justify-content: space-between;
     gap: 1rem;
     flex-wrap: wrap;
-    margin-bottom: .75rem;
+    margin-bottom: .9rem;
+}
+
+/* The link sits on a tinted shelf rather than loose in the panel body: it is
+   the one thing on this page that gets copied, and it should be findable
+   without reading. */
+.link-row {
+    background: var(--blue-faint);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: .8rem .9rem;
+}
+.link-row + .link-row { margin-top: .75rem; }
+.link-row-label {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .72rem;
+    font-weight: 700;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    margin-bottom: .45rem;
+}
+.link-row-note {
+    font-size: .76rem;
+    color: var(--text-muted);
+    margin: .5rem 0 0;
+    line-height: 1.5;
+}
+.inline-form { display: flex; gap: .4rem; align-items: center; }
+.inline-form input[type="number"] {
+    width: 7rem;
+    padding: .4rem .55rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+/* "12 / 40" — the denominator rides along with the figure instead of taking a
+   stat card of its own, which is how the old two-page layout ended up showing
+   responses twice. */
+.stat-of {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-subtle);
+    margin-left: .3rem;
+}
+
+.purpose-quote {
+    border-left: 3px solid var(--orange);
+    background: var(--orange-faint);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: .8rem 1rem;
+    margin: 0;
+    color: var(--text);
+    font-size: .95rem;
+    line-height: 1.6;
+}
+
+/* A definition list reads better than a table for reference material: no
+   header row to carry, and the labels can sit quietly in the left column. */
+.kv-grid {
+    display: grid;
+    grid-template-columns: minmax(10rem, 16rem) 1fr;
+    gap: .1rem 1.5rem;
+    margin: 0;
+}
+.kv-grid dt {
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: .7rem 0;
+    border-top: 1px solid var(--border-light);
+}
+.kv-grid dd {
+    margin: 0;
+    padding: .7rem 0;
+    border-top: 1px solid var(--border-light);
+    color: var(--text);
+    font-size: .88rem;
+}
+.kv-grid dt:first-of-type, .kv-grid dd:first-of-type { border-top: none; }
+.kv-grid dd .badge { margin: 0 .25rem .25rem 0; }
+.kv-note {
+    display: block;
+    font-size: .76rem;
+    color: var(--text-muted);
+    margin-top: .25rem;
+    line-height: 1.5;
+}
+
+.empty-state { text-align: center; padding: 1.5rem 1rem; }
+.empty-state-title { font-weight: 600; color: var(--text); margin: 0 0 .3rem; }
+.empty-state-note {
+    font-size: .82rem;
+    color: var(--text-muted);
+    margin: 0 auto 1rem;
+    max-width: 34rem;
+    line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+    .kv-grid { grid-template-columns: 1fr; gap: 0; }
+    .kv-grid dd { padding-top: 0; border-top: none; }
+    .deployment-head { align-items: flex-start; }
 }

@@ -8,6 +8,10 @@
     <h1>Measurement Cycles</h1>
     <p class="muted">A cycle is one measurement round - "Employee Satisfaction
       Survey 2026 H1" - not a person and not a position.</p>
+    {% if branch_scoped %}
+    <p class="muted">Showing
+      {{ current_user.branch.name if current_user.branch else 'your branch' }} only.</p>
+    {% endif %}
   </div>
   <div class="page-actions">
     {% if can(current_user, 'manage_cycles') %}
@@ -16,12 +20,26 @@
   </div>
 </div>
 
+{#
+  THE DEPLOYMENTS LIST WAS MERGED INTO THIS TABLE.
+
+  There used to be a separate /org/deployments page listing the same rows
+  keyed the other way round. A cycle is 1:1 with its deployment in practice —
+  L2 deploys organisation-wide only and L3 deploys to its own branch, and
+  neither can see the other's cycles — so the two tables were the same table
+  twice, and an admin had to know which one carried the response count.
+
+  The response, rate and deployed columns below come from the cycle's
+  deployments, summed. `rows` is built in cycles_list().
+#}
 <div class="panel"><div class="table-scroll">
   <table class="table">
     <thead><tr><th>Reference</th><th>Name</th><th>Domains</th><th>Status</th>
-      <th class="num">Deployments</th><th>Threshold</th><th>Retention</th><th></th></tr></thead>
+      <th>Scope</th><th class="num">Responses</th><th>Rate</th>
+      <th>Deployed</th><th></th></tr></thead>
     <tbody>
-    {% for c in cycles %}
+    {% for r in rows %}
+      {% set c = r.cycle %}
       <tr>
         <td><code>{{ c.id }}</code>{% if c.is_pilot %}
             <span class="badge badge-outline">pilot</span>{% endif %}</td>
@@ -31,16 +49,29 @@
         <td>{{ (c.assessed_domains or [])|length }} of 4</td>
         <td><span class="status-pill status-{{ 'green' if c.status == 'open'
              else 'amber' if c.status == 'draft' else 'red' }}">{{ c.status }}</span></td>
-        <td class="num">{{ deployments.get(c.id, 0) }}</td>
-        <td>n &ge; {{ c.min_reporting_n }}</td>
-        <td>{{ c.retention_months }} months</td>
+        <td>
+          {% if r.deployed %}{{ r.scope }}
+          {% else %}<span class="muted">not deployed</span>{% endif %}
+        </td>
+        <td class="num">
+          {% if r.deployed %}{{ r.responses }} / {{ r.expected }}
+          {% else %}<span class="muted">-</span>{% endif %}
+        </td>
+        <td>
+          {% if r.deployed %}{{ r.rate }}%
+          {% else %}<span class="muted">-</span>{% endif %}
+        </td>
+        <td>
+          {% if r.deployed_at %}{{ r.deployed_at.strftime('%d %b %Y') }}
+          {% else %}<span class="muted">-</span>{% endif %}
+        </td>
         <td class="row-actions">
           <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}"
              class="btn btn-sm btn-secondary">Open</a>
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="8" class="muted">No cycles yet.</td></tr>
+      <tr><td colspan="9" class="muted">No cycles yet.</td></tr>
     {% endfor %}
     </tbody>
   </table>

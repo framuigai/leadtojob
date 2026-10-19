@@ -41,7 +41,7 @@ from app.domains import (
 )
 from app.models import (
     AiCostEvent, Analysis, AuditEvent, Branch, InterventionCatalogue,
-    InterventionCell, MeasurementCycle, Org, ReportEvent, Segment,
+    InterventionCell, MeasurementCycle, Org, ReportEvent,
     SurveyDeployment, SurveyItem, User,
 )
 from app.permissions import (
@@ -49,8 +49,8 @@ from app.permissions import (
     VIEW_AUDIT_LOG, VIEW_COSTS,
 )
 from app.provisioning import (
-    ProvisioningError, active_segments, clone_instrument_to_org,
-    create_default_segments, default_active_domains, latest_version,
+    ProvisioningError, clone_instrument_to_org,
+    default_active_domains, latest_version,
 )
 
 # Days since the last deployment, for the status-board traffic light.
@@ -209,7 +209,8 @@ def orgs_new():
             flash(str(exc), 'error')
             return render_template('admin/org_form.html', wizard_step=1)
 
-        create_default_segments(org.id)
+        # No default segments any more: segments were removed from the
+        # product, so a new org seeds the instrument and nothing else.
         record_audit(ORG_CREATE, 'org', org.id,
                      f'Created organisation {org.name}',
                      org_id=org.id,
@@ -262,14 +263,8 @@ def org_setup_confirm(org_id):
               .filter_by(org_id=org.id, role=ORG_ADMIN)
               .order_by(User.email).all())
     items = db.session.query(SurveyItem).filter_by(org_id=org.id).count()
-    # Every seeded segment, not active_segments(): a client defines the
-    # options themselves before their first cycle, so at this point none has
-    # any and active_segments() would correctly report nothing.
-    segments = (db.session.query(Segment).filter_by(org_id=org.id)
-                .order_by(Segment.sort_order, Segment.label).all())
     return render_template('admin/org_setup_confirm.html', org=org,
-                           admins=admins, item_count=items,
-                           segments=segments, wizard_step=4)
+                           admins=admins, item_count=items, wizard_step=4)
 
 
 @admin_bp.route('/orgs/<uuid:org_id>')
@@ -822,7 +817,7 @@ def org_report(org_id, cycle_id, report_type):
     try:
         context = report_builder.assemble(
             db.session, org, cycle, report_type, deployments,
-            scope_branch=branch, segments=active_segments(org.id),
+            scope_branch=branch, segments=[],
             narrative=(narrative.payload if narrative else None))
     except report_builder.ReportNotAvailable as exc:
         return render_template('admin/report_unavailable.html', org=org,
@@ -866,7 +861,7 @@ def org_report_download(org_id, cycle_id, report_type, fmt):
     try:
         context = report_builder.assemble(
             db.session, org, cycle, report_type, deployments,
-            scope_branch=branch, segments=active_segments(org.id),
+            scope_branch=branch, segments=[],
             narrative=(narrative.payload if narrative else None),
             with_charts=(fmt == 'pdf'))
     except report_builder.ReportNotAvailable as exc:

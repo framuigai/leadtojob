@@ -2,12 +2,46 @@
 {% block title %}{{ cycle.cycle_name }} - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
+
+{#
+  THE ONE PAGE FOR A CYCLE.
+
+  Reading order follows what an admin actually does, which is not the order
+  the data happens to sit in:
+
+    1. header   — what this is, and the actions on it
+    2. stats    — how far it has got
+    3. live     — the survey link, FIRST, because on an open cycle it is the
+                  only thing anyone comes here to copy
+    4. told     — what respondents read, with its own Edit
+    5. method   — scope and method, which is reference material
+
+  Before the merge, the link lived on a second page and this one opened with
+  the purpose statement — so the most-used thing on the product was two clicks
+  and a page load away from the place people looked for it.
+#}
+
 <div class="page-header">
   <div class="page-header-left">
     <div class="section-label">{{ role_label(current_user.role) }} / Cycle</div>
     <h1>{{ cycle.cycle_name }}</h1>
-    <p class="muted"><code>{{ cycle.id }}</code> &middot; {{ cycle.status }}
-      {% if cycle.is_pilot %} &middot; pilot cycle{% endif %}</p>
+    <div class="meta-row">
+      <code>{{ cycle.id }}</code>
+      <span class="meta-sep">&bull;</span>
+      <span class="status-pill status-{{ 'green' if cycle.status == 'open'
+           else 'amber' if cycle.status == 'draft' else 'red' }}">{{ cycle.status }}</span>
+      {% if cycle.is_pilot %}
+      <span class="badge badge-outline">pilot</span>
+      {% endif %}
+      {% if cycle.branch %}
+      <span class="meta-sep">&bull;</span>
+      <span class="badge pill-branch">{{ cycle.branch.name }}</span>
+      {% endif %}
+      {% if cycle.previous_cycle_id %}
+      <span class="meta-sep">&bull;</span>
+      <span>follows <code>{{ cycle.previous_cycle_id }}</code></span>
+      {% endif %}
+    </div>
   </div>
   <div class="page-actions">
     {% if can(current_user, 'manage_actions') %}
@@ -45,77 +79,32 @@
   </div>
 </div>
 
+{% set invited = rows | sum(attribute='deployment.expected_respondents') %}
 <div class="stats-row">
-  <div class="stat-card"><div class="stat-val">{{ deployments|length }}</div>
-    <div class="stat-label">Deployments</div></div>
-  <div class="stat-card"><div class="stat-val">{{ responses }}</div>
+  <div class="stat-card">
+    <div class="stat-val">{{ responses }}{% if invited %}<span
+      class="stat-of">/ {{ invited }}</span>{% endif %}</div>
     <div class="stat-label">Responses</div></div>
-  <div class="stat-card"><div class="stat-val">{{ cycle.min_reporting_n }}</div>
+  <div class="stat-card">
+    <div class="stat-val">{{ (responses / invited * 100) | round | int
+                             if invited else 0 }}%</div>
+    <div class="stat-label">Response rate</div></div>
+  <div class="stat-card"><div class="stat-val">n &ge; {{ cycle.min_reporting_n }}</div>
     <div class="stat-label">Reporting threshold</div></div>
   <div class="stat-card"><div class="stat-val">{{ cycle.retention_months }}</div>
     <div class="stat-label">Retention (months)</div></div>
 </div>
 
+{# ── The link, first ──────────────────────────────────────────────────── #}
 <div class="panel">
-  <div class="panel-head"><div class="panel-title">What respondents are told</div></div>
-  <div class="panel-body">
-    <p class="panel-note">
-      This is rendered on the survey landing page, before the first question.
-      The specification requires respondents be told the purpose, how results
-      will be used, and that honest answers carry no consequence.
-    </p>
-    <blockquote style="border-left:3px solid var(--border);padding-left:1rem;
-                       margin:0;color:var(--text)">
-      {{ cycle.purpose_statement }}
-    </blockquote>
+  <div class="panel-head">
+    <div class="panel-title">Deployment</div>
+    {% if rows %}
+    <span class="panel-note">
+      {{ rows | length }} deployment{{ '' if rows | length == 1 else 's' }}
+    </span>
+    {% endif %}
   </div>
-</div>
-
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">Scope and method</div></div>
-  <div class="panel-body">
-    <table class="table">
-      <tbody>
-      <tr><th style="width:16rem">Domains measured</th><td>
-        {% for d in cycle.assessed_domains or [] %}{{ domain_label(d) }}{% if not loop.last %}, {% endif %}{% endfor %}
-      </td></tr>
-      <tr><th>Domain scoring method</th><td>
-        {% if cycle.scoring_method == 'mean_of_subdomains' %}
-          Mean of the three subdomain scores
-        {% else %}Mean of all valid domain items{% endif %}
-        <br><span class="muted">Frozen for this cycle. Printed in every report
-        generated from it.</span>
-      </td></tr>
-      <tr><th>Minimum reporting threshold</th><td>
-        n &ge; {{ cycle.min_reporting_n }}
-        <br><span class="muted">Any group below this is suppressed, and its
-        next-smallest sibling with it, so the suppressed figure cannot be
-        recovered by subtraction.</span>
-      </td></tr>
-      <tr><th>Previous cycle</th><td>
-        {% if cycle.previous_cycle_id %}<code>{{ cycle.previous_cycle_id }}</code>
-        {% else %}<span class="muted">none - this is a baseline</span>{% endif %}
-      </td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-{#
-  THE MERGED DEPLOYMENT PANEL.
-
-  There used to be a separate /org/deployments/<id> page. It showed the same
-  cycle from a second angle and repeated this page's headline numbers and
-  purpose statement, so an admin had to remember which page they were on to
-  know whether a response count meant one deployment or the whole cycle.
-
-  Everything it carried lives here now, one block per deployment: the survey
-  link, the invited count, the response rate, the close button, and the access
-  codes for any ticketed deployment that predates the open-link change. The old
-  route still exists and redirects here.
-#}
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">Deployments</div></div>
   <div class="panel-body">
   {% if rows %}
     {% for row in rows %}
@@ -123,77 +112,160 @@
     <div class="deployment-block{% if not loop.last %} deployment-block-sep{% endif %}">
 
       <div class="deployment-head">
-        <div>
-          <strong>{% if w.branch_id %}Branch deployment{% else %}Organisation-wide{% endif %}</strong>
-          <span class="muted">
-            &middot; {{ 'open link' if w.delivery_mode == 'open_link' else 'ticketed' }}
-            &middot; {{ 'closed' if w.closed else 'open' }}
-          </span>
+        <div class="meta-row" style="margin-top:0">
+          <strong>{% if w.branch_id %}Branch{% else %}Organisation-wide{% endif %}</strong>
+          <span class="meta-sep">&bull;</span>
+          <span class="status-pill status-{{ 'red' if w.closed else 'green' }}">
+            {{ 'closed' if w.closed else 'open' }}</span>
+          <span class="meta-sep">&bull;</span>
+          <span>{{ w.responses_received }} of {{ w.expected_respondents }}
+            invited &middot;
+            {{ w.response_rate_pct | round | int if w.response_rate_pct else 0 }}%</span>
+          {% if w.deployed_at %}
+          <span class="meta-sep">&bull;</span>
+          <span>deployed {{ w.deployed_at.strftime('%d %b %Y') }}</span>
+          {% endif %}
         </div>
         {% if not w.closed and can(current_user, 'edit_deployment') %}
         <form method="post"
               action="{{ url_for('org.deployment_close', deployment_id=w.id) }}"
               style="display:inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-secondary">Close this deployment</button>
+          <button type="submit" class="btn btn-sm btn-secondary">Close</button>
         </form>
         {% endif %}
       </div>
 
-      <table class="table">
-        <thead><tr><th class="num">Responses</th><th class="num">Invited</th>
-          <th class="num">Response rate</th></tr></thead>
-        <tbody>
-          <tr>
-            <td class="num">{{ w.responses_received }}</td>
-            <td class="num">{{ w.expected_respondents }}</td>
-            <td class="num">{{ w.response_rate_pct | round | int
-                               if w.response_rate_pct else 0 }}%</td>
-          </tr>
-        </tbody>
-      </table>
-
       {% if not w.closed %}
-      <div class="form-group">
-        <label for="link-{{ w.id }}">The survey link</label>
-        <input class="link-copy" type="text" readonly onclick="this.select()"
-               id="link-{{ w.id }}" value="{{ row.link }}"
-               style="width:100%;font-family:monospace">
-        <small class="muted">
-          This is the only way in. It is not recoverable from anywhere else,
-          and anyone holding it can respond - so share it with the invited
-          population and not more widely.
-        </small>
+      <div class="link-row">
+        <label class="link-row-label" for="link-{{ w.id }}">Survey link</label>
+        {# `.link-copy` wraps input + button; copy.js reads the input inside
+           the same wrapper, so N deployments cannot collide. #}
+        <div class="link-copy">
+          <input type="text" readonly onclick="this.select()"
+                 id="link-{{ w.id }}" value="{{ row.link }}">
+          <button type="button" data-copy data-copy-label="Copy">Copy</button>
+        </div>
+        <p class="link-row-note">
+          The only way in. It is not recoverable from anywhere else, and anyone
+          holding it can respond - so share it with the invited population and
+          not more widely.
+        </p>
       </div>
+      {% else %}
+      <p class="link-none">This deployment is closed. Its link no longer
+        accepts responses.</p>
       {% endif %}
 
       {% if w.delivery_mode == 'ticketed' and not w.closed %}
       {# Only reachable for a deployment created before the delivery choice
          was removed. New deployments are always open links. #}
-      <div class="form-group">
-        <label for="count-{{ w.id }}">Access codes
-          <span class="badge badge-outline">{{ row.unused }} unused of {{ row.tickets }}</span>
-        </label>
-        <form method="post"
+      <div class="link-row">
+        <label class="link-row-label" for="count-{{ w.id }}">Access codes
+          <span class="badge badge-outline">{{ row.unused }} unused of
+            {{ row.tickets }}</span></label>
+        <form method="post" class="inline-form"
               action="{{ url_for('org.issue_tickets', deployment_id=w.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="number" id="count-{{ w.id }}" name="count" min="1" max="2000"
                  value="{{ w.expected_respondents }}">
-          <button type="submit" class="btn btn-primary">Issue codes</button>
+          <button type="submit" class="btn btn-sm btn-primary">Issue codes</button>
         </form>
-        <small class="muted">
+        <p class="link-row-note">
           Codes are shown <strong>once</strong>, when you issue them. The system
           keeps only a one-way fingerprint, so they cannot be listed again - and
           it never records who received which.
-        </small>
+        </p>
       </div>
       {% endif %}
 
     </div>
     {% endfor %}
   {% else %}
-    <p class="muted">Not deployed yet.</p>
+    <div class="empty-state">
+      <p class="empty-state-title">Not deployed yet.</p>
+      <p class="empty-state-note">
+        {% if cycle.status == 'draft' %}
+          Open the cycle first. Opening it freezes the domains measured, so
+          check them before you do.
+        {% else %}
+          Deploy this cycle to mint its anonymous survey link.
+        {% endif %}
+      </p>
+      {% if cycle.status == 'open' and can(current_user, 'deploy_surveys') %}
+      <a href="{{ url_for('org.deploy', cycle_id=cycle.id) }}"
+         class="btn btn-primary">Deploy</a>
+      {% endif %}
+    </div>
   {% endif %}
+  </div>
+</div>
+
+{# ── What respondents read ────────────────────────────────────────────── #}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">What respondents are told</div>
+    {% if can(current_user, 'manage_cycles') %}
+    <a href="{{ url_for('org.cycle_edit', cycle_id=cycle.id) }}#purpose_statement"
+       class="btn btn-sm btn-secondary">Edit</a>
+    {% endif %}
+  </div>
+  <div class="panel-body">
+    <blockquote class="purpose-quote">{{ cycle.purpose_statement }}</blockquote>
+    <p class="panel-note" style="margin-top:.75rem">
+      Rendered on the survey landing page, before the first question. Editing it
+      changes this cycle only, not the organisation default.
+    </p>
+  </div>
+</div>
+
+{# ── Reference material, last ─────────────────────────────────────────── #}
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Scope and method</div></div>
+  <div class="panel-body">
+    <dl class="kv-grid">
+      <dt>Domains measured</dt>
+      <dd>
+        {% for d in cycle.assessed_domains or [] %}
+        <span class="badge badge-outline">{{ domain_label(d) }}</span>
+        {% endfor %}
+      </dd>
+
+      <dt>Domain scoring method</dt>
+      <dd>
+        {% if cycle.scoring_method == 'mean_of_subdomains' %}
+          Mean of the three subdomain scores
+        {% else %}Mean of all valid domain items{% endif %}
+        <span class="kv-note">Frozen for this cycle, and printed in every
+          report generated from it.</span>
+      </dd>
+
+      <dt>Minimum reporting threshold</dt>
+      <dd>
+        n &ge; {{ cycle.min_reporting_n }}
+        <span class="kv-note">
+        {% if cycle.min_reporting_n < 2 %}
+          At this threshold a result can rest on a single respondent.
+        {% else %}
+          Any group below this is suppressed, and its next-smallest sibling
+          with it, so the suppressed figure cannot be recovered by subtraction.
+        {% endif %}
+        </span>
+      </dd>
+
+      <dt>Retention</dt>
+      <dd>
+        {{ cycle.retention_months }} months after the cycle closes
+        <span class="kv-note">The clock starts at close, not at open. Nothing
+          is deleted automatically.</span>
+      </dd>
+
+      <dt>Previous cycle</dt>
+      <dd>
+        {% if cycle.previous_cycle_id %}<code>{{ cycle.previous_cycle_id }}</code>
+        {% else %}<span class="muted">none - this is a baseline</span>{% endif %}
+      </dd>
+    </dl>
   </div>
 </div>
 {% endblock %}

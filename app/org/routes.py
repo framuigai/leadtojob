@@ -31,10 +31,10 @@ from app.audit import (
     ORG_SETTINGS_EDIT,
     BRANCH_CREATE, BRANCH_DEACTIVATE, BRANCH_REACTIVATE, CYCLE_ARCHIVE,
     CYCLE_CLOSE, CYCLE_CREATE, CYCLE_EDIT, CYCLE_OPEN, DEPLOYMENT_CLOSE,
-    DEPLOYMENT_CREATE, SEGMENT_CREATE, SEGMENT_EDIT, TICKETS_ISSUE,
+    DEPLOYMENT_CREATE, TICKETS_ISSUE,
     USER_CREATE, ACTION_COMPLETE, ACTION_CREATE, ACTION_EDIT, ANALYSIS_RUN,
     REPORT_DOWNLOAD, action_payload, branch_payload, cycle_payload,
-    deployment_payload, record_audit, segment_payload, user_payload,
+    deployment_payload, record_audit, user_payload,
 )
 from app import ai_service
 # IMPORTED AS report_builder, NOT reports.
@@ -49,15 +49,15 @@ from app.analytics import reports as report_builder
 from app.auth.routes import require_capability, require_role_any
 from app.models import (
     AccessTicket, AiCostEvent, Analysis, Branch, ImprovementActions,
-    MeasurementCycle, Org, ReportEvent, Segment, SegmentOption,
+    MeasurementCycle, Org, ReportEvent,
     SurveyDeployment, SurveyItem, User,
 )
 from app.org import org_bp
-from app.provisioning import active_segments, latest_version
+from app.provisioning import latest_version
 from app.permissions import (
     BRANCH_ADMIN, DEPLOY_ORG_WIDE, DEPLOY_SURVEYS, DEPLOY_TO_BRANCH,
     EDIT_DEPLOYMENT, ISSUE_TICKETS, MANAGE_BRANCH_ADMINS, MANAGE_BRANCHES,
-    MANAGE_ACTIONS, MANAGE_CYCLES, MANAGE_ORG_SETTINGS, MANAGE_SEGMENTS,
+    MANAGE_ACTIONS, MANAGE_CYCLES, MANAGE_ORG_SETTINGS,
     ORG_ADMIN, RUN_ANALYSIS,
     VIEW_REPORTS,
     VIEW_TEMPLATES, can, is_branch_scoped, visible_branch_ids,
@@ -351,15 +351,48 @@ def branch_admin_new(branch_id):
 @org_bp.route('/cycles')
 @require_role_any(*_ORG_TIERS)
 def cycles_list():
+    """
+    THE ONE LIST. The separate deployments list was merged into it.
+
+    It listed the same rows keyed the other way round, and because a cycle is
+    1:1 with its deployment in practice - L2 deploys organisation-wide only,
+    L3 deploys to its own branch, and neither sees the other's cycles - the
+    two pages were the same table twice. An admin had to know which of them
+    carried the response count.
+    """
     cycles = _scoped(db.session.query(MeasurementCycle), MeasurementCycle) \
         .filter(MeasurementCycle.archived_at.is_(None)) \
         .order_by(MeasurementCycle.created_at.desc()).all()
-    deployments = dict(
-        db.session.query(SurveyDeployment.cycle_id, func.count(SurveyDeployment.id))
-        .filter(SurveyDeployment.org_id == current_user.org_id)
-        .group_by(SurveyDeployment.cycle_id).all()
-    )
-    return render_template('org/cycles.html', cycles=cycles, deployments=deployments)
+
+    by_cycle = {}
+    for deployment in (_scoped(db.session.query(SurveyDeployment),
+                               SurveyDeployment)
+                       .filter(SurveyDeployment.archived_at.is_(None)).all()):
+        by_cycle.setdefault(deployment.cycle_id, []).append(deployment)
+
+    rows = []
+    for cycle in cycles:
+        found = by_cycle.get(cycle.id, [])
+        responses = sum(d.responses_received for d in found)
+        expected = sum(d.expected_respondents for d in found)
+        dates = [d.deployed_at for d in found if d.deployed_at]
+        rows.append({
+            'cycle': cycle,
+            'deployed': bool(found),
+            # SUMMED, not taken from one row. A cycle is 1:1 with its
+            # deployment only because no role can currently create a second
+            # one; the schema allows an org-wide deployment alongside one per
+            # branch, and this page should not start lying if that changes.
+            'responses': responses,
+            'expected': expected,
+            'rate': round(responses / expected * 100) if expected else 0,
+            'deployed_at': min(dates) if dates else None,
+            'scope': ('branch' if any(d.branch_id for d in found)
+                      else 'organisation-wide'),
+        })
+
+    return render_template('org/cycles.html', rows=rows,
+                           branch_scoped=is_branch_scoped(current_user))
 
 
 @org_bp.route('/cycles/new', methods=['GET', 'POST'])
@@ -540,11 +573,6 @@ def cycle_status(cycle_id):
     now = datetime.now(timezone.utc)
 
     if target == 'open' and cycle.status == 'draft':
-        if not _org_segments_ready():
-            flash('Define at least one reporting segment with options, or '
-                  'deactivate them all, before opening a cycle. Segments freeze '
-                  'on the first response.', 'error')
-            return redirect(url_for('org.cycle_detail', cycle_id=cycle.id))
         cycle.status = 'open'
         cycle.opened_at = now
         action, message = CYCLE_OPEN, 'is open'
@@ -605,19 +633,6 @@ def _cycle_has_responses(cycle):
         .filter_by(cycle_id=cycle.id)
         .filter(SurveyDeployment.responses_received > 0).count()
     )
-
-
-def _org_segments_ready():
-    """
-    True when the org has no active segments, or every active one has options.
-
-    An active segment with no options is a dropdown with nothing in it on the
-    survey form — and because segments freeze on the first response, it cannot
-    be fixed once the cycle is running.
-    """
-    segments = (db.session.query(Segment)
-                .filter_by(org_id=current_user.org_id, is_active=True).all())
-    return all(any(o.is_active for o in s.options) for s in segments)
 
 
 def _cycle_defaults():
@@ -792,123 +807,27 @@ def _validate_cycle(form, creating):
     return None
 
 
-# ── Segments ────────────────────────────────────────────────────────────────
-
-@org_bp.route('/segments')
-@require_role_any(*_ORG_TIERS)
-def segments_list():
-    """
-    L3 may VIEW segments but not define them (the capability gate is on the
-    write routes).
-
-    If two branches could each add their own options, "Finance", "finance" and
-    "Fin." become three groups and none of them reaches the reporting
-    threshold. The data is not wrong — it is simply gone, and nothing in the
-    system would report that it had been lost.
-    """
-    segments = (db.session.query(Segment)
-                .filter_by(org_id=current_user.org_id)
-                .order_by(Segment.sort_order, Segment.label).all())
-    return render_template('org/segments.html', segments=segments,
-                           can_manage=can(current_user, MANAGE_SEGMENTS))
-
-
-@org_bp.route('/segments/<uuid:segment_id>', methods=['GET', 'POST'])
-@require_capability(MANAGE_SEGMENTS)
-def segment_detail(segment_id):
-    segment = _segment_or_404(segment_id)
-
-    if request.method == 'POST':
-        if segment.frozen_at:
-            # Not a permission failure — a correctness one. Renaming an option
-            # after responses exist silently re-groups answers given under the
-            # old meaning, and the response rows themselves are unchanged, so
-            # nothing in the data would ever reveal it.
-            flash('This segment is frozen: a cycle has already collected '
-                  'responses against its options. Renaming one now would '
-                  'silently re-group answers that were given under the old '
-                  'meaning.', 'error')
-            return redirect(url_for('org.segment_detail', segment_id=segment.id))
-
-        action = request.form.get('action')
-        if action == 'add_option':
-            code = (request.form.get('option_code') or '').strip().upper()
-            label = (request.form.get('option_label') or '').strip()
-            if not code or not label:
-                flash('An option needs both a code and a label.', 'error')
-            elif db.session.query(SegmentOption).filter_by(
-                    segment_id=segment.id, option_code=code).first():
-                flash(f'{code} already exists in this segment.', 'error')
-            else:
-                db.session.add(SegmentOption(
-                    segment_id=segment.id, option_code=code, option_label=label,
-                    sort_order=len(segment.options) + 1, is_active=True))
-                record_audit(SEGMENT_EDIT, 'segment', segment.id,
-                             f'Added option {code} to {segment.label}',
-                             org_id=current_user.org_id,
-                             payload=segment_payload(segment))
-                db.session.commit()
-                flash(f'Added {label}.', 'success')
-        elif action == 'toggle_active':
-            segment.is_active = not segment.is_active
-            record_audit(SEGMENT_EDIT, 'segment', segment.id,
-                         f'{"Activated" if segment.is_active else "Deactivated"} '
-                         f'{segment.label}',
-                         org_id=current_user.org_id,
-                         payload=segment_payload(segment))
-            db.session.commit()
-            flash('Saved.', 'success')
-        elif action == 'rename':
-            label = (request.form.get('label') or '').strip()
-            if label:
-                segment.label = label
-                record_audit(SEGMENT_EDIT, 'segment', segment.id,
-                             f'Renamed segment to {label}',
-                             org_id=current_user.org_id,
-                             payload=segment_payload(segment))
-                db.session.commit()
-                flash('Saved.', 'success')
-        return redirect(url_for('org.segment_detail', segment_id=segment.id))
-
-    return render_template('org/segment_detail.html', segment=segment)
-
-
-@org_bp.route('/segments/new', methods=['GET', 'POST'])
-@require_capability(MANAGE_SEGMENTS)
-def segment_new():
-    if request.method == 'POST':
-        key = (request.form.get('segment_key') or '').strip().lower()
-        label = (request.form.get('label') or '').strip()
-        if not key or not label:
-            flash('A segment needs both a key and a label.', 'error')
-        elif not re.match(r'^[a-z][a-z0-9_]{1,49}$', key):
-            flash('The key must be lower-case letters, numbers and '
-                  'underscores — it is stored on every response.', 'error')
-        elif db.session.query(Segment).filter_by(
-                org_id=current_user.org_id, segment_key=key).first():
-            flash(f'{key} already exists.', 'error')
-        else:
-            segment = Segment(org_id=current_user.org_id, segment_key=key,
-                              label=label, collect_at_survey=True,
-                              is_active=False, sort_order=99)
-            db.session.add(segment)
-            db.session.flush()
-            record_audit(SEGMENT_CREATE, 'segment', segment.id,
-                         f'Created segment {label}',
-                         org_id=current_user.org_id,
-                         payload=segment_payload(segment))
-            db.session.commit()
-            flash(f'Created {label}. Add its options, then activate it.',
-                  'success')
-            return redirect(url_for('org.segment_detail', segment_id=segment.id))
-    return render_template('org/segment_form.html')
-
-
-def _segment_or_404(segment_id):
-    segment = db.session.get(Segment, segment_id)
-    if segment is None or segment.org_id != current_user.org_id:
-        abort(404)
-    return segment
+# ── Segments were removed from the product ───────────────────────
+#
+# There used to be /segments, /segments/<id> and /segments/new here: an L2
+# admin defined reporting dimensions (department, function, location, tenure
+# band) as a controlled vocabulary, and a respondent self-declared theirs at
+# the start of the survey.
+#
+# They were removed because a breakdown by BRANCH and a comparison across
+# CYCLES already cover what most clients ask for, and the vocabulary was a
+# setup step a novice admin had to get right before a cycle could open — an
+# empty dropdown on the survey form being unfixable once responses arrived.
+#
+# The `segments` and `segment_options` TABLES and the model classes are left
+# in place, unused, along with `response_sessions.segment_values` and the
+# analytics helpers that read it. Nothing writes them any more. Dropping them
+# would be a migration that destroys what earlier respondents declared, and
+# would make restoring the feature a rewrite rather than a revert.
+#
+# MANAGE_SEGMENTS still exists in permissions.py and is held by NO ROLE, which
+# is how the capability table records a feature that is off rather than a
+# feature nobody thought about.
 
 
 # ── Instrument (read-only for both tiers) ───────────────────────────────────
@@ -938,16 +857,11 @@ def instrument():
 @org_bp.route('/deployments')
 @require_role_any(*_ORG_TIERS)
 def deployments_list():
-    """Every deployment this user may see, newest first."""
-    deployments = _scoped(db.session.query(SurveyDeployment), SurveyDeployment) \
-        .filter(SurveyDeployment.archived_at.is_(None)) \
-        .order_by(SurveyDeployment.deployed_at.desc().nullslast()).all()
-    cycles = {c.id: c for c in
-              db.session.query(MeasurementCycle)
-              .filter_by(org_id=current_user.org_id).all()}
-    return render_template('org/deployments.html', deployments=deployments,
-                           cycles=cycles,
-                           branch_scoped=is_branch_scoped(current_user))
+    """
+    MERGED INTO THE CYCLES LIST. Kept as a redirect, not deleted, so the nav
+    change, any bookmark and any remaining url_for() all still resolve.
+    """
+    return redirect(url_for('org.cycles_list'))
 
 
 @org_bp.route('/cycles/<cycle_id>/deploy', methods=['GET', 'POST'])
@@ -1255,10 +1169,10 @@ def analysis(cycle_id):
     priority = association.priority_view(
         profiles, outcome=association.DEFAULT_OUTCOME, min_reporting_n=min_n)
 
+    # Segments were removed, so there is nothing to compare across. The
+    # template still iterates `comparisons`, and an empty list renders as no
+    # section rather than as an empty one.
     comparisons = []
-    for segment in active_segments(current_user.org_id):
-        comparisons.append(association.segment_comparison(
-            profiles, (domains.GEM, 'G'), segment, min_reporting_n=min_n))
 
     return render_template(
         'org/analysis.html', cycle=cycle, deployments=deployments,
@@ -1334,7 +1248,9 @@ def _build_report(cycle, report_type, scope_branch=None, with_charts=True):
         org=db.session.get(Org, cycle.org_id),
         cycle=cycle, deployments=deployments, profiles=profiles,
         branch=scope_branch, scope_label=scope_label,
-        segments=active_segments(cycle.org_id),
+        # Segments were removed; the report builder treats [] as no
+        # segment section at all.
+        segments=[],
         previous=previous, improvement_actions=actions,
         narrative=(analysis_row.payload if analysis_row else None),
     )

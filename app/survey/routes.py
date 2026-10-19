@@ -47,9 +47,6 @@ from app.models import (
     AccessTicket, MeasurementCycle, PilotFeedback, ResponseSession,
     SurveyDeployment, SurveyItem, SurveyResponse,
 )
-from app.provisioning import (
-    active_segments, freeze_segments, validate_segment_values,
-)
 from app.survey import survey_bp
 
 # 60 days. Long enough that a cycle can run over a holiday; short enough that a
@@ -214,7 +211,6 @@ def landing(slug):
         already_submitted=already,
         section_count=len(_sections(deployment)),
         item_count=sum(len(items) for _, items in _sections(deployment)),
-        segments=active_segments(deployment.org_id),
     )
 
 
@@ -233,7 +229,7 @@ def begin(slug):
 
     existing = _load_session(deployment)
     if existing is not None:
-        return redirect(url_for('survey.segments', slug=slug))
+        return redirect(url_for('survey.section', slug=slug, index=1))
 
     if deployment.delivery_mode == 'ticketed':
         ticket = (request.form.get('ticket') or '').strip()
@@ -261,13 +257,16 @@ def begin(slug):
         deployment_id=deployment.id,
         org_id=deployment.org_id,
         branch_id=deployment.branch_id,
+        # The column survives the removal of segments, unused. {} rather
+        # than NULL so existing readers see an empty map, not a None.
         segment_values={},
         resume_secret_hash=hashlib.sha256(secret.encode()).hexdigest(),
     )
     db.session.add(session)
     db.session.commit()
 
-    response = make_response(redirect(url_for('survey.segments', slug=slug)))
+    response = make_response(
+        redirect(url_for('survey.section', slug=slug, index=1)))
     _set_resume_cookie(response, slug, session, secret)
     return response
 
@@ -282,39 +281,21 @@ def _set_resume_cookie(response, slug, session, secret):
     )
 
 
-# ── Segment step ────────────────────────────────────────────────────────────
-
-@survey_bp.route('/<slug>/about-you', methods=['GET', 'POST'])
-def segments(slug):
-    """
-    SELF-DECLARED, and optional.
-
-    The platform never ingests a staff list (§13.2 data minimisation), so there
-    is nothing to look a respondent up in — by construction, not by policy.
-
-    Every question here is skippable. A respondent in a three-person department
-    who would rather not say is right to be cautious, and forcing the answer
-    would either lose their 48 responses or get a false one. An unspecified
-    answer becomes its own reporting row rather than silently folding into
-    another group.
-    """
-    deployment = _load_open_deployment(slug)
-    if not _is_live(deployment):
-        return render_template('survey/closed.html'), 410
-    session = _require_session(deployment)
-    available = active_segments(deployment.org_id)
-
-    if request.method == 'POST' or not available:
-        declared = {s.segment_key: (request.form.get(s.segment_key) or '').strip()
-                    for s in available}
-        session.segment_values = validate_segment_values(
-            deployment.org_id, {k: v for k, v in declared.items() if v})
-        db.session.commit()
-        return redirect(url_for('survey.section', slug=slug, index=1))
-
-    return render_template('survey/segments.html', deployment=deployment,
-                           segments=available, session=session,
-                           section_count=len(_sections(deployment)))
+# ── The segment step was removed ──────────────────────────────
+#
+# There used to be a `/‹slug›/about-you` step between `begin` and question 1,
+# where a respondent self-declared their department, location or tenure band
+# from a controlled vocabulary the org admin had defined. `begin` now goes
+# straight to section 1.
+#
+# `response_sessions.segment_values` is LEFT IN THE SCHEMA and still written as
+# an empty map. Sessions recorded before this change keep whatever they
+# declared, and dropping the column would destroy that silently.
+#
+# What went with it: the reporting dimension. Results can still be broken down
+# by BRANCH and compared across CYCLES, which is what the product now offers.
+# A breakdown by department within a branch is no longer possible, because the
+# data to do it is no longer collected.
 
 
 # ── The domain sections ─────────────────────────────────────────────────────
@@ -447,10 +428,9 @@ def review(slug):
         # submission so the two cannot disagree.
         deployment.responses_received = (deployment.responses_received or 0) + 1
 
-        # FREEZE THE SEGMENTS. From here on, renaming an option would silently
-        # re-group answers given under the old meaning — and the response rows
-        # are unchanged, so nothing in the data would ever reveal it.
-        freeze_segments(deployment.org_id)
+        # Segments were removed, so there is nothing left to freeze here. The
+        # freeze existed because renaming an option after responses arrived
+        # would silently re-group answers given under the old meaning.
         db.session.commit()
 
         response = make_response(redirect(url_for('survey.done', slug=slug)))

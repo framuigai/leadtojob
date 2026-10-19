@@ -118,7 +118,7 @@ client-facing label is "Appropriate Challenge and Development"; the word
 
 ---
 
-## Five deliberate departures from the spec
+## Six deliberate departures from the spec
 
 Both were decided by the product owner after seeing the screens. They are
 recorded here so they are not "fixed" back by someone reading only the PDF.
@@ -255,6 +255,57 @@ org's cycle id confirms that cycle exists.
 
 ---
 
+### Segments were removed from the product (2026-10-19)
+
+The reporting dimensions (department, function, location, tenure band) are
+gone: the `/org/segments*` screens, the respondent's `/about-you`
+self-declaration step, `create_default_segments()` at org creation, the
+cycle-open gate that required them to be configured, and the Segments nav tab.
+
+**Why**, recorded because §3.2.4 asks for "patterns across departments,
+functions, locations": branch breakdowns and cycle-over-cycle comparison cover
+most of it, and the vocabulary was a setup step a novice admin had to get right
+*before* a cycle could open — an empty dropdown being unfixable once responses
+arrived.
+
+**What is left in place, unused:** the `segments` and `segment_options` tables
+and models, `response_sessions.segment_values` (still written as `{}`), and the
+`provisioning` helpers. `association.segment_comparison()` and the
+`comparison.segment_label` blocks in `analysis.html`, `executive.html` and
+`hr_od.html` survive too — they iterate a list that is now always `[]`, so they
+render nothing. Dropping any of it would be a migration that destroys what
+earlier respondents declared and would make restoring the feature a rewrite
+rather than a revert.
+
+`MANAGE_SEGMENTS` still exists in `permissions.py` and **is held by no role** —
+the same shape as `LOWER_MIN_N`, for a different reason: this table should
+record a feature that is *off*, not a feature nobody thought about.
+
+**The cost:** there is no longer any breakdown *within* a branch. A department's
+results inside Nairobi cannot be produced, because the data is no longer
+collected.
+
+---
+
+### The deployments list was merged into the cycles list (2026-10-19)
+
+`org/deployments.html` is deleted and `deployments_list()` redirects to
+`cycles_list()`. The cycles table now carries scope, responses, rate and
+deployed-date, summed from the cycle's deployments in `cycles_list()`.
+
+**Summed, not taken from one row.** A cycle is 1:1 with its deployment only
+because no role can currently create a second: L2 holds `DEPLOY_ORG_WIDE` but
+not `DEPLOY_TO_BRANCH`, L3 the reverse, and `_scoped()` stops L3 seeing
+org-wide cycles. The schema still permits one org-wide deployment alongside one
+per branch (`uq_open_deployment` keys on scope, not on cycle), so the page must
+not start lying if that policy changes.
+
+Note `cycle_detail.html` still gates its Deploy button on `{% if not
+deployments %}` — stricter than both the schema and the capability table, and it
+blocks the legitimate remake-after-archive case.
+
+---
+
 ## Two more that cost money if broken
 
 **Training is one intervention category among several (§11, §8.5).** The three
@@ -317,6 +368,7 @@ on `TEST_DATABASE_URL` and skip when it is unset.
   `app/domains.py`.
 - ALL list filtering/sorting UI lives in `app/static/js/filters.js` + the
   `.filter-bar` block in `main.css`.
+- ALL expand/collapse lives in `app/static/js/collapse.js`, and ALL copy-to-clipboard in `app/static/js/copy.js`. Both are data-attribute contracts (`data-collapse-*`, `data-copy`) with no id plumbing, so a page can render N of them — one per deployment — without colliding.
 
 Edit files in place. No `models_v2.py`, no `scoring_new.py`.
 

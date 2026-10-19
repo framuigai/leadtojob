@@ -20,11 +20,11 @@ first user.
 """
 import pytest
 
-from app.models import MeasurementCycle, Segment, SurveyDeployment
+from app.models import MeasurementCycle, SurveyDeployment
 from tests.conftest import login
 from tests.factories import (
     make_branch, make_branch_admin, make_cycle, make_deployment, make_org,
-    make_org_admin, make_segment,
+    make_org_admin,
 )
 
 
@@ -216,42 +216,45 @@ def test_an_org_admin_cannot_add_a_branch_to_another_org(client, db, world):
     assert db.session.get(type(globex_branch), globex_branch.id).is_active is True
 
 
-# ── Segments are org-scoped ─────────────────────────────────────────────────
+# ── Segments were removed from the product ──────────────────────
 
-def test_segments_do_not_cross_organisations(client, db, world):
-    make_segment(world['acme'], 'department', 'Department',
-                 [('FIN', 'Finance'), ('OPS', 'Operations')])
-    make_segment(world['globex'], 'region', 'Region', [('EU', 'Europe')])
-    db.session.commit()
+# Two tests lived here: one that an L2 admin saw only their own org's segments
+# at /org/segments, and one that an L3 admin could VIEW the vocabulary but not
+# add to it. Both described screens that no longer exist.
+#
+# The tables remain, unused. What replaces segments as a reporting dimension is
+# the BRANCH, whose scoping is covered by the rest of this file - which is the
+# part that actually had to keep working.
 
+
+def test_the_segment_screens_are_gone(client, db, world):
+    """
+    Pins the removal. A half-restored route - the list back without its
+    capability gate, say - fails here rather than quietly reappearing in the
+    product.
+    """
     login(client, world['acme_admin'])
-    body = client.get('/org/segments').get_data(as_text=True)
-    assert 'Department' in body
-    assert 'Region' not in body
+    for path in ('/org/segments', '/org/segments/new'):
+        assert client.get(path).status_code == 404, path
 
 
-def test_a_branch_admin_may_view_segments_but_not_change_them(client, db, world):
+def test_the_survey_goes_straight_from_begin_to_the_first_question(
+        client, db, world):
     """
-    L3 needs to know which groups their results will be broken down by. They do
-    not get to add to the vocabulary: two branches each adding their own
-    spelling of one department produces two groups, neither of which reaches
-    the reporting threshold.
+    THE RESPONDENT-FACING HALF OF THE REMOVAL.
+
+    There used to be an `/about-you` step between `begin` and question 1 where
+    the respondent self-declared their department, location or tenure band.
+    A respondent now lands on the first question.
     """
-    segment = make_segment(world['acme'], 'department', 'Department',
-                           [('FIN', 'Finance')])
+    cycle = make_cycle(world['acme'], 'ACME-NOSEG', status='open')
+    make_deployment(world['acme'], cycle, public_slug='slug-noseg-aaa')
     db.session.commit()
 
-    login(client, world['nairobi_admin'])
-    assert client.get('/org/segments').status_code == 200
-
-    res = client.get(f'/org/segments/{segment.id}')
+    res = client.post('/survey/slug-noseg-aaa/begin')
     assert res.status_code == 302
-
-    res = client.post('/org/segments/new',
-                      data={'segment_key': 'shift', 'label': 'Shift'})
-    assert res.status_code == 302
-    assert db.session.query(Segment).filter_by(
-        org_id=world['acme'].id, segment_key='shift').first() is None
+    assert '/section/1' in res.headers['Location']
+    assert 'about-you' not in res.headers['Location']
 
 
 # ── The master template org is not a tenant ─────────────────────────────────

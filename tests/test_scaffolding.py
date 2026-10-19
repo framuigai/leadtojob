@@ -55,7 +55,6 @@ def test_login_rejects_a_bad_password_without_saying_which_part_was_wrong(db, cl
     '/admin/orgs/new',
     '/org/',
     '/org/cycles',
-    '/org/segments',
     '/org/deployments',
     '/org/branches',
     '/org/reports',

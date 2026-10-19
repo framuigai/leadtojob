@@ -122,26 +122,24 @@ def test_a_new_org_starts_as_a_resumable_draft(client, db, l1):
         .setup_complete is False
 
 
-def test_creating_an_org_seeds_the_suggested_segments_with_no_options(
+def test_creating_an_org_seeds_the_instrument_and_nothing_else(
         client, db, l1):
     """
-    Deliberately empty of options. Only the client knows what their departments
-    are called, and a helpfully pre-filled list of plausible names would be
-    wrong for every client and accepted by at least one of them.
-
-    Inactive too: an active segment with no options is an empty dropdown on the
-    survey form.
+    A new org used to be seeded with the suggested segments (department,
+    function, location, tenure band), inactive until the client filled in
+    their options. Segments were removed, so provisioning now clones the
+    instrument and stops.
     """
-    login(client, l1)
-    client.post('/admin/orgs/new', data={'name': 'Acme Ltd'},
-                follow_redirects=True)
-    org = db.session.query(Org).filter_by(name='Acme Ltd').one()
+    from app.models import Segment, SurveyItem
 
-    segments = db.session.query(Segment).filter_by(org_id=org.id).all()
-    assert {s.segment_key for s in segments} == {
-        'department', 'function', 'location', 'tenure_band'}
-    assert all(not s.is_active for s in segments)
-    assert all(s.options == [] for s in segments)
+    login(client, l1)
+    client.post('/admin/orgs/new', data={'name': 'Fresh Ltd',
+                                         'industry': 'Manufacturing'},
+                follow_redirects=True)
+
+    org = db.session.query(Org).filter_by(name='Fresh Ltd').one()
+    assert db.session.query(SurveyItem).filter_by(org_id=org.id).count() == 48
+    assert db.session.query(Segment).filter_by(org_id=org.id).count() == 0
 
 
 def test_an_org_with_no_instrument_available_is_not_created_at_all(client, db):

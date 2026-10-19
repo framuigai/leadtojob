@@ -218,23 +218,14 @@ def test_the_analysis_view_states_the_scoring_method_in_force(client, org):
     assert 'mean of the three subdomain scores' in body
 
 
-def test_a_segment_comparison_appears_and_is_not_sorted_by_score(client, org):
-    """
-    Groups in their DEFINED order. A list of departments sorted by satisfaction
-    is read as a ranking of their managers within seconds.
-    """
-    make_segment(org['org'], 'department', 'Department',
-                 [('FIN', 'Finance'), ('OPS', 'Operations')])
-    db.session.commit()
-
-    codes = ['FIN'] * 6 + ['OPS'] * 6
-    _deployment_with(org, [(2, 2)] * 6 + [(5, 5)] * 6, segments=codes)
-
-    login(client, org['admin'])
-    body = client.get('/org/cycles/KD-A/analysis').get_data(as_text=True)
-    assert 'This is not a ranking' in flat(body)
-    # Finance (lower scoring) still appears before Operations.
-    assert body.index('Finance') < body.index('Operations')
+# A segment-comparison test lived here: two departments, and the assertion
+# that they appeared in their DEFINED order rather than sorted by score,
+# because a list of departments ranked by satisfaction reads as a ranking of
+# their managers within seconds. Segments were removed, so there is no
+# comparison section left to order.
+#
+# The "this is not a ranking" discipline still applies to every other list the
+# analysis view renders, and is covered by the tests around this one.
 
 
 def test_the_analysis_view_lists_what_it_does_not_show(client, org):

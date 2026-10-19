@@ -7,8 +7,8 @@
     <div class="section-label">{{ role_label(current_user.role) }}</div>
     <h1>Branches</h1>
     <p class="muted">Departments, divisions or sites. One flat level,
-      deliberately not nestable - cross-cutting views are what reporting
-      segments are for.</p>
+      deliberately not nestable. A branch is how results are broken down, and
+      how a branch admin's view is scoped.</p>
   </div>
   <div class="page-actions">
     <a href="{{ url_for('org.branch_new') }}" class="btn btn-primary">+ New branch</a>

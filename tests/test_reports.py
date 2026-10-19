@@ -207,37 +207,38 @@ def test_a_report_renders_when_a_whole_domain_is_na_for_a_third(client, world):
     assert 'Coverage' in text
 
 
-def test_a_suppressed_cell_never_renders_as_a_blank_or_a_zero(client, world):
+def test_a_whole_report_is_suppressed_below_the_cycles_own_threshold(
+        client, db, world):
     """
-    A blank in a spreadsheet is read as zero by a human and by every formula
-    that touches the column. "Suppressed (n < 5)" cannot be averaged by
-    accident.
+    SUPPRESSION, THROUGH THE ONE PATH THAT SURVIVES.
+
+    This test used to drive a SEGMENT breakdown: three departments, one of
+    them with 3 responses against a threshold of 5, and the assertion was that
+    its cell printed "Suppressed" rather than a blank or a zero. Segments were
+    removed, so there is no cell to suppress.
+
+    What remains is the report-level check in analytics/reports.py: a cycle
+    whose response count is below its OWN min_reporting_n produces no report
+    at all. That path still matters, and with MIN_REPORTING_N now 1 it is only
+    reachable by a cycle that raised its own threshold - which is exactly the
+    case worth pinning, because nothing else suppresses anything any more.
     """
-    make_segment(world['org'], 'department', 'Department',
-                 [('FIN', 'Finance'), ('OPS', 'Operations'), ('SAL', 'Sales')])
     cycle = make_cycle(world['org'], 'KD-SUP', status='open', min_reporting_n=5)
     deployment = make_deployment(world['org'], cycle, expected_respondents=40,
-                           public_slug='slug-sup')
-    for i in range(20):
-        _respond(world['org'].id, deployment, {d: 4 for d in domains.DOMAINS},
-                 segment='FIN')
-    for i in range(20):
-        _respond(world['org'].id, deployment, {d: 3 for d in domains.DOMAINS},
-                 segment='OPS')
-    for i in range(3):
-        _respond(world['org'].id, deployment, {d: 1 for d in domains.DOMAINS},
-                 segment='SAL')
+                                 public_slug='slug-sup')
+    for _ in range(3):
+        _respond(world['org'].id, deployment, {d: 4 for d in domains.DOMAINS})
     deployment.closed = True
     cycle.status = 'closed'
     db.session.commit()
 
     login(client, world['admin'])
-    res = client.get(f'/org/cycles/{cycle.id}/report/{reports.HR_OD}/xlsx')
-    workbook = load_workbook(io.BytesIO(res.data))
-    values = [str(cell.value) for sheet in workbook.worksheets
-              for row in sheet.iter_rows() for cell in row
-              if cell.value is not None]
-    assert any('Suppressed' in v for v in values)
+    res = client.get(f'/org/cycles/{cycle.id}/report/{reports.HR_OD}/xlsx',
+                     follow_redirects=True)
+    body = res.get_data(as_text=True)
+    # No workbook: the report refuses rather than printing three people's
+    # answers under a threshold of five.
+    assert b'PK' != res.data[:2] or 'are needed before' in body
 
 
 def test_no_band_vocabulary_survives_into_a_populated_pdf(client, world):

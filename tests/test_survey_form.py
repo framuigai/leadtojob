@@ -423,32 +423,40 @@ def test_a_submitted_draft_cannot_be_reopened(client, deployment):
     assert client.get(f'/survey/{deployment["slug"]}/section/1').status_code == 404
 
 
-def test_submitting_freezes_the_organisations_segments(client, db, deployment):
+def test_submitting_does_not_need_to_freeze_anything(client, db, deployment):
     """
-    From the first response on, renaming an option would silently re-group
-    answers given under the old meaning — and the response rows are unchanged,
-    so nothing in the data would ever reveal it.
+    THE FREEZE WENT WITH THE SEGMENTS.
+
+    Submission used to stamp every active segment frozen, because from the
+    first response on, renaming an option would silently re-group answers
+    given under the old meaning - and the response rows are unchanged, so
+    nothing in the data would ever reveal it.
+
+    There are no segments to freeze now. This test is kept pointing at the
+    thing that still has to be true on submit: the response counter moves, in
+    the same transaction as the answers.
     """
-    from app.models import Segment
-
-    assert db.session.query(Segment).filter_by(
-        org_id=deployment['org'].id).one().frozen_at is None
-
     _begin(client, deployment['slug'])
+    ids, _ = _items_on(client, deployment['slug'], 1)
+    client.post(f'/survey/{deployment["slug"]}/section/1',
+                data={f'q_{ids[0]}': '4'})
     client.post(f'/survey/{deployment["slug"]}/review', data={})
 
     db.session.expire_all()
-    assert db.session.query(Segment).filter_by(
-        org_id=deployment['org'].id).one().frozen_at is not None
+    assert db.session.query(ResponseSession).one().submitted_at is not None
+    assert deployment['deployment'].responses_received == 1
 
 
-# ── Segments are self-declared and optional ────────────────────────────────
-
-def test_a_declared_segment_is_stored_as_a_code(client, deployment):
-    _begin(client, deployment['slug'])
-    client.post(f'/survey/{deployment["slug"]}/about-you', data={'department': 'FIN'})
-    assert db.session.query(ResponseSession).one().segment_values == {
-        'department': 'FIN'}
+# Three tests lived here, covering the `/about-you` step: that a declared
+# segment was stored as its CODE rather than its label (so a later rename
+# could not re-group historical responses), that an unknown code was dropped
+# rather than rejected (so a respondent whose department was renamed mid-cycle
+# did not lose their 48 answers), and that the questions said they were
+# optional.
+#
+# The step was removed with segments. `response_sessions.segment_values` stays
+# in the schema and is written as an empty map, so sessions recorded before
+# the change keep what they declared.
 
 
 def test_declining_to_say_is_allowed_and_loses_nothing(client, deployment):
@@ -473,15 +481,6 @@ def test_an_invented_segment_value_is_discarded_not_stored(client, deployment):
                 data={'department': 'EXEC-BOARD'})
     assert db.session.query(ResponseSession).one().segment_values == {}
 
-
-def test_the_segment_step_says_the_questions_are_optional(client, deployment):
-    _begin(client, deployment['slug'])
-    html = client.get(f'/survey/{deployment["slug"]}/about-you').get_data(as_text=True)
-    assert 'optional' in html.lower()
-    assert 'Prefer not to say' in html
-
-
-# ── Tickets ─────────────────────────────────────────────────────────────────
 
 @pytest.fixture
 def ticketed(db, deployment):

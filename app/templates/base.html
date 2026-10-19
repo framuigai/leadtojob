@@ -16,6 +16,7 @@
     {% block head %}{% endblock %}
     <script src="{{ url_for('static', filename='js/filters.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/collapse.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/copy.js') }}" defer></script>
 </head>
 <body>
     {# ──────────────────────────────────────────────────────────────────────
@@ -49,9 +50,9 @@
         <div class="nav-right">
             {% if current_user.role == 'org_admin' %}
                 <a href="{{ url_for('org.dashboard') }}"         class="nav-link">Dashboard</a>
+                {# Segments were removed from the product; deployments were merged
+                   into Cycles, which is 1:1 with them in practice. #}
                 <a href="{{ url_for('org.cycles_list') }}"       class="nav-link">Cycles</a>
-                <a href="{{ url_for('org.segments_list') }}"     class="nav-link">Segments</a>
-                <a href="{{ url_for('org.deployments_list') }}"  class="nav-link">Deployments</a>
                 <a href="{{ url_for('org.branches_list') }}"     class="nav-link">Branches</a>
                 <a href="{{ url_for('org.instrument') }}"        class="nav-link">Instrument</a>
                 <a href="{{ url_for('org.reports') }}"           class="nav-link">Reports</a>
@@ -60,16 +61,11 @@
                    others — see MANAGE_ORG_SETTINGS. #}
                 <a href="{{ url_for('org.settings') }}"          class="nav-link">Settings</a>
             {% elif current_user.role == 'branch_admin' %}
-                {# L3: no Branches tab — they manage none. Segments IS shown,
-                   but read-only: a branch admin needs to know which groups
-                   their results will be broken down by, while the vocabulary
-                   itself stays the organisation's. If two branches could each
-                   add options, two spellings of one department become two
-                   groups and neither reaches the reporting threshold. #}
+                {# L3: no Branches tab — they manage none. No Segments tab
+                   either: segments were removed from the product. Deployments
+                   were merged into Cycles. #}
                 <a href="{{ url_for('org.dashboard') }}"         class="nav-link">Dashboard</a>
                 <a href="{{ url_for('org.cycles_list') }}"       class="nav-link">Cycles</a>
-                <a href="{{ url_for('org.segments_list') }}"     class="nav-link">Segments</a>
-                <a href="{{ url_for('org.deployments_list') }}"  class="nav-link">Deployments</a>
                 <a href="{{ url_for('org.instrument') }}"        class="nav-link">Instrument</a>
                 <a href="{{ url_for('org.reports') }}"           class="nav-link">Reports</a>
             {% elif current_user.role == 'master_admin' %}
