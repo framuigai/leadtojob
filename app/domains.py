@@ -28,7 +28,7 @@ import uuid
 
 # Fixed UUID of the master template org created by seed_templates.py. Client
 # orgs clone their survey items from here on first deployment and are then
-# frozen independently forever.
+#  frozen independently forever.
 MASTER_ORG_ID = uuid.UUID('00000000-0000-0000-0000-000000000001')
 
 
