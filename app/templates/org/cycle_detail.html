@@ -101,27 +101,98 @@
   </div>
 </div>
 
+{#
+  THE MERGED DEPLOYMENT PANEL.
+
+  There used to be a separate /org/deployments/<id> page. It showed the same
+  cycle from a second angle and repeated this page's headline numbers and
+  purpose statement, so an admin had to remember which page they were on to
+  know whether a response count meant one deployment or the whole cycle.
+
+  Everything it carried lives here now, one block per deployment: the survey
+  link, the invited count, the response rate, the close button, and the access
+  codes for any ticketed deployment that predates the open-link change. The old
+  route still exists and redirects here.
+#}
 <div class="panel">
   <div class="panel-head"><div class="panel-title">Deployments</div></div>
   <div class="panel-body">
-  {% if deployments %}
-    <table class="table">
-      <thead><tr><th>Scope</th><th>Mode</th><th class="num">Responses</th>
-        <th>Status</th></tr></thead>
-      <tbody>
-      {% for w in deployments %}
-        <tr>
-          <td><a href="{{ url_for('org.deployment_detail', deployment_id=w.id) }}">
-            {% if w.branch_id %}branch{% else %}organisation-wide{% endif %}</a></td>
-          <td>{{ 'open link' if w.delivery_mode == 'open_link' else 'ticketed' }}</td>
-          <td class="num">{{ w.responses_received }} / {{ w.expected_respondents }}</td>
-          <td>{{ 'closed' if w.closed else 'open' }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  {% if rows %}
+    {% for row in rows %}
+    {% set w = row.deployment %}
+    <div class="deployment-block{% if not loop.last %} deployment-block-sep{% endif %}">
+
+      <div class="deployment-head">
+        <div>
+          <strong>{% if w.branch_id %}Branch deployment{% else %}Organisation-wide{% endif %}</strong>
+          <span class="muted">
+            &middot; {{ 'open link' if w.delivery_mode == 'open_link' else 'ticketed' }}
+            &middot; {{ 'closed' if w.closed else 'open' }}
+          </span>
+        </div>
+        {% if not w.closed and can(current_user, 'edit_deployment') %}
+        <form method="post"
+              action="{{ url_for('org.deployment_close', deployment_id=w.id) }}"
+              style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-secondary">Close this deployment</button>
+        </form>
+        {% endif %}
+      </div>
+
+      <table class="table">
+        <thead><tr><th class="num">Responses</th><th class="num">Invited</th>
+          <th class="num">Response rate</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="num">{{ w.responses_received }}</td>
+            <td class="num">{{ w.expected_respondents }}</td>
+            <td class="num">{{ w.response_rate_pct | round | int
+                               if w.response_rate_pct else 0 }}%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {% if not w.closed %}
+      <div class="form-group">
+        <label for="link-{{ w.id }}">The survey link</label>
+        <input class="link-copy" type="text" readonly onclick="this.select()"
+               id="link-{{ w.id }}" value="{{ row.link }}"
+               style="width:100%;font-family:monospace">
+        <small class="muted">
+          This is the only way in. It is not recoverable from anywhere else,
+          and anyone holding it can respond - so share it with the invited
+          population and not more widely.
+        </small>
+      </div>
+      {% endif %}
+
+      {% if w.delivery_mode == 'ticketed' and not w.closed %}
+      {# Only reachable for a deployment created before the delivery choice
+         was removed. New deployments are always open links. #}
+      <div class="form-group">
+        <label for="count-{{ w.id }}">Access codes
+          <span class="badge badge-outline">{{ row.unused }} unused of {{ row.tickets }}</span>
+        </label>
+        <form method="post"
+              action="{{ url_for('org.issue_tickets', deployment_id=w.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="number" id="count-{{ w.id }}" name="count" min="1" max="2000"
+                 value="{{ w.expected_respondents }}">
+          <button type="submit" class="btn btn-primary">Issue codes</button>
+        </form>
+        <small class="muted">
+          Codes are shown <strong>once</strong>, when you issue them. The system
+          keeps only a one-way fingerprint, so they cannot be listed again - and
+          it never records who received which.
+        </small>
+      </div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
   {% else %}
-    <p class="muted">Not deployed yet. Deployment arrives in phase 5.</p>
+    <p class="muted">Not deployed yet.</p>
   {% endif %}
   </div>
 </div>

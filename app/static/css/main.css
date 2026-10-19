@@ -1688,3 +1688,22 @@ a.group-card-title:hover { color: var(--blue); }
 @media (max-width: 768px) {
     .link-copy { min-width: 0; flex-direction: column; }
 }
+
+/* ── Deployment blocks on the cycle page ──────────────────────────────────
+   The deployment detail page was merged into the cycle page, so one cycle
+   now renders N deployment blocks in a single panel. The separator is what
+   keeps two deployments from reading as one list. */
+.deployment-block { padding: .25rem 0 .5rem; }
+.deployment-block-sep {
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.25rem;
+    padding-bottom: 1.25rem;
+}
+.deployment-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: .75rem;
+}

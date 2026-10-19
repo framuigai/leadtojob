@@ -421,11 +421,47 @@ def cycle_new():
 @org_bp.route('/cycles/<cycle_id>')
 @require_role_any(*_ORG_TIERS)
 def cycle_detail(cycle_id):
+    """
+    THE ONE PAGE FOR A CYCLE. The separate deployment page was merged into it.
+
+    The two showed the same cycle from two angles and each repeated the
+    other's headline numbers and purpose statement, so an admin had to hold
+    "which page am I on" in their head to know whether a response count meant
+    this deployment or the whole cycle. Everything the deployment page carried
+    — the survey link, the invited count, the response rate, the per-deployment
+    close button, and the access codes for any ticketed deployment that
+    predates the open-link change — now lives in the Deployments panel here,
+    one block per deployment.
+
+    `deployment_detail` is kept as a REDIRECT rather than deleted: eight call
+    sites and any bookmark an admin already has still resolve.
+    """
     cycle = _cycle_or_404(cycle_id)
     deployments = (db.session.query(SurveyDeployment)
              .filter_by(cycle_id=cycle.id, org_id=current_user.org_id)
              .order_by(SurveyDeployment.deployed_at.desc().nullslast()).all())
-    return render_template('org/cycle_detail.html', cycle=cycle, deployments=deployments,
+
+    rows = []
+    for deployment in deployments:
+        tickets = unused = None
+        if deployment.delivery_mode == 'ticketed':
+            tickets = db.session.query(AccessTicket).filter_by(
+                deployment_id=deployment.id).count()
+            unused = db.session.query(AccessTicket).filter_by(
+                deployment_id=deployment.id, used_at=None).count()
+        rows.append({
+            'deployment': deployment,
+            # Built from SURVEY_BASE_URL, never from the request Host header.
+            # An admin on *.onrender.com must still copy a link that says
+            # jobs.leadto.co.ke — see external_url() for why that is more than
+            # cosmetic here.
+            'link': external_url('survey.landing', slug=deployment.public_slug),
+            'tickets': tickets,
+            'unused': unused,
+        })
+
+    return render_template('org/cycle_detail.html', cycle=cycle,
+                           deployments=deployments, rows=rows,
                            responses=sum(w.responses_received for w in deployments))
 
 
@@ -686,16 +722,21 @@ def _cycle_form_values(form, existing=None):
             'is_pilot': defaults['is_pilot'],
         }
 
-    # EDITING. Every field is on the screen, so every field is read from the
-    # post — including `is_pilot`, whose ABSENCE means unchecked and must not
-    # fall back to the stored value or the box could never be cleared.
+    # EDITING. The edit screen now carries name, purpose statement, domains and
+    # previous cycle — the same four as creation plus the cycle's own §9.2
+    # text. The remaining four are CARRIED OVER FROM THE STORED ROW and the
+    # posted body is ignored for them, so there is no screen anywhere that can
+    # change a cycle's scoring method, threshold, retention or pilot flag.
+    #
+    # `_int` is still used for the two numbers rather than reading the
+    # attribute directly, so that restoring either field is a one-line change
+    # here and not a re-derivation of how the form parsed it.
     return common | {
         'purpose_statement': (form.get('purpose_statement') or '').strip(),
-        'min_reporting_n': _int('min_reporting_n', existing.min_reporting_n),
-        'scoring_method': (form.get('scoring_method')
-                           or existing.scoring_method).strip(),
-        'retention_months': _int('retention_months', existing.retention_months),
-        'is_pilot': form.get('is_pilot') == 'on',
+        'min_reporting_n': existing.min_reporting_n,
+        'scoring_method': existing.scoring_method,
+        'retention_months': existing.retention_months,
+        'is_pilot': existing.is_pilot,
     }
 
 
@@ -953,9 +994,12 @@ def deploy(cycle_id):
                                 deployment_id=existing.id))
 
     if request.method == 'POST':
-        mode = (request.form.get('delivery_mode') or 'open_link').strip()
-        if mode not in ('open_link', 'ticketed'):
-            abort(400)
+        # ALWAYS AN OPEN LINK. The choice was removed from the screen, and a
+        # posted `delivery_mode` is IGNORED rather than validated — a form
+        # that no longer offers a mode must not be able to select it through a
+        # hand-crafted POST. Ticketed deployments that predate this change
+        # still work; see the comment in deploy_form.html.
+        mode = 'open_link'
         try:
             expected = int((request.form.get('expected_respondents') or '').strip())
         except ValueError:
@@ -1001,21 +1045,12 @@ def deploy(cycle_id):
 def deployment_detail(deployment_id):
     deployment = _deployment_or_404(deployment_id)
     cycle = db.session.get(MeasurementCycle, deployment.cycle_id)
-    tickets = unused = None
-    if deployment.delivery_mode == 'ticketed':
-        tickets = db.session.query(AccessTicket).filter_by(
-            deployment_id=deployment.id).count()
-        unused = db.session.query(AccessTicket).filter_by(
-            deployment_id=deployment.id, used_at=None).count()
-
-    # Built from SURVEY_BASE_URL, never from the request Host header. An admin
-    # on *.onrender.com must still copy a link that says jobs.leadto.co.ke —
-    # see external_url() for why that is more than cosmetic here.
-    link = external_url('survey.landing', slug=deployment.public_slug)
-
-    return render_template('org/deployment_detail.html', deployment=deployment,
-                           cycle=cycle, link=link, tickets=tickets,
-                           unused=unused)
+    # MERGED INTO THE CYCLE PAGE. This route survives only to redirect, so
+    # existing links, the deployments list and any bookmark keep working.
+    # _deployment_or_404 above still runs first, so the branch scoping and the
+    # 404 for another tenant's deployment are unchanged — a redirect that
+    # skipped them would turn this into a cross-tenant probe.
+    return redirect(url_for('org.cycle_detail', cycle_id=deployment.cycle_id))
 
 
 @org_bp.route('/deployments/<uuid:deployment_id>/tickets', methods=['POST'])

@@ -217,20 +217,32 @@ def test_production_boots_when_everything_is_set(monkeypatch):
 
 # ── The threshold is configured, not scattered ──────────────────────────────
 
-def test_the_reporting_threshold_is_set_PER_ENVIRONMENT(app):
+def test_the_reporting_threshold_is_1_IN_EVERY_ENVIRONMENT(app):
     """
-    1 locally, 5 in production — deliberately not one shared default.
+    1 EVERYWHERE, INCLUDING PRODUCTION, ON REQUEST.
 
-    A threshold convenient for a local walkthrough must not reach a real
-    workforce by inheritance, and "we forgot to change it before go-live" is
-    the most ordinary way that happens. This test is what makes the production
-    default a decision rather than an accident.
+    This test used to assert 5 in production against 1 locally, so that a
+    threshold convenient for a local walkthrough could not reach a real
+    workforce by inheritance. The split was removed deliberately and the test
+    is kept, inverted, for the same reason it existed: the production value
+    should be something a test states out loud rather than something nobody
+    looks at.
+
+    WHAT 1 MEANS, so this is not read as a formality. Nothing is ever
+    suppressed. A group of one reports, so a segment breakdown containing a
+    single person shows that person's own answers to whoever reads the report.
+    The differencing defence never fires either, because no cell is ever
+    suppressed for it to protect. The landing page no longer warns respondents
+    about this — the section that did was removed.
+
+    If production is ever raised back, change it here and in config.py
+    together, and restore the landing-page wording with it.
     """
     from config import DevelopmentConfig, ProductionConfig, TestingConfig
 
     assert TestingConfig.MIN_REPORTING_N == 1
     assert DevelopmentConfig.MIN_REPORTING_N == 1
-    assert ProductionConfig.MIN_REPORTING_N == 5
+    assert ProductionConfig.MIN_REPORTING_N == 1
 
     assert app.config['MIN_REPORTING_N'] == 1        # this app is 'testing'
     assert app.config['ASSOCIATION_MIN_N'] == 12

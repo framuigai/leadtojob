@@ -95,77 +95,29 @@ consequence.">{{ form.purpose_statement }}</textarea>
   {% endif %}
 
   {#
-    EDIT ONLY, all four. Each has a correct default and none of them is a
-    decision the person naming a survey has an opinion about:
+    SCORING METHOD, REPORTING THRESHOLD, RETENTION AND THE PILOT FLAG ARE ON
+    NEITHER FORM NOW.
 
-      scoring_method   §10.2 requires DOCUMENTING which method is used, not
-                       choosing it per cycle. Every report prints it.
-      min_reporting_n  the platform floor, which can only ever be RAISED —
-                       so leaving it off the creation form cannot weaken
-                       suppression, only hide the option to strengthen it.
-      retention_months §13.8 requires a bounded, defined period; 24 months is
-                       it until somebody says otherwise.
-      is_pilot         rare, and a decision about the INSTRUMENT rather than
-                       about this client's measurement.
+    They were removed from creation first and from editing second, so every
+    cycle takes them from _cycle_defaults() and keeps them for life. The
+    routes IGNORE them in a posted body rather than validating one, which is
+    what stops a hand-crafted POST reaching a field no screen offers.
 
-    Anyone who does have an opinion edits the draft cycle, which is free until
-    it is opened.
+    What that costs, stated plainly so nobody rediscovers it as a bug:
+
+      - `min_reporting_n` is now always the platform floor. Raising it for a
+        client who wants a stricter threshold is a code or config change.
+        Safe in the direction that matters — it can no longer be lowered
+        either, and LOWER_MIN_N was already held by no role.
+      - `retention_months` is now always 24. Still bounded and still defined,
+        so §13.8 holds; a client needing 12 or 60 needs a code change.
+      - `scoring_method` is now always mean_of_subdomains. §10.2 asks that the
+        method be DOCUMENTED, and every report still prints it.
+      - A pilot cycle (§15) can no longer be created through this screen.
+
+    Restoring any of them means restoring BOTH the field here and the branch
+    in _cycle_form_values that reads it.
   #}
-  {% if cycle %}
-  <div class="form-group">
-    <label for="scoring_method">Domain scoring method</label>
-    <select id="scoring_method" name="scoring_method" {% if locked %}disabled{% endif %}>
-      <option value="mean_of_subdomains"
-        {% if form.scoring_method == 'mean_of_subdomains' %}selected{% endif %}>
-        Mean of the three subdomain scores (default)</option>
-      <option value="mean_of_items"
-        {% if form.scoring_method == 'mean_of_items' %}selected{% endif %}>
-        Mean of all valid domain items</option>
-    </select>
-    <small class="muted">
-      The two differ when response completeness varies. Whichever is chosen is
-      frozen for this cycle and printed in every report generated from it.
-    </small>
-  </div>
-
-  <div class="form-group">
-    <label for="min_reporting_n">Minimum reporting threshold</label>
-    {# The `min` attribute follows the PLATFORM FLOOR, not a literal. Hardcoding
-       5 here while the floor is 1 makes the browser reject a value the server
-       accepts — the two disagreeing is how a form becomes untrustworthy. #}
-    <input type="number" id="min_reporting_n" name="min_reporting_n"
-           min="{{ config.MIN_REPORTING_N }}"
-           value="{{ form.min_reporting_n }}">
-    <small class="muted">
-      May be raised, never lowered below {{ config.MIN_REPORTING_N }}. Groups
-      below it are suppressed, together with their next-smallest sibling so the
-      hidden figure cannot be recovered by subtraction.
-      {% if config.MIN_REPORTING_N < 3 %}
-      <br><strong>At {{ config.MIN_REPORTING_N }}, a result can rest on a
-      single response.</strong> The survey form tells respondents so, in those
-      words, while the threshold is this low.
-      {% endif %}
-    </small>
-  </div>
-
-  <div class="form-group">
-    <label for="retention_months">Retention after the cycle closes</label>
-    <input type="number" id="retention_months" name="retention_months"
-           min="3" max="120" value="{{ form.retention_months }}">
-    <small class="muted">3 to 120 months. The clock starts when the cycle
-      closes, not when it opens. Nothing is deleted automatically.</small>
-  </div>
-
-  <div class="form-group">
-    <label style="font-weight:normal">
-      <input type="checkbox" name="is_pilot" {% if form.is_pilot %}checked{% endif %}>
-      This is a pilot cycle
-    </label>
-    <small class="muted">Adds one optional question at the end asking whether
-      any items were unclear, repetitive or hard to answer. Those answers are
-      never shown to the organisation.</small>
-  </div>
-  {% endif %}
 
   <button type="submit" class="btn btn-primary">
     {{ 'Save' if cycle else 'Create cycle' }}</button>

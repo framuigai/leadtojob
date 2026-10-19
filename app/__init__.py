@@ -209,12 +209,15 @@ def _check_required_config(app, config_name):
         )
 
     # The reporting threshold is a deliberate decision in production, so a low
-    # one is logged loudly rather than refused. Refusing would be wrong — a
-    # genuinely tiny client may have accepted it with the respondent wording
-    # changed to match — but it must never pass unremarked, because the most
-    # ordinary way it gets here is the local testing value surviving the
-    # cutover.
-    min_n = app.config.get('MIN_REPORTING_N', 5)
+    # one is logged loudly rather than refused.
+    #
+    # IT IS NOW 1 BY DEFAULT, so this warning fires on every production boot.
+    # That is the point of leaving it in: the choice to report groups of one
+    # should appear in the logs of every start rather than being invisible
+    # because it has become the default. Do not silence it by raising the
+    # comparison — raise MIN_REPORTING_N instead, which is the thing the
+    # warning is about.
+    min_n = app.config.get('MIN_REPORTING_N', 1)
     if min_n < 3:
         app.logger.warning(
             'MIN_REPORTING_N is %s in production. At this threshold a group '

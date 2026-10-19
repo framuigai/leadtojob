@@ -238,7 +238,11 @@ class MeasurementCycle(db.Model):
     # The suppression floor for this cycle. May be raised above the platform
     # default (config.MIN_REPORTING_N) and NEVER lowered below it — the check
     # lives in app/analytics/ and the LOWER_MIN_N capability is held by nobody.
-    min_reporting_n = Column(Integer, nullable=False, default=5)
+    # 1 EVERYWHERE, ON REQUEST — see config.MIN_REPORTING_N for what that
+    # means. At 1 nothing is ever suppressed, so a one-person group reports
+    # that person's own answers. A cycle created before this change keeps the
+    # value it was created with, and no screen can lower it.
+    min_reporting_n = Column(Integer, nullable=False, default=1)
 
     # Which of the two documented domain-scoring methods is in force
     # (spec §10.2: the organisation must document which it uses, because

@@ -163,15 +163,16 @@ def _count_cycles(db, org):
 
 
 def _edit_form(cycle, **over):
-    """The EDIT form still carries every field. That is the point of it."""
+    """
+    What the EDIT screen actually posts: name, purpose statement, domains,
+    previous cycle. The four settings it no longer carries can still be passed
+    through `over`, which is how the test above proves they are ignored.
+    """
     data = {
         'cycle_name': cycle.cycle_name,
         'purpose_statement': _GOOD_PURPOSE,
         'assessed_domains': list(DOMAINS),
         'previous_cycle_id': '',
-        'min_reporting_n': str(cycle.min_reporting_n),
-        'scoring_method': cycle.scoring_method,
-        'retention_months': str(cycle.retention_months),
     }
     data.update(over)
     return data
@@ -375,44 +376,60 @@ def test_the_creation_form_ignores_a_posted_threshold(app, client, db, org_world
         app.config['MIN_REPORTING_N'] = 1
 
 
-def test_the_threshold_may_still_be_raised_by_editing_the_cycle(
-        client, db, org_world):
-    """It left the CREATION form, not the product."""
-    cycle = make_cycle(org_world['org'], 'ACME-RAISE', min_reporting_n=1)
-    db.session.commit()
-
-    login(client, org_world['admin'])
-    client.post(f'/org/cycles/{cycle.id}/edit',
-                data=_edit_form(cycle, min_reporting_n='10'),
-                follow_redirects=True)
-
-    db.session.refresh(cycle)
-    assert cycle.min_reporting_n == 10
-
-
-def test_the_threshold_cannot_be_lowered_through_the_edit_form(
+def test_the_edit_form_carries_the_four_settings_over_untouched(
         app, client, db, org_world):
     """
-    permissions.LOWER_MIN_N exists and is held by no role precisely so that
-    this cannot be waived from a screen under client pressure. The floor is
-    raised FOR THIS TEST rather than relying on the configured default, which
-    is 1 in development and testing - a suppression rule that only holds at
-    one particular configured value is a rule nobody has tested.
+    SCORING METHOD, THRESHOLD, RETENTION AND THE PILOT FLAG ARE ON NEITHER
+    FORM NOW.
+
+    They were removed from creation first and from editing second. The posted
+    body is ignored for all four, so a hand-crafted POST cannot reach a field
+    no screen offers — in either direction. The threshold is the one that
+    matters: it can no longer be lowered, which is what LOWER_MIN_N has always
+    been for.
     """
-    cycle = make_cycle(org_world['org'], 'ACME-EDIT', min_reporting_n=5)
+    cycle = make_cycle(org_world['org'], 'ACME-CARRY', min_reporting_n=5,
+                       retention_months=24,
+                       scoring_method='mean_of_subdomains', is_pilot=False)
     db.session.commit()
 
     app.config['MIN_REPORTING_N'] = 5
     try:
         login(client, org_world['admin'])
-        res = client.post(f'/org/cycles/{cycle.id}/edit',
-                          data=_edit_form(cycle, min_reporting_n='2'),
-                          follow_redirects=True)
-        assert 'cannot go below' in res.get_data(as_text=True)
+        client.post(f'/org/cycles/{cycle.id}/edit',
+                    data=_edit_form(cycle, min_reporting_n='2',
+                                    retention_months='120',
+                                    scoring_method='mean_of_items',
+                                    is_pilot='on',
+                                    cycle_name='Renamed'),
+                    follow_redirects=True)
+
         db.session.refresh(cycle)
         assert cycle.min_reporting_n == 5
+        assert cycle.retention_months == 24
+        assert cycle.scoring_method == 'mean_of_subdomains'
+        assert cycle.is_pilot is False
+        # The fields that ARE on the screen still save.
+        assert cycle.cycle_name == 'Renamed'
     finally:
         app.config['MIN_REPORTING_N'] = 1
+
+
+def test_the_edit_screen_offers_only_the_four_fields_it_should(
+        client, db, org_world):
+    """Pins the removal, so a restored half-field fails here."""
+    cycle = make_cycle(org_world['org'], 'ACME-FIELDS')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    html = client.get(f'/org/cycles/{cycle.id}/edit').get_data(as_text=True)
+
+    for name in ('cycle_name', 'purpose_statement', 'assessed_domains',
+                 'previous_cycle_id'):
+        assert f'name="{name}"' in html, name
+    for name in ('min_reporting_n', 'scoring_method', 'retention_months',
+                 'is_pilot'):
+        assert f'name="{name}"' not in html, name
 
 
 def test_a_cycles_own_statement_can_still_be_edited_without_moving_the_default(
@@ -683,3 +700,151 @@ def test_segment_values_store_codes_so_a_rename_cannot_regroup_history(
     assert stored == {'department': 'FIN'}
     assert validate_segment_values(
         org_world['org'].id, {'department': 'FIN'}) == stored
+
+
+# ── Deploying: one audience, one open link ─────────────────────────
+
+def test_a_deployment_through_the_form_is_always_an_open_link(
+        client, db, org_world):
+    """
+    THE DELIVERY CHOICE WAS REMOVED FROM THE SCREEN.
+
+    Ticketed mode still exists in the schema and still serves deployments that
+    predate the change, but nothing new can be created in it.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-DEP1', status='open')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.post(f'/org/cycles/{cycle.id}/deploy',
+                data={'expected_respondents': '40'}, follow_redirects=True)
+
+    deployment = db.session.query(SurveyDeployment).filter_by(
+        cycle_id=cycle.id).one()
+    assert deployment.delivery_mode == 'open_link'
+    assert deployment.expected_respondents == 40
+    assert deployment.public_slug
+
+
+def test_the_deploy_form_ignores_a_posted_delivery_mode(client, db, org_world):
+    """
+    The field is not on the screen, so a POST carrying it is hand-crafted. It
+    is IGNORED rather than rejected — the same discipline the creation form
+    applies to the reporting threshold. A form that no longer offers a mode
+    must not be able to select it.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-DEP2', status='open')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.post(f'/org/cycles/{cycle.id}/deploy',
+                data={'expected_respondents': '40',
+                      'delivery_mode': 'ticketed'},
+                follow_redirects=True)
+
+    deployment = db.session.query(SurveyDeployment).filter_by(
+        cycle_id=cycle.id).one()
+    assert deployment.delivery_mode == 'open_link'
+
+
+def test_the_deploy_form_still_requires_a_headcount(client, db, org_world):
+    """
+    The only thing the screen asks for now, so it had better still bind. It is
+    the DENOMINATOR of the response rate, and a rate without one is a
+    percentage of nothing.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-DEP3', status='open')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    res = client.post(f'/org/cycles/{cycle.id}/deploy',
+                      data={'expected_respondents': ''}, follow_redirects=True)
+
+    assert 'number of people invited' in res.get_data(as_text=True)
+    assert db.session.query(SurveyDeployment).filter_by(
+        cycle_id=cycle.id).count() == 0
+
+
+def test_the_deploy_screen_no_longer_offers_a_delivery_choice(
+        client, db, org_world):
+    """Pins the removal, so a restored half-option fails here."""
+    cycle = make_cycle(org_world['org'], 'ACME-DEP4', status='open')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    html = client.get(f'/org/cycles/{cycle.id}/deploy').get_data(as_text=True)
+    assert 'delivery_mode' not in html
+    assert 'Ticketed' not in html
+
+
+# ── The deployment page was merged into the cycle page ────────────────
+
+def test_the_cycle_page_carries_the_survey_link_and_the_invited_count(
+        client, db, org_world):
+    """
+    THE MERGE. Everything the separate deployment page showed is here now:
+    the link, the invited count, the response rate and the close button.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-MERGE', status='open')
+    deployment = make_deployment(org_world['org'], cycle,
+                                 public_slug='slug-merge-aaa',
+                                 expected_respondents=10)
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    html = client.get(f'/org/cycles/{cycle.id}').get_data(as_text=True)
+
+    assert 'slug-merge-aaa' in html          # the survey link itself
+    assert 'The survey link' in html
+    assert 'Close this deployment' in html
+    assert str(deployment.expected_respondents) in html
+
+
+def test_the_old_deployment_url_redirects_to_the_cycle_page(
+        client, db, org_world):
+    """
+    The route is kept as a redirect rather than deleted, so the deployments
+    list and any bookmark an admin already has still resolve.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-REDIR', status='open')
+    deployment = make_deployment(org_world['org'], cycle,
+                                 public_slug='slug-redir-aaa')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    res = client.get(f'/org/deployments/{deployment.id}')
+    assert res.status_code == 302
+    assert f'/org/cycles/{cycle.id}' in res.headers['Location']
+
+
+def test_the_redirect_still_404s_another_tenants_deployment(
+        client, db, org_world):
+    """
+    THE PART A REDIRECT COULD QUIETLY BREAK.
+
+    _deployment_or_404 still runs before the redirect. Skipping it would turn
+    this route into a cross-tenant probe: a redirect carrying another org's
+    cycle id confirms that cycle exists.
+    """
+    other_org = make_org('Other Ltd')
+    other_cycle = make_cycle(other_org, 'OTHER-1', status='open')
+    other_deployment = make_deployment(other_org, other_cycle,
+                                       public_slug='slug-other-aaa')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    res = client.get(f'/org/deployments/{other_deployment.id}')
+    assert res.status_code == 404
+    assert 'OTHER-1' not in res.get_data(as_text=True)
+
+
+def test_a_closed_deployment_does_not_show_its_link(client, db, org_world):
+    """A closed deployment's link is dead; showing it invites a support call."""
+    cycle = make_cycle(org_world['org'], 'ACME-CLOSED', status='open')
+    make_deployment(org_world['org'], cycle, public_slug='slug-closed-aaa',
+                    closed=True)
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    html = client.get(f'/org/cycles/{cycle.id}').get_data(as_text=True)
+    assert 'slug-closed-aaa' not in html

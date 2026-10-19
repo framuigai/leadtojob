@@ -43,21 +43,34 @@ class Config:
     # — a template-level check is one {% if %} away from being forgotten in the
     # next report.
     #
-    # THE DEFAULT IS SET PER ENVIRONMENT, NOT ONCE HERE. See the subclasses:
-    # development and testing default to 1 so a two-person fixture produces a
-    # visible number, production defaults to 5. Both are overridable by
-    # environment variable.
+    # SET TO 1 IN EVERY ENVIRONMENT, INCLUDING PRODUCTION, ON REQUEST.
     #
-    # It is deliberately NOT a single shared default. A threshold convenient
-    # for a local walkthrough is not a threshold that should reach a real
-    # workforce by inheritance, and "we forgot to change it before go-live" is
-    # the most ordinary way that happens.
+    # AT 1 THERE IS NO SUPPRESSION. A group of one reports, so a breakdown by
+    # a segment that happens to contain one person shows that person's own
+    # answers to whoever reads the report — their manager included. The
+    # differencing defence (suppressing the next-smallest cell alongside a
+    # suppressed one) never fires either, because nothing is ever suppressed
+    # to begin with.
     #
-    # Whatever it is set to, app/templates/survey/landing.html renders a claim
-    # that MATCHES it — see _reporting_promise() in app/survey/routes.py. A
-    # form that promises group-only reporting while the threshold is 1 is a
-    # false statement to a respondent, which is worse than no promise at all.
-    MIN_REPORTING_N = int(os.environ.get('MIN_REPORTING_N', 5))
+    # It used to be 5 in production and 1 in development and testing, split
+    # deliberately so that a threshold convenient for a local walkthrough
+    # could not reach a real workforce by inheritance. That split is gone; 1
+    # is now the intended production value, not a leftover.
+    #
+    # Still a FLOOR, and still one-directional: a cycle may raise its own
+    # min_reporting_n above this and never below it, and LOWER_MIN_N remains
+    # held by no role. At a floor of 1 that guarantee protects nothing on its
+    # own, because there is nothing below 1 to be lowered to.
+    #
+    # ALSO NOTE: app/templates/survey/landing.html no longer renders any claim
+    # about the threshold — the section that did was removed. So respondents
+    # are not told that a result may rest on their answers alone. Previously
+    # the form said so in those words whenever this value was below 2.
+    #
+    # ASSOCIATION OUTPUTS ARE NOT AFFECTED. association.contrast_floor() takes
+    # max(ASSOCIATION_MIN_N, 3 x min_reporting_n), so ASSOCIATION_MIN_N still
+    # binds there independently of this value.
+    MIN_REPORTING_N = int(os.environ.get('MIN_REPORTING_N', 1))
 
     # The floor for ANY association output (app/analytics/association.py).
     #
@@ -135,14 +148,15 @@ class ProductionConfig(Config):
     DEBUG = False
     TESTING = False
 
-    # 5 in production, NOT inherited from development.
+    # 1 IN PRODUCTION, ON REQUEST. See the base class for what that means.
     #
-    # Settable downward by environment variable if a client genuinely needs it
-    # — that is a decision for a real engagement, taken deliberately, with the
-    # respondent-facing wording changed to match. What it must not be is the
-    # local testing value arriving in production because nobody remembered to
-    # change it. app/__init__.py logs a warning at boot if it is below 3.
-    MIN_REPORTING_N = int(os.environ.get('MIN_REPORTING_N', 5))
+    # This used to be 5, and the comment here used to warn against the local
+    # testing value arriving in production by accident. It is no longer an
+    # accident: 1 is the intended value. app/__init__.py still logs a warning
+    # at boot whenever this is below 3, which is now expected rather than a
+    # signal — it is left in place so the choice is at least visible in the
+    # logs of every production start.
+    MIN_REPORTING_N = int(os.environ.get('MIN_REPORTING_N', 1))
 
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
 

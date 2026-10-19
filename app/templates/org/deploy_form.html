@@ -25,33 +25,21 @@
     </small>
   </div>
 
-  <div class="form-group">
-    <label>Delivery</label>
+  {#
+    THE DELIVERY CHOICE WAS REMOVED. Every deployment is an OPEN LINK.
 
-    <label style="display:block;font-weight:normal;margin-bottom:.6rem">
-      <input type="radio" name="delivery_mode" value="open_link" checked>
-      <strong>Open link</strong> (recommended)
-    </label>
-    <small class="muted" style="display:block;margin:-.4rem 0 1rem 1.5rem">
-      One link for everyone, by email or on a noticeboard. Honest claim to
-      respondents: their answers are not linked to them, and duplicate
-      submissions cannot be strictly prevented. A duplicate is a small, bounded
-      error in a pooled result.
-    </small>
+    Ticketed mode offered one single-use code per person, for the case where
+    findings would be contested and someone would claim people answered twice.
+    It is gone from this screen on request, and the route no longer honours a
+    posted `delivery_mode` — so the only way a ticketed deployment exists now
+    is if it predates this change.
 
-    <label style="display:block;font-weight:normal;margin-bottom:.6rem">
-      <input type="radio" name="delivery_mode" value="ticketed">
-      <strong>Ticketed</strong>
-    </label>
-    <small class="muted" style="display:block;margin:-.4rem 0 0 1.5rem">
-      One single-use code per person. Choose this when the findings will be
-      contested and someone will claim people answered twice. The system stores
-      only a one-way fingerprint of each code and never who received it - but
-      that mapping can still be written down outside the system, and employees
-      know it. Hand the codes out shuffled and in bulk, or you buy integrity
-      with the candour the survey depends on.
-    </small>
-  </div>
+    The schema, the AccessTicket table and the survey's ticket-entry path are
+    deliberately LEFT IN PLACE. They still serve those older deployments, and
+    the honest-claim wording that distinguishes the two modes is not something
+    to reconstruct from memory if the choice ever comes back. See
+    `ck_delivery_mode` in models.py.
+  #}
 
   <button type="submit" class="btn btn-primary">Deploy and get the link</button>
   <a href="{{ url_for('org.cycle_detail', cycle_id=cycle.id) }}"
