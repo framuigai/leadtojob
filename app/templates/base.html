@@ -55,6 +55,10 @@
                 <a href="{{ url_for('org.branches_list') }}"     class="nav-link">Branches</a>
                 <a href="{{ url_for('org.instrument') }}"        class="nav-link">Instrument</a>
                 <a href="{{ url_for('org.reports') }}"           class="nav-link">Reports</a>
+                {# L2 only. The purpose statement is the organisation speaking
+                   to its staff, so one branch does not write it for the
+                   others — see MANAGE_ORG_SETTINGS. #}
+                <a href="{{ url_for('org.settings') }}"          class="nav-link">Settings</a>
             {% elif current_user.role == 'branch_admin' %}
                 {# L3: no Branches tab — they manage none. Segments IS shown,
                    but read-only: a branch admin needs to know which groups

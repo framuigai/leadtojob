@@ -30,9 +30,23 @@ _CHEAP_HASH = bcrypt.hashpw(b'password', bcrypt.gensalt(rounds=4)).decode()
 PASSWORD = 'password'
 
 
+# The org's standing §9.2 statement. A new cycle is created with a copy of it,
+# so an org without one cannot create a cycle at all — which is the gate, and
+# is tested on its own. Every other test wants an org past that gate, so the
+# factory supplies one. Pass default_purpose_statement=None to get an org that
+# still owes it.
+DEFAULT_PURPOSE = (
+    'We are asking how satisfied you are with your job so that we can decide '
+    'what to improve. Results are reported in groups only, and answering '
+    'honestly carries no consequence.'
+)
+
+
 def make_org(name='Acme Ltd', **kw):
     org = Org(name=name, industry=kw.pop('industry', 'Manufacturing'),
               active_domains=kw.pop('active_domains', list(DOMAINS)),
+              default_purpose_statement=kw.pop('default_purpose_statement',
+                                               DEFAULT_PURPOSE),
               setup_complete=kw.pop('setup_complete', True),
               is_active=kw.pop('is_active', True), **kw)
     db.session.add(org)

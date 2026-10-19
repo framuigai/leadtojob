@@ -14,11 +14,13 @@ from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.domains import DOMAINS, GEM, OUTCOME_DOMAIN
+from app.org.routes import _CYCLE_ID_RE
 from app.models import MeasurementCycle, Segment, SegmentOption, SurveyDeployment
 from app.provisioning import freeze_segments, validate_segment_values
 from tests.conftest import login
 from tests.factories import (
-    make_branch, make_cycle, make_deployment, make_org, make_org_admin,
+    make_branch, make_branch_admin, make_cycle, make_deployment, make_org,
+    make_org_admin,
     make_segment,
 )
 
@@ -132,15 +134,44 @@ _GOOD_PURPOSE = (
 
 
 def _cycle_form(**over):
+    """
+    THE CREATION FORM NOW POSTS THREE FIELDS.
+
+    Not a convenience here: the route reads only these on create, so a test
+    that posts `min_reporting_n` is testing a field the screen does not offer
+    and the route ignores. The settings that used to live on this form are
+    asserted below against their DEFAULTS, and on the EDIT form where they
+    still live.
+    """
     data = {
-        'id': 'JS-2026-H1',
         'cycle_name': 'Employee Satisfaction 2026 H1',
+        'assessed_domains': list(DOMAINS),
+        'previous_cycle_id': '',
+    }
+    data.update(over)
+    return data
+
+
+def _only_cycle(db, org):
+    cycles = db.session.query(MeasurementCycle).filter_by(org_id=org.id).all()
+    assert len(cycles) == 1, f'expected exactly one cycle, got {len(cycles)}'
+    return cycles[0]
+
+
+def _count_cycles(db, org):
+    return db.session.query(MeasurementCycle).filter_by(org_id=org.id).count()
+
+
+def _edit_form(cycle, **over):
+    """The EDIT form still carries every field. That is the point of it."""
+    data = {
+        'cycle_name': cycle.cycle_name,
         'purpose_statement': _GOOD_PURPOSE,
         'assessed_domains': list(DOMAINS),
-        'min_reporting_n': '5',
-        'scoring_method': 'mean_of_subdomains',
-        'retention_months': '24',
         'previous_cycle_id': '',
+        'min_reporting_n': str(cycle.min_reporting_n),
+        'scoring_method': cycle.scoring_method,
+        'retention_months': str(cycle.retention_months),
     }
     data.update(over)
     return data
@@ -151,48 +182,142 @@ def test_an_org_admin_can_create_a_cycle(client, db, org_world):
     res = client.post('/org/cycles/new', data=_cycle_form(), follow_redirects=True)
     assert res.status_code == 200
 
-    cycle = db.session.get(MeasurementCycle, 'JS-2026-H1')
-    assert cycle is not None
+    cycle = _only_cycle(db, org_world['org'])
     assert cycle.status == 'draft'
-    assert cycle.org_id == org_world['org'].id
     assert cycle.branch_id is None          # an L2 cycle is org-wide
     assert sorted(cycle.assessed_domains) == sorted(DOMAINS)
 
 
-def test_a_purpose_statement_is_required_and_must_say_something(client, db, org_world):
+def test_the_cycle_reference_is_generated_and_safe_for_a_filename(
+        client, db, org_world):
     """
-    NOT NULL in the schema, with a length floor at the point of entry.
-
-    §9.2 requires respondents be told the purpose, how results will be used and
-    that there will be no retaliation, BEFORE the first question. This text is
-    what the landing page renders. A deployment that opens with "Survey" in that box
-    is the deployment whose answers are not worth having, and no later screen can fix
-    it.
+    It used to be typed, which meant validating '../../etc/passwd' out of a
+    string that lands in a report filename. Generating it removes the input
+    rather than filtering it.
     """
     login(client, org_world['admin'])
-    res = client.post('/org/cycles/new',
-                      data=_cycle_form(purpose_statement='Please fill in.'),
+    client.post('/org/cycles/new', data=_cycle_form(), follow_redirects=True)
+    cycle = _only_cycle(db, org_world['org'])
+    assert _CYCLE_ID_RE.match(cycle.id), cycle.id
+    assert '/' not in cycle.id and '\\' not in cycle.id
+
+
+def test_a_second_cycle_does_not_collide_with_the_first(client, db, org_world):
+    """The generated reference is a GLOBAL pk, so it must probe, not count."""
+    login(client, org_world['admin'])
+    client.post('/org/cycles/new', data=_cycle_form(), follow_redirects=True)
+    client.post('/org/cycles/new', data=_cycle_form(cycle_name='Pulse 2026 H2'),
+                follow_redirects=True)
+    ids = {c.id for c in db.session.query(MeasurementCycle)
+           .filter_by(org_id=org_world['org'].id).all()}
+    assert len(ids) == 2
+
+
+def test_a_new_cycle_inherits_the_organisations_purpose_statement(
+        client, db, org_world):
+    """
+    Section 9.2 is unchanged; only the place the statement is WRITTEN moved.
+    The cycle still carries its own copy, which is what the landing page
+    renders.
+    """
+    login(client, org_world['admin'])
+    client.post('/org/cycles/new', data=_cycle_form(), follow_redirects=True)
+    cycle = _only_cycle(db, org_world['org'])
+    assert cycle.purpose_statement == org_world['org'].default_purpose_statement
+    assert len(cycle.purpose_statement) >= 40
+
+
+def test_a_cycle_cannot_be_created_before_the_org_statement_is_written(
+        client, db, org_world):
+    """
+    THE SECTION 9.2 GATE, MOVED ONE SCREEN EARLIER RATHER THAN REMOVED.
+
+    An org that has not written what respondents are told cannot create a
+    cycle at all. This is the test that stops the simplified form becoming a
+    way to ship a survey with nothing to say.
+    """
+    org_world['org'].default_purpose_statement = None
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    res = client.post('/org/cycles/new', data=_cycle_form(),
+                      follow_redirects=True)
+    assert 'has not yet written' in res.get_data(as_text=True)
+    assert _count_cycles(db, org_world['org']) == 0
+
+
+def test_a_blank_org_statement_is_refused_at_the_settings_screen(
+        client, db, org_world):
+    login(client, org_world['admin'])
+    res = client.post('/org/settings',
+                      data={'default_purpose_statement': 'Please fill in.'},
                       follow_redirects=True)
     assert 'at least 40 characters' in res.get_data(as_text=True)
-    assert db.session.get(MeasurementCycle, 'JS-2026-H1') is None
+
+
+def test_an_org_statement_is_saved_and_does_not_touch_existing_cycles(
+        client, db, org_world):
+    existing = make_cycle(org_world['org'], 'ACME-OLD')
+    before = existing.purpose_statement
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.post('/org/settings',
+                data={'default_purpose_statement': _GOOD_PURPOSE},
+                follow_redirects=True)
+
+    db.session.refresh(org_world['org'])
+    db.session.refresh(existing)
+    assert org_world['org'].default_purpose_statement == _GOOD_PURPOSE
+    assert existing.purpose_statement == before
+
+
+def test_a_branch_admin_cannot_reach_the_org_settings_screen(
+        client, db, org_world):
+    """
+    The statement is the ORGANISATION speaking to its staff. One branch does
+    not write it for the others - see MANAGE_ORG_SETTINGS. L3 still inherits
+    it and may edit its own cycle's copy.
+    """
+    l3 = make_branch_admin(org_world['org'], org_world['branch'],
+                           email='l3-settings@acme.test')
+    db.session.commit()
+    login(client, l3)
+    # require_capability REDIRECTS rather than 403s, so assert the bounce and
+    # that the screen itself never rendered.
+    res = client.get('/org/settings', follow_redirects=True)
+    assert 'What respondents are told' not in res.get_data(as_text=True)
+
+
+def test_a_branch_cycle_inherits_the_same_organisation_statement(
+        client, db, org_world):
+    """L3 creates its own cycles, and starts from the organisation's wording."""
+    l3 = make_branch_admin(org_world['org'], org_world['branch'],
+                           email='l3-cycle@acme.test')
+    db.session.commit()
+    login(client, l3)
+    client.post('/org/cycles/new', data=_cycle_form(), follow_redirects=True)
+    cycle = _only_cycle(db, org_world['org'])
+    assert cycle.branch_id == org_world['branch'].id
+    assert cycle.purpose_statement == org_world['org'].default_purpose_statement
 
 
 def test_a_cycle_without_the_outcome_domain_is_refused(client, db, org_world):
     """
-    §1 and §10.4: the diagnostic domains are reported IN RELATION TO the
-    outcome domain. Without it there is nothing to relate them to, and the
+    Sections 1 and 10.4: the diagnostic domains are reported IN RELATION TO
+    the outcome domain. Without it there is nothing to relate them to, and the
     product degenerates into three unanchored scores that invite exactly the
     "generic satisfaction score" reading the specification exists to replace.
 
-    A shorter pulse deployment is legitimate — GEM plus one diagnostic — which is why
-    the rule is "the outcome domain must be present", not "all four".
+    A shorter pulse deployment is legitimate - GEM plus one diagnostic - which
+    is why the rule is "the outcome domain must be present", not "all four".
     """
     login(client, org_world['admin'])
     res = client.post('/org/cycles/new',
                       data=_cycle_form(assessed_domains=['TID', 'BIT']),
                       follow_redirects=True)
     assert 'outcome measure' in res.get_data(as_text=True)
-    assert db.session.get(MeasurementCycle, 'JS-2026-H1') is None
+    assert _count_cycles(db, org_world['org']) == 0
 
 
 def test_a_pulse_cycle_of_the_outcome_plus_one_diagnostic_is_allowed(
@@ -201,58 +326,116 @@ def test_a_pulse_cycle_of_the_outcome_plus_one_diagnostic_is_allowed(
     client.post('/org/cycles/new',
                 data=_cycle_form(assessed_domains=[GEM, 'TID']),
                 follow_redirects=True)
-    cycle = db.session.get(MeasurementCycle, 'JS-2026-H1')
-    assert cycle is not None
+    cycle = _only_cycle(db, org_world['org'])
     assert sorted(cycle.assessed_domains) == sorted([GEM, 'TID'])
 
 
-def test_the_reporting_threshold_cannot_be_lowered_through_the_form(
+def test_a_new_cycle_takes_the_platform_floor_as_its_threshold(
         app, client, db, org_world):
     """
-    The platform floor, whatever it is set to.
+    THE THRESHOLD LEFT THE CREATION FORM, AND THAT IS SAFE IN ONE DIRECTION
+    ONLY.
 
-    The floor is raised to 5 FOR THIS TEST rather than relying on the
-    configured default, which is 1 in development and testing. A suppression
-    rule that only holds at one particular configured value is a rule nobody
-    has tested — and the point of the floor is that it binds at whatever it is
-    set to, not that it happens to equal 5.
-
-    permissions.LOWER_MIN_N exists and is held by no role precisely so that
-    this cannot be waived from a screen under client pressure.
+    It can be RAISED but never lowered below the floor, so defaulting it
+    cannot weaken suppression. This asserts it tracks the CONFIGURED floor
+    rather than a literal - a default of 5 written into the route while the
+    floor is 10 is exactly the quiet disagreement the config lookup avoids.
     """
-    app.config['MIN_REPORTING_N'] = 5
+    app.config['MIN_REPORTING_N'] = 7
     try:
         login(client, org_world['admin'])
-        res = client.post('/org/cycles/new',
-                          data=_cycle_form(min_reporting_n='2'),
-                          follow_redirects=True)
-        assert 'cannot go below' in res.get_data(as_text=True)
-        assert db.session.get(MeasurementCycle, 'JS-2026-H1') is None
+        client.post('/org/cycles/new', data=_cycle_form(), follow_redirects=True)
+        assert _only_cycle(db, org_world['org']).min_reporting_n == 7
     finally:
         app.config['MIN_REPORTING_N'] = 1
 
 
-def test_the_reporting_threshold_may_be_raised(client, db, org_world):
-    login(client, org_world['admin'])
-    client.post('/org/cycles/new', data=_cycle_form(min_reporting_n='10'),
-                follow_redirects=True)
-    assert db.session.get(MeasurementCycle, 'JS-2026-H1').min_reporting_n == 10
+def test_the_creation_form_ignores_a_posted_threshold(app, client, db, org_world):
+    """
+    These fields are not on the screen, so a POST carrying them is
+    hand-crafted. They must not be honoured - least of all a LOWER threshold,
+    which would waive suppression through a form that no longer offers it.
+    That is precisely what LOWER_MIN_N exists to make impossible.
+    """
+    app.config['MIN_REPORTING_N'] = 5
+    try:
+        login(client, org_world['admin'])
+        client.post('/org/cycles/new',
+                    data=_cycle_form(min_reporting_n='2', retention_months='120',
+                                     scoring_method='mean_of_items',
+                                     purpose_statement='x' * 50),
+                    follow_redirects=True)
+        cycle = _only_cycle(db, org_world['org'])
+        assert cycle.min_reporting_n == 5
+        assert cycle.retention_months == 24
+        assert cycle.scoring_method == 'mean_of_subdomains'
+        # And the purpose statement came from the ORG, not from the post.
+        assert cycle.purpose_statement == org_world['org'].default_purpose_statement
+    finally:
+        app.config['MIN_REPORTING_N'] = 1
 
 
-def test_a_duplicate_cycle_reference_is_refused(client, db, org_world):
-    make_cycle(org_world['org'], 'JS-2026-H1')
+def test_the_threshold_may_still_be_raised_by_editing_the_cycle(
+        client, db, org_world):
+    """It left the CREATION form, not the product."""
+    cycle = make_cycle(org_world['org'], 'ACME-RAISE', min_reporting_n=1)
     db.session.commit()
 
     login(client, org_world['admin'])
-    res = client.post('/org/cycles/new', data=_cycle_form(), follow_redirects=True)
-    assert 'already in use' in res.get_data(as_text=True)
+    client.post(f'/org/cycles/{cycle.id}/edit',
+                data=_edit_form(cycle, min_reporting_n='10'),
+                follow_redirects=True)
+
+    db.session.refresh(cycle)
+    assert cycle.min_reporting_n == 10
 
 
-def test_a_cycle_reference_unsafe_for_a_filename_is_refused(client, org_world):
+def test_the_threshold_cannot_be_lowered_through_the_edit_form(
+        app, client, db, org_world):
+    """
+    permissions.LOWER_MIN_N exists and is held by no role precisely so that
+    this cannot be waived from a screen under client pressure. The floor is
+    raised FOR THIS TEST rather than relying on the configured default, which
+    is 1 in development and testing - a suppression rule that only holds at
+    one particular configured value is a rule nobody has tested.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-EDIT', min_reporting_n=5)
+    db.session.commit()
+
+    app.config['MIN_REPORTING_N'] = 5
+    try:
+        login(client, org_world['admin'])
+        res = client.post(f'/org/cycles/{cycle.id}/edit',
+                          data=_edit_form(cycle, min_reporting_n='2'),
+                          follow_redirects=True)
+        assert 'cannot go below' in res.get_data(as_text=True)
+        db.session.refresh(cycle)
+        assert cycle.min_reporting_n == 5
+    finally:
+        app.config['MIN_REPORTING_N'] = 1
+
+
+def test_a_cycles_own_statement_can_still_be_edited_without_moving_the_default(
+        client, db, org_world):
+    """
+    The L3 admin's escape hatch, and the L2 admin's. Editing one cycle's copy
+    changes that cycle only - not the organisation default, and not a sibling.
+    """
+    cycle = make_cycle(org_world['org'], 'ACME-OWN')
+    db.session.commit()
+    bespoke = ('This cycle follows the restructure announced in March. We are '
+               'asking what has changed for you, and nothing you say is used '
+               'in any decision about you.')
+
     login(client, org_world['admin'])
-    res = client.post('/org/cycles/new', data=_cycle_form(id='../../etc/passwd'),
-                      follow_redirects=True)
-    assert 'must be 3-50 characters' in res.get_data(as_text=True)
+    client.post(f'/org/cycles/{cycle.id}/edit',
+                data=_edit_form(cycle, purpose_statement=bespoke),
+                follow_redirects=True)
+
+    db.session.refresh(cycle)
+    db.session.refresh(org_world['org'])
+    assert cycle.purpose_statement == bespoke
+    assert org_world['org'].default_purpose_statement != bespoke
 
 
 # ── Freezing, once responses exist ─────────────────────────────────────────
@@ -272,8 +455,8 @@ def test_assessed_domains_freeze_once_a_response_exists(client, db, org_world):
 
     login(client, org_world['admin'])
     client.post('/org/cycles/JS-2026-H1/edit',
-                data=_cycle_form(assessed_domains=[GEM],
-                                 cycle_name='Renamed'),
+                data=_edit_form(cycle, assessed_domains=[GEM],
+                                cycle_name='Renamed'),
                 follow_redirects=True)
 
     db.session.expire_all()
@@ -294,7 +477,7 @@ def test_the_scoring_method_freezes_once_a_response_exists(client, db, org_world
 
     login(client, org_world['admin'])
     client.post('/org/cycles/JS-2026-H1/edit',
-                data=_cycle_form(scoring_method='mean_of_items'),
+                data=_edit_form(cycle, scoring_method='mean_of_items'),
                 follow_redirects=True)
 
     db.session.expire_all()
@@ -309,7 +492,8 @@ def test_domains_remain_editable_before_any_response(client, db, org_world):
 
     login(client, org_world['admin'])
     client.post('/org/cycles/JS-2026-H1/edit',
-                data=_cycle_form(assessed_domains=[GEM, 'PIE']),
+                data=_edit_form(db.session.get(MeasurementCycle, 'JS-2026-H1'),
+                                assessed_domains=[GEM, 'PIE']),
                 follow_redirects=True)
 
     db.session.expire_all()

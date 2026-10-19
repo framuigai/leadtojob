@@ -342,8 +342,15 @@ def org_admin_new(org_id):
                      f'Created organisation admin {email} for {org.name}',
                      org_id=org.id, payload=user_payload(user))
         db.session.commit()
+        # THE §9.2 HANDOVER, SAID AT THE MOMENT THE ACCOUNT IS HANDED OVER.
+        # The same prompt waits for them on their own dashboard until it is
+        # done, but the person creating the account is usually the person
+        # briefing them, and this is the one moment that conversation happens.
         flash(f'Created {email}. Give them the password directly; it is not '
-              'emailed and is not recoverable from here.', 'success')
+              'emailed and is not recoverable from here. Ask them to write '
+              'what respondents are told, under Settings, before they create '
+              'their first cycle — every cycle, including their branch '
+              'admins’, starts from it.', 'success')
         if not org.setup_complete:
             return redirect(url_for('admin.org_setup_confirm', org_id=org.id))
         return redirect(url_for('admin.org_detail', org_id=org.id))

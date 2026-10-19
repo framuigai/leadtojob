@@ -27,6 +27,25 @@
     </div>
 </div>
 
+{#
+  THE §9.2 REMINDER. Shown until the organisation's statement to respondents
+  exists, and then never again — a CONDITION rather than a dismissible
+  first-login notice, because a notice is clicked away once while the
+  statement is still missing. On a brand-new org it is true by construction,
+  which is what makes it the L2 admin's first-login prompt without a
+  first-login column.
+#}
+{% if purpose_reminder %}
+<div class="flash flash-warning">
+  <strong>Before your first cycle:</strong> write what respondents are told
+  before they answer — why you are asking, how the results will be used, who
+  sees what, and that answering honestly carries no consequence. Every new
+  cycle starts from it, including cycles your branch admins create, and a
+  cycle cannot be created until it is set.
+  <a href="{{ url_for('org.settings') }}">Write it now</a>.
+</div>
+{% endif %}
+
 {# ────────────────────────────────────────────────────────────────────────────
    WHAT IS NOT ON THIS PAGE, AND WHY.
 

@@ -28,6 +28,7 @@ from sqlalchemy import func
 from app import db, domains
 from app import external_url
 from app.audit import (
+    ORG_SETTINGS_EDIT,
     BRANCH_CREATE, BRANCH_DEACTIVATE, BRANCH_REACTIVATE, CYCLE_ARCHIVE,
     CYCLE_CLOSE, CYCLE_CREATE, CYCLE_EDIT, CYCLE_OPEN, DEPLOYMENT_CLOSE,
     DEPLOYMENT_CREATE, SEGMENT_CREATE, SEGMENT_EDIT, TICKETS_ISSUE,
@@ -56,7 +57,8 @@ from app.provisioning import active_segments, latest_version
 from app.permissions import (
     BRANCH_ADMIN, DEPLOY_ORG_WIDE, DEPLOY_SURVEYS, DEPLOY_TO_BRANCH,
     EDIT_DEPLOYMENT, ISSUE_TICKETS, MANAGE_BRANCH_ADMINS, MANAGE_BRANCHES,
-    MANAGE_ACTIONS, MANAGE_CYCLES, MANAGE_SEGMENTS, ORG_ADMIN, RUN_ANALYSIS,
+    MANAGE_ACTIONS, MANAGE_CYCLES, MANAGE_ORG_SETTINGS, MANAGE_SEGMENTS,
+    ORG_ADMIN, RUN_ANALYSIS,
     VIEW_REPORTS,
     VIEW_TEMPLATES, can, is_branch_scoped, visible_branch_ids,
 )
@@ -66,6 +68,24 @@ _ORG_TIERS = (ORG_ADMIN, BRANCH_ADMIN)
 # Cycle ids appear in report filenames and in conversation, so they are
 # constrained to something safe to put in a path and readable in an email.
 _CYCLE_ID_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{2,49}$')
+
+# One wording for the §9.2 minimum, used by the org settings screen and by
+# cycle validation. Two screens enforcing the same rule in two different
+# sentences is how a rule starts to look like a suggestion.
+_PURPOSE_TOO_SHORT = (
+    'Write a statement of at least 40 characters. Respondents read it before '
+    'the first question: what this is for, how the results will be used, who '
+    'sees what, and that answering honestly carries no consequence.'
+)
+
+# Shown when an L3 admin reaches cycle creation before L2 has written the
+# statement. It names who can fix it, because the L3 admin cannot.
+_PURPOSE_NOT_SET = (
+    'Your organisation administrator has not yet written the statement '
+    'respondents are shown before the first question. A cycle cannot be '
+    'created without it (specification §9.2). Ask them to set it under '
+    'Settings.'
+)
 
 
 def _scoped(query, model):
@@ -151,6 +171,7 @@ def dashboard():
     return render_template(
         'org/dashboard.html',
         branch_scoped=is_branch_scoped(current_user),
+        purpose_reminder=_purpose_reminder(),
         rows=rows,
         stats={
             'cycles': len(cycles),
@@ -161,6 +182,66 @@ def dashboard():
             'ready': sum(1 for r in rows if r['state']['key'] == 'ready'),
         },
     )
+
+
+# ── Org settings ──────────────────────────────────────────
+
+
+def _purpose_reminder():
+    """
+    True when this org still owes §9.2 a statement AND this user can write it.
+
+    Rendered as a banner rather than stored as a 'seen it' flag: a flag is
+    dismissed once and the statement is still missing, whereas a condition that
+    clears itself when the work is done cannot be dismissed into silence. It
+    therefore also covers the L2 admin's FIRST login without a first-login
+    column, because on a new org the condition is true by construction.
+    """
+    if not can(current_user, MANAGE_ORG_SETTINGS) or current_user.org_id is None:
+        return False
+    org = db.session.get(Org, current_user.org_id)
+    return org is not None and not (org.default_purpose_statement or '').strip()
+
+
+@org_bp.route('/settings', methods=['GET', 'POST'])
+@require_capability(MANAGE_ORG_SETTINGS)
+def settings():
+    """
+    The organisation's standing answer to §9.2.
+
+    Written once by L2 and inherited by every new cycle, including the branch
+    cycles an L3 admin creates. L3 does not reach this screen — the statement
+    is the ORGANISATION speaking to its staff, and one branch should not write
+    it for the others — but L3 may edit its own cycle's copy afterwards, which
+    changes nothing for anyone else.
+    """
+    org = db.session.get(Org, current_user.org_id) or abort(404)
+
+    if request.method == 'POST':
+        text_value = (request.form.get('default_purpose_statement') or '').strip()
+        if len(text_value) < 40:
+            flash(_PURPOSE_TOO_SHORT, 'error')
+            return render_template('org/settings.html', org=org,
+                                   value=text_value)
+
+        was_set = bool((org.default_purpose_statement or '').strip())
+        org.default_purpose_statement = text_value
+        # PAYLOAD CARRIES THE FACT, NOT THE TEXT. audit_events outlives the
+        # retention purge and holds administrative identifiers only.
+        record_audit(ORG_SETTINGS_EDIT, 'org', org.id,
+                     ('Replaced' if was_set else 'Set')
+                     + ' the default purpose statement',
+                     org_id=org.id,
+                     payload={'field': 'default_purpose_statement',
+                              'replaced_existing': was_set,
+                              'length': len(text_value)})
+        db.session.commit()
+        flash('Saved. New cycles will start with this statement; existing '
+              'cycles are unchanged.', 'success')
+        return redirect(url_for('org.settings'))
+
+    return render_template('org/settings.html', org=org,
+                           value=org.default_purpose_statement or '')
 
 
 # ── Branches ────────────────────────────────────────────────────────────────
@@ -296,6 +377,8 @@ def cycle_new():
 
     if request.method == 'POST':
         form = _cycle_form_values(request.form)
+        # Generated, not typed. See _next_cycle_id().
+        form['id'] = _next_cycle_id()
         error = _validate_cycle(form, creating=True)
         if error:
             flash(error, 'error')
@@ -325,8 +408,9 @@ def cycle_new():
                      org_id=current_user.org_id, branch_id=cycle.branch_id,
                      payload=cycle_payload(cycle))
         db.session.commit()
-        flash(f'Created {cycle.cycle_name}. It is a draft until you open it.',
-              'success')
+        flash(f'Created {cycle.cycle_name} ({cycle.id}). It is a draft until '
+              'you open it — open it to review what respondents will be told '
+              'and start collecting.', 'success')
         return redirect(url_for('org.cycle_detail', cycle_id=cycle.id))
 
     return render_template('org/cycle_form.html', cycle=None,
@@ -501,9 +585,35 @@ def _org_segments_ready():
 
 
 def _cycle_defaults():
+    """
+    WHAT A NEW CYCLE IS, BEFORE ANYONE TYPES ANYTHING.
+
+    The creation form asks for three things — name, domains, previous cycle —
+    and everything else comes from here. That is not a shortcut around the
+    specification; it is where the specification's requirements are met.
+
+      - `purpose_statement` is the ORG's standing §9.2 statement, written once
+        under Settings. Still copied onto the cycle, so the landing page keeps
+        rendering the cycle's own text and the column stays NOT NULL.
+      - `min_reporting_n` is the platform floor. It can only ever be RAISED
+        (the floor check in _validate_cycle, and LOWER_MIN_N is held by no
+        role), so defaulting it cannot weaken suppression.
+      - `scoring_method`: §10.2 requires DOCUMENTING which method is used, not
+        choosing it per cycle. Every report prints it. Nobody filling a
+        creation form has an opinion about mean-of-items.
+      - `retention_months`: §13.8 requires a bounded, defined period, not a
+        decision re-made every cycle.
+
+    All four remain editable on the EDIT screen, which is where an admin who
+    does have an opinion goes.
+    """
     from flask import current_app
+    org = (db.session.get(Org, current_user.org_id)
+           if current_user.org_id else None)
     return {
-        'id': '', 'cycle_name': '', 'purpose_statement': '',
+        'id': '',
+        'cycle_name': '',
+        'purpose_statement': (org.default_purpose_statement or '') if org else '',
         'assessed_domains': list(domains.DOMAINS),
         'previous_cycle_id': None,
         'min_reporting_n': current_app.config['MIN_REPORTING_N'],
@@ -511,6 +621,26 @@ def _cycle_defaults():
         'retention_months': 24,
         'is_pilot': False,
     }
+
+
+def _next_cycle_id():
+    """
+    Generate the cycle reference instead of asking for it.
+
+    It is a human-readable PK that lands in report filenames, so it stays
+    readable — JS-2026-1, JS-2026-2 — but there is nothing an admin knows that
+    this does not. The probe loops rather than counting rows because the PK is
+    GLOBAL across orgs while a count would be per-org, and because an archived
+    cycle still holds its id. It is also belt-and-braces only: a collision
+    still raises on the unique PK rather than overwriting anything, and
+    _validate_cycle re-checks the generated value against the same regex an
+    admin's input used to face.
+    """
+    year = datetime.now(timezone.utc).year
+    n = 1
+    while db.session.get(MeasurementCycle, f'JS-{year}-{n}') is not None:
+        n += 1
+    return f'JS-{year}-{n}'
 
 
 def _cycle_form_values(form, existing=None):
@@ -533,15 +663,38 @@ def _cycle_form_values(form, existing=None):
         except ValueError:
             return fallback
 
-    return {
+    common = {
         'id': existing.id if existing else (form.get('id') or '').strip(),
         'cycle_name': (form.get('cycle_name') or '').strip(),
-        'purpose_statement': (form.get('purpose_statement') or '').strip(),
         'assessed_domains': form.getlist('assessed_domains') or [],
         'previous_cycle_id': (form.get('previous_cycle_id') or '').strip() or None,
-        'min_reporting_n': _int('min_reporting_n', 5),
-        'scoring_method': (form.get('scoring_method') or 'mean_of_subdomains').strip(),
-        'retention_months': _int('retention_months', 24),
+    }
+
+    if existing is None:
+        # CREATING. The form posts three fields and these four are not among
+        # them, so they come from _cycle_defaults() and the posted body is
+        # ignored for them entirely — a hand-crafted POST cannot set a
+        # retention of 120 or a scoring method through a screen that does not
+        # offer either. (min_reporting_n is still floor-checked in
+        # _validate_cycle regardless, since that one must never be weakened.)
+        defaults = _cycle_defaults()
+        return common | {
+            'purpose_statement': defaults['purpose_statement'],
+            'min_reporting_n': defaults['min_reporting_n'],
+            'scoring_method': defaults['scoring_method'],
+            'retention_months': defaults['retention_months'],
+            'is_pilot': defaults['is_pilot'],
+        }
+
+    # EDITING. Every field is on the screen, so every field is read from the
+    # post — including `is_pilot`, whose ABSENCE means unchecked and must not
+    # fall back to the stored value or the box could never be cleared.
+    return common | {
+        'purpose_statement': (form.get('purpose_statement') or '').strip(),
+        'min_reporting_n': _int('min_reporting_n', existing.min_reporting_n),
+        'scoring_method': (form.get('scoring_method')
+                           or existing.scoring_method).strip(),
+        'retention_months': _int('retention_months', existing.retention_months),
         'is_pilot': form.get('is_pilot') == 'on',
     }
 
@@ -566,10 +719,11 @@ def _validate_cycle(form, creating):
     # that opens with nothing to say is the cycle whose answers are not worth
     # having.
     if len(form['purpose_statement']) < 40:
-        return ('Write a purpose statement of at least 40 characters. '
-                'Respondents read it before the first question: what this is '
-                'for, how the results will be used, who sees what, and that '
-                'answering honestly carries no consequence.')
+        # ON CREATE this text came from the ORG DEFAULT, not from a box on this
+        # screen, so the error has to point at the screen that can fix it —
+        # and for an L3 admin, at the person who can. §9.2 is enforced in the
+        # same place it always was; only the place it is WRITTEN moved.
+        return _PURPOSE_NOT_SET if creating else _PURPOSE_TOO_SHORT
 
     if not form['assessed_domains']:
         return 'Select at least one domain.'

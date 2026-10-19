@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Settings - leadTo{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-header-left">
+  <div class="section-label">{{ role_label(current_user.role) }}</div>
+  <h1>Organisation settings</h1>
+</div></div>
+
+{% if not value %}
+<div class="flash flash-warning">
+  <strong>This needs writing before your first cycle.</strong> Respondents are
+  told why they are being asked before they answer the first question, and a
+  cycle cannot be created until this is set. Branch admins inherit what you
+  write here.
+</div>
+{% endif %}
+
+<div class="panel"><div class="panel-body">
+<form method="post" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-group">
+    <label for="default_purpose_statement">What respondents are told</label>
+    <textarea id="default_purpose_statement" name="default_purpose_statement"
+              rows="8" required autofocus
+              placeholder="Why we are asking, how the results will be used, who sees
+what, and our commitment that answering honestly carries no
+consequence.">{{ value }}</textarea>
+    <small class="muted">
+      At least 40 characters. Shown on the survey landing page before the first
+      question, and copied onto every <strong>new</strong> cycle — including
+      cycles a branch admin creates. Existing cycles keep the text they were
+      created with; change a single cycle's wording by editing that cycle.
+      This is what makes the responses worth having.
+    </small>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Save</button>
+  <a href="{{ url_for('org.dashboard') }}" class="btn btn-secondary">Cancel</a>
+</form>
+</div></div>
+{% endblock %}

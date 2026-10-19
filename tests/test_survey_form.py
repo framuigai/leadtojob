@@ -168,54 +168,78 @@ def test_the_session_row_holds_no_identity(client, deployment):
     assert 'werkzeug' not in blob.lower()
 
 
-# ── The anonymity claim matches the mode ────────────────────────────────────
+# ── The landing page no longer makes any promise ───────────────────
 
-def test_an_open_link_deployment_does_not_promise_to_prevent_duplicates(client, deployment):
+# THE "WHAT WE CAN AND CANNOT PROMISE" SECTION WAS REMOVED FROM THE LANDING
+# PAGE ON REQUEST, AND WITH IT THE SECTION 9.2 DISCLOSURES.
+#
+# What used to be asserted here, and no longer can be:
+#
+#   - the delivery-mode anonymity claim ("cannot strictly prevent duplicate
+#     submissions" for open_link, "one response per code" for ticketed)
+#   - the reporting threshold, as a number
+#   - who sees what ("not to your manager")
+#   - non-retaliation ("carries no consequence")
+#   - the technical-logs caveat ("network address")
+#   - at a threshold of 1, the warning that a result may rest on a single
+#     response
+#
+# The tests below are what is left: the page must still not OVERCLAIM, and it
+# must still render the org's own purpose statement, which is now the only
+# thing a respondent is told before answering. The deleted assertions are
+# listed above rather than simply removed so that restoring the section is a
+# matter of restoring these tests, not of reconstructing which guarantees the
+# specification asked for.
+
+
+def test_the_landing_page_does_not_overclaim_anonymity(client, deployment):
     """
-    THE NAMED ACCEPTANCE CRITERION.
+    Section 9.2: "avoid promising absolute anonymity if the administration
+    method cannot guarantee it."
 
-    Specification §9.2: "avoid promising absolute anonymity if the
-    administration method cannot guarantee it." An open link cannot prevent a
-    second submission, so the page says so. A page that claimed otherwise would
-    be a bug, not marketing.
+    The page no longer makes the positive disclosures, but the prohibition is
+    not conditional on them: it must not claim what it cannot deliver. The
+    purpose statement is free text written by an org admin, so this is the one
+    check that still has something to catch.
+    """
+    html = client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True).lower()
+    for phrase in ('completely anonymous', 'totally anonymous',
+                   'fully anonymous', '100% anonymous'):
+        assert phrase not in html, phrase
+
+
+def test_an_open_link_deployment_does_not_claim_one_response_per_person(
+        client, deployment):
+    """
+    An open link cannot prevent a second submission. The page used to say so;
+    it must at least not say the opposite.
     """
     html = client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True)
-    assert 'cannot strictly prevent duplicate submissions' in html
     assert 'One response per code' not in html
-    # And it must not overclaim in the other direction either.
-    assert 'completely anonymous' not in html.lower()
-    assert 'totally anonymous' not in html.lower()
 
 
-def test_a_ticketed_deployment_makes_the_stronger_claim(client, db, deployment):
-    # Its own cycle: uq_open_deployment permits one open deployment per
-    # (org, cycle, scope), which is exactly the duplicate-deployment guard working.
-    other = make_cycle(deployment['org'], 'KD-2026-H2', status='open')
-    make_deployment(deployment['org'], other,
-                    public_slug='slug-ticketed-bbb',
-                    delivery_mode='ticketed', expected_respondents=40)
-    db.session.commit()
+def test_the_landing_page_still_renders_the_cycles_own_purpose_statement(
+        client, deployment):
+    """
+    NOW THE ONLY THING A RESPONDENT IS TOLD BEFORE ANSWERING.
 
-    html = client.get('/survey/slug-ticketed-bbb').get_data(as_text=True)
-    assert 'One response per code' in html
-    assert 'do not know which code is yours' in html
-    assert 'cannot strictly prevent duplicate submissions' not in html
-
-
-def test_the_landing_page_carries_every_disclosure_spec_9_2_requires(client, deployment):
-    html = _text(client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True))
-    # purpose, in the org admin's own words
+    It carried weight before; it carries all of it now. The cycle's own copy
+    is what renders here — not the org default it was created from — so an
+    edit to one cycle reaches its respondents and nobody else's.
+    """
+    html = client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True)
+    assert 'Why you are being asked' in html
     assert 'what to improve' in html
-    # the reporting threshold, as a number
-    assert str(deployment['cycle'].min_reporting_n) in html
-    # who sees what
-    assert 'not to your manager' in html
-    # non-retaliation
-    assert 'carries no consequence' in html
-    # an honest time estimate — saying so measurably reduces abandonment
-    assert 'minutes' in html
-    # the limit of the promise, stated rather than hidden
-    assert 'network address' in html
+
+
+def test_the_removed_section_is_really_gone(client, deployment):
+    """
+    Pins the removal, so a later edit that restores half of it — a heading
+    without its bullets, or bullets whose wording no longer tracks the
+    threshold — fails here rather than shipping a partial promise.
+    """
+    html = client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True)
+    assert 'What we can and cannot promise' not in html
 
 
 def test_the_word_daunting_never_reaches_a_respondent(client, deployment):
@@ -660,59 +684,39 @@ def test_subdomains_are_interleaved_on_the_page(client, deployment):
     assert len(subs) == 12
     assert not any(a == b for a, b in zip(subs, subs[1:])), subs
 
-# ── The promise follows the threshold ──────────────────────────────────────
+# ── The threshold no longer reaches the respondent ──────────────────
 
-@pytest.mark.parametrize('min_n, must_say, must_not_say', [
-    (5, ['smaller than 5 people is suppressed',
-         'No individual response is shown to anyone'],
-        ['may be based on your answers alone']),
-    (2, ['groups of two or more',
-         'the other person could work out your answers'],
-        ['No individual response is shown to anyone',
-         'smaller than 2 people is suppressed']),
-    (1, ['may be based on your answers alone',
-         'work out that it is yours',
-         'comfortable putting your name to'],
-        ['No individual response is shown to anyone',
-         'only ever reported for groups']),
-])
-def test_the_reporting_promise_matches_the_threshold_in_force(
-        client, db, deployment, min_n, must_say, must_not_say):
+# WHAT WAS HERE, AND WHY IT IS NOT.
+#
+# A parametrised test asserted that the landing page's wording tracked
+# cycle.min_reporting_n: group-only reporting at 5, the "groups of two or
+# more" caveat at 2, and at 1 an explicit warning that a figure might rest on
+# one person's answers together with advice to answer only what they were
+# comfortable putting their name to.
+#
+# The section that carried all three was removed, so there is no wording left
+# to track. reporting_promise() still computes the value and the route still
+# passes it; the template no longer renders it. The test below pins that the
+# page is at least not asserting a threshold it does not have.
+
+
+@pytest.mark.parametrize('min_n', [1, 2, 5])
+def test_the_landing_page_makes_no_claim_about_the_threshold(
+        client, db, deployment, min_n):
     """
-    THE SAME DISCIPLINE AS THE DELIVERY-MODE WORDING, APPLIED TO THE THRESHOLD.
-
-    Spec §9.2: "avoid promising absolute anonymity if the administration method
-    cannot guarantee it." A form claiming group-only reporting while the
-    threshold is 1 is a false statement to someone being asked to answer
-    candidly about their employer — and a false promise is worse than no
-    promise, because it is believed once and never again.
-
-    The threshold is 1 in development and testing for local convenience. This
-    test is what stops that convenience quietly turning the landing page into a
-    lie.
+    The page says nothing about grouping at any threshold — including at 5,
+    where the claim would have been true and reassuring, and at 1, where the
+    old page warned. Whatever it says now comes from the purpose statement.
     """
     deployment['cycle'].min_reporting_n = min_n
     db.session.commit()
 
-    html = re.sub(r'\s+', ' ', client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True))
+    html = re.sub(r'\s+', ' ',
+                  client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True))
 
-    for phrase in must_say:
-        assert phrase in html, f'min_n={min_n} should say {phrase!r}'
-    for phrase in must_not_say:
-        assert phrase not in html, f'min_n={min_n} must NOT say {phrase!r}'
+    for phrase in ('only ever reported for groups',
+                   'No individual response is shown to anyone',
+                   'groups of two or more',
+                   'may be based on your answers alone'):
+        assert phrase not in html, f'min_n={min_n} should no longer say {phrase!r}'
 
-
-def test_at_a_threshold_of_one_the_form_tells_respondents_to_self_censor(
-        client, db, deployment):
-    """
-    Unpleasant, and correct. If a result can be one person's answers, the only
-    honest thing to do is say so and let them decide what to put in writing —
-    rather than collect candour under a promise we are not keeping.
-    """
-    deployment['cycle'].min_reporting_n = 1
-    db.session.commit()
-
-    html = re.sub(r'\s+', ' ', client.get(f'/survey/{deployment["slug"]}').get_data(as_text=True))
-    assert 'Answer only what you are comfortable putting your name to' in html
-    # And it must still say a blank costs them nothing, or the advice is a trap.
-    assert 'not counted against you' in html

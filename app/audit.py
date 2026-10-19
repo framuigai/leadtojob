@@ -38,6 +38,12 @@ from app.models import AuditEvent
 ORG_CREATE          = 'org.create'
 ORG_EDIT            = 'org.edit'
 ORG_ARCHIVE         = 'org.archive'
+# An L2 edit to the org's standing defaults — today the §9.2 purpose statement
+# every new cycle inherits. Logged separately from ORG_EDIT because it changes
+# what the organisation promises its staff, and the payload therefore carries
+# whether the text was set or replaced, never the text itself: audit_events
+# outlives the retention purge and is for administrative identifiers only.
+ORG_SETTINGS_EDIT   = 'org.settings_edit'
 
 BRANCH_CREATE       = 'branch.create'
 BRANCH_EDIT         = 'branch.edit'

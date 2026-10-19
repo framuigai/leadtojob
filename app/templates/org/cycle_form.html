@@ -19,23 +19,23 @@
 <form method="post" novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-  {% if not cycle %}
-  <div class="form-group">
-    <label for="id">Cycle reference</label>
-    <input type="text" id="id" name="id" required autofocus
-           placeholder="JS-2026-H1" value="{{ form.id }}">
-    <small class="muted">Appears in report filenames. Letters, numbers,
-      hyphens and underscores.</small>
-  </div>
-  {% endif %}
-
   <div class="form-group">
     <label for="cycle_name">Cycle name</label>
-    <input type="text" id="cycle_name" name="cycle_name" required
+    <input type="text" id="cycle_name" name="cycle_name" required autofocus
            placeholder="Employee Satisfaction Survey 2026 H1"
            value="{{ form.cycle_name }}">
   </div>
 
+  {#
+    EDIT ONLY. On creation this is inherited from the organisation's standing
+    statement (Settings -> What respondents are told), so an L2 admin writes it
+    once and an L3 admin creating a branch cycle starts from the
+    organisation's wording rather than inventing a weaker one. Editing it here
+    changes THIS CYCLE ONLY. The column stays NOT NULL and the landing page
+    still renders the cycle's own copy: §9.2 is unchanged, only the place it
+    is written moved one screen.
+  #}
+  {% if cycle %}
   <div class="form-group">
     <label for="purpose_statement">What respondents are told</label>
     <textarea id="purpose_statement" name="purpose_statement" rows="6" required
@@ -45,8 +45,10 @@ consequence.">{{ form.purpose_statement }}</textarea>
     <small class="muted">
       Shown on the survey landing page before the first question. At least 40
       characters. This is what makes the responses worth having.
+      Changing it here affects this cycle only, not the organisation default.
     </small>
   </div>
+  {% endif %}
 
   <div class="form-group">
     <label>Domains measured</label>
@@ -65,6 +67,51 @@ consequence.">{{ form.purpose_statement }}</textarea>
     </small>
   </div>
 
+  <div class="form-group">
+    <label for="previous_cycle_id">Previous cycle (optional)</label>
+    <select id="previous_cycle_id" name="previous_cycle_id">
+      <option value="">None - this is a baseline</option>
+      {% for p in previous %}
+      <option value="{{ p.id }}"
+        {% if p.id == form.previous_cycle_id %}selected{% endif %}>
+        {{ p.id }} - {{ p.cycle_name }}</option>
+      {% endfor %}
+    </select>
+    <small class="muted">Links this cycle to its predecessor so change over time
+      can be reported.</small>
+  </div>
+
+  {% if not cycle %}
+  {# The defaults are SHOWN, not merely applied. A form that silently decides
+     the suppression threshold on someone's behalf is worse than one that asks
+     — the point is to stop making them type it, not to stop them knowing. #}
+  <p class="muted">
+    This cycle will use your organisation's statement to respondents, suppress
+    any group smaller than {{ config.MIN_REPORTING_N }}, score domains as the
+    mean of their subdomains, and keep responses for 24 months after it
+    closes. It is a draft until you open it, and all of that can be changed by
+    editing it first.
+  </p>
+  {% endif %}
+
+  {#
+    EDIT ONLY, all four. Each has a correct default and none of them is a
+    decision the person naming a survey has an opinion about:
+
+      scoring_method   §10.2 requires DOCUMENTING which method is used, not
+                       choosing it per cycle. Every report prints it.
+      min_reporting_n  the platform floor, which can only ever be RAISED —
+                       so leaving it off the creation form cannot weaken
+                       suppression, only hide the option to strengthen it.
+      retention_months §13.8 requires a bounded, defined period; 24 months is
+                       it until somebody says otherwise.
+      is_pilot         rare, and a decision about the INSTRUMENT rather than
+                       about this client's measurement.
+
+    Anyone who does have an opinion edits the draft cycle, which is free until
+    it is opened.
+  #}
+  {% if cycle %}
   <div class="form-group">
     <label for="scoring_method">Domain scoring method</label>
     <select id="scoring_method" name="scoring_method" {% if locked %}disabled{% endif %}>
@@ -110,20 +157,6 @@ consequence.">{{ form.purpose_statement }}</textarea>
   </div>
 
   <div class="form-group">
-    <label for="previous_cycle_id">Previous cycle (optional)</label>
-    <select id="previous_cycle_id" name="previous_cycle_id">
-      <option value="">None - this is a baseline</option>
-      {% for p in previous %}
-      <option value="{{ p.id }}"
-        {% if p.id == form.previous_cycle_id %}selected{% endif %}>
-        {{ p.id }} - {{ p.cycle_name }}</option>
-      {% endfor %}
-    </select>
-    <small class="muted">Links this cycle to its predecessor so change over time
-      can be reported.</small>
-  </div>
-
-  <div class="form-group">
     <label style="font-weight:normal">
       <input type="checkbox" name="is_pilot" {% if form.is_pilot %}checked{% endif %}>
       This is a pilot cycle
@@ -132,6 +165,7 @@ consequence.">{{ form.purpose_statement }}</textarea>
       any items were unclear, repetitive or hard to answer. Those answers are
       never shown to the organisation.</small>
   </div>
+  {% endif %}
 
   <button type="submit" class="btn btn-primary">
     {{ 'Save' if cycle else 'Create cycle' }}</button>

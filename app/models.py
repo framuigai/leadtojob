@@ -78,6 +78,23 @@ class Org(db.Model):
     # new cycle inherits this set and may narrow it further; it can never
     # widen beyond it.
     active_domains = Column(ARRAY(String))
+
+    # THE ORG'S STANDING ANSWER TO §9.2, WRITTEN ONCE INSTEAD OF EVERY CYCLE.
+    #
+    # `measurement_cycles.purpose_statement` stays NOT NULL — the guarantee is
+    # still a property of the schema and every cycle still carries its own
+    # text. This column only supplies the DEFAULT that a new cycle is created
+    # with, so an L2 admin writes the statement once and an L3 admin creating a
+    # branch cycle inherits it rather than inventing a worse one under time
+    # pressure. Either may edit a cycle's own copy afterwards; editing it
+    # changes that cycle only, never this default or another cycle.
+    #
+    # Nullable because an org exists before anyone has written it. Blank is the
+    # prompt state, not a valid operating state: the L2 dashboard carries a
+    # reminder until it is filled, and cycle creation refuses while it is
+    # empty — which is the same §9.2 check as before, moved one screen earlier.
+    default_purpose_statement = Column(Text)
+
     # False while the creation wizard is in progress. The org exists as a
     # resumable DRAFT from step 1, rather than the wizard holding its state in
     # the session — an abandoned wizard then loses nothing, and org_detail

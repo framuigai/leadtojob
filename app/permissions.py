@@ -78,6 +78,12 @@ VIEW_PILOT_FEEDBACK = 'view_pilot_feedback'
 MANAGE_BRANCHES      = 'manage_branches'       # create/rename/deactivate branches
 MANAGE_BRANCH_ADMINS = 'manage_branch_admins'  # create/deactivate L3 users
 VIEW_ALL_BRANCHES    = 'view_all_branches'     # see beyond own branch
+# Edit the org's standing defaults — currently the §9.2 purpose statement that
+# every new cycle inherits. L2 only, deliberately: it is the organisation's
+# own commitment to its staff, and a branch admin writing it would be one
+# branch speaking for the whole organisation. L3 inherits the text and may
+# edit its OWN cycle's copy, which changes nothing for anyone else.
+MANAGE_ORG_SETTINGS  = 'manage_org_settings'
 
 # ── Measurement work ────────────────────────────────────────────────────────
 
@@ -144,6 +150,7 @@ _CAPABILITIES = {
         MANAGE_ORGS, EDIT_TEMPLATES, VIEW_TEMPLATES, VIEW_COSTS, VIEW_AUDIT_LOG,
         MANAGE_CATALOGUE, VIEW_PILOT_FEEDBACK,
         MANAGE_BRANCHES, MANAGE_BRANCH_ADMINS, VIEW_ALL_BRANCHES,
+        MANAGE_ORG_SETTINGS,
         MANAGE_CYCLES, MANAGE_SEGMENTS, DEPLOY_SURVEYS,
         DEPLOY_ORG_WIDE, DEPLOY_TO_BRANCH, ISSUE_TICKETS,
         RUN_ANALYSIS, VIEW_REPORTS, MANAGE_ACTIONS,
@@ -160,6 +167,7 @@ _CAPABILITIES = {
         # about the instrument, not about this client.
         VIEW_TEMPLATES,
         MANAGE_BRANCHES, MANAGE_BRANCH_ADMINS, VIEW_ALL_BRANCHES,
+        MANAGE_ORG_SETTINGS,
         MANAGE_CYCLES, MANAGE_SEGMENTS, ISSUE_TICKETS,
         # Deploys ORG-WIDE ONLY. Not DEPLOY_TO_BRANCH — see its definition.
         DEPLOY_SURVEYS, DEPLOY_ORG_WIDE,

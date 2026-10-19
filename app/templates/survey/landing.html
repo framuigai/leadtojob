@@ -16,79 +16,28 @@
   <p class="sv-purpose">{{ cycle.purpose_statement }}</p>
 </section>
 
-<section class="sv-card">
-  <h2 class="sv-h2">What we can and cannot promise</h2>
+{#
+  THE "WHAT WE CAN AND CANNOT PROMISE" SECTION WAS REMOVED ON REQUEST.
 
-  {#
-    THE ANONYMITY CLAIM, STATED HONESTLY FOR THE DELIVERY MODE.
+  It carried the §9.2 disclosures: the delivery-mode anonymity claim, the
+  reporting threshold in force, who sees what, non-retaliation, and the
+  technical-logs caveat. The product no longer states any of them on the
+  landing page — whatever the respondent is told is now entirely whatever the
+  org admin wrote in the purpose statement above.
 
-    Specification 9.2: "avoid promising absolute anonymity if the administration
-    method cannot guarantee it." The two modes earn two different claims, and
-    a page that gave the open-link deployment the ticketed deployment's wording would be a
-    bug, not marketing. tests/test_privacy_and_wording.py asserts the match.
-  #}
-  <ul class="sv-list">
-    {% if deployment.delivery_mode == 'open_link' %}
-    <li><strong>Your answers are not linked to you.</strong> This survey asks
-      for no name, no email address and no employee number, and the system has
-      nowhere to store one.</li>
-    <li><strong>We cannot strictly prevent duplicate submissions.</strong>
-      Everyone receives the same link, so we have no way to tell whether one
-      person answered twice. We are telling you this rather than claiming
-      something we cannot deliver.</li>
-    {% else %}
-    <li><strong>One response per code.</strong> Your code can be used once.</li>
-    <li><strong>We do not know which code is yours.</strong> The system stores
-      only a one-way fingerprint of each code and never a record of who
-      received it.</li>
-    {% endif %}
-    {#
-      THE REPORTING PROMISE FOLLOWS THE THRESHOLD IN FORCE.
+  Two consequences to know rather than rediscover:
 
-      `promise` comes from reporting_promise() in app/survey/routes.py. The
-      same discipline that gives open_link and ticketed different anonymity
-      wording applies here: a form claiming group-only reporting while the
-      threshold is 1 is a false statement to someone being asked to answer
-      candidly about their employer. tests assert the match.
-    #}
-    {% if promise == 'group' %}
-    <li><strong>Results are only ever reported for groups.</strong> Any group
-      smaller than {{ cycle.min_reporting_n }} people is suppressed, and the
-      next-smallest group with it, so a suppressed figure cannot be worked out
-      by subtraction.</li>
-    <li><strong>No individual response is shown to anyone</strong> - not to
-      your manager, not to HR, not in any report or export. Managers receive
-      group results for their team and nothing else.</li>
-    {% elif promise == 'pair' %}
-    <li><strong>Results are reported for groups of two or more.</strong> We
-      will not show a figure that rests on a single response. You should know
-      that in a group of exactly two, the other person could work out your
-      answers from the pair's average and their own.</li>
-    <li><strong>No individual response is shown as such</strong> in any report
-      or export.</li>
-    {% else %}
-    <li><strong>Please read this before answering.</strong> This survey is
-      currently set up to report a result even when only one person in a group
-      has responded. That means a figure shown for your team may be based on
-      your answers alone, and someone who knows who is in your team may be able
-      to work out that it is yours.</li>
-    <li>We are telling you this rather than claiming your answers are grouped
-      with other people's, because for now they may not be.</li>
-    <li><strong>Answer only what you are comfortable putting your name to</strong>,
-      and leave anything else blank or mark it as not applicable. A blank
-      answer is left out of the results; it is not counted against you or
-      treated as a middle answer.</li>
-    {% endif %}
-    <li><strong>Answering honestly carries no consequence.</strong> Your
-      responses are not used in any decision about you as an individual.</li>
-    <li>In the interest of being complete: like any website, the servers that
-      carry this page keep ordinary technical logs, which include the network
-      address you connect from. Those logs are separate from your answers and
-      cannot be joined to them. We would rather say so than claim perfect
-      anonymity.</li>
-  </ul>
-</section>
+  1. reporting_promise() in app/survey/routes.py and the `promise` context
+     value it feeds are now unused by this template. They are left in place
+     deliberately: they are the only code that keeps the page's wording honest
+     if this section is ever restored, and rewriting them from scratch is how
+     a restored section ends up claiming group-only reporting at a threshold
+     of 1.
 
+  2. At a threshold of 1 the page no longer warns that a result may rest on a
+     single response. That warning existed because the claim is true, not
+     because the threshold was misconfigured.
+#}
 <section class="sv-card">
   <h2 class="sv-h2">What it involves</h2>
   <ul class="sv-list">
