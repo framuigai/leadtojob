@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Review instrument - leadTo{% endblock %}
+{% block title %}Review template - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
 <div class="page-header"><div class="page-header-left">
   <div class="section-label">Master Admin &middot; {{ org.name }}</div>
-  <h1>Review instrument</h1>
+  <h1>Review template</h1>
   <p class="muted">Version {{ version }} &mdash; {{ total }} questions, this
     organisation's own copy. Read-only: once a cycle has run it is the record
     of what was asked. Edit the master template to change what future clients
@@ -36,7 +36,7 @@
 </div>
 {% else %}
 <div class="panel"><div class="panel-body">
-  <p class="muted">No instrument was cloned for this organisation.</p>
+  <p class="muted">No template was cloned for this organisation.</p>
 </div></div>
 {% endfor %}
 

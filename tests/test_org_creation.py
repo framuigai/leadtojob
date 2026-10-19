@@ -50,7 +50,7 @@ def test_creating_an_org_clones_the_instrument_in_the_same_transaction(
 
 def test_the_four_step_wizard_runs_end_to_end(client, db, l1):
     """
-    Details & scope -> Review instrument -> Administrator -> Confirm.
+    Details & scope -> Review template -> Administrator -> Confirm.
 
     Each step is a real URL against a draft that already exists in the
     database, so closing the tab loses nothing.
@@ -67,9 +67,9 @@ def test_the_four_step_wizard_runs_end_to_end(client, db, l1):
     assert f'/admin/orgs/{org.id}/setup/instrument' in res.headers['Location']
     assert org.setup_complete is False
 
-    # 2. Review instrument — the org's own 48, read-only.
+    # 2. Review template — the org's own 48, read-only.
     body = client.get(f'/admin/orgs/{org.id}/setup/instrument').get_data(as_text=True)
-    assert 'Review instrument' in body
+    assert 'Review template' in body
     assert 'Overall, I am satisfied with my current job.' in body
 
     # 4 before 3: confirm refuses to finish without an administrator.
@@ -154,7 +154,7 @@ def test_an_org_with_no_instrument_available_is_not_created_at_all(client, db):
     login(client, admin)
     res = client.post('/admin/orgs/new', data={'name': 'Acme Ltd'},
                       follow_redirects=True)
-    assert 'master instrument is empty' in res.get_data(as_text=True)
+    assert 'master template is empty' in res.get_data(as_text=True)
     assert db.session.query(Org).filter_by(name='Acme Ltd').first() is None
 
 

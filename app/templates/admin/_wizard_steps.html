@@ -7,7 +7,7 @@
   step that has not been reached cannot be jumped into.
 #}
 <div class="wizard-steps">
-  {% for n, label in [(1, 'Details & scope'), (2, 'Review instrument'),
+  {% for n, label in [(1, 'Details & scope'), (2, 'Review template'),
                       (3, 'Administrator'), (4, 'Confirm')] %}
   <div class="wizard-step
               {%- if n == wizard_step %} is-current

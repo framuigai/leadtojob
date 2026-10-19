@@ -225,7 +225,7 @@ def orgs_new():
                               'items_cloned': cloned})
         db.session.commit()
         flash(f'{org.name} created with its own copy of the {cloned}-item '
-              'instrument.', 'success')
+              'template.', 'success')
         return redirect(url_for('admin.org_setup_instrument', org_id=org.id))
 
     return render_template('admin/org_form.html', wizard_step=1)
@@ -572,7 +572,7 @@ def template_edit(domain_code):
 
         record_audit(
             INSTRUMENT_EDIT, 'survey_item_version', version + 1,
-            f'Master instrument {domain_code} edited; version '
+            f'Master template {domain_code} edited; version '
             f'{version} copied to {version + 1}.',
             payload={'domain_code': domain_code,
                      'from_version': version,

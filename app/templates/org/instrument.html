@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Instrument - leadTo{% endblock %}
+{% block title %}Templates - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
     <div class="section-label">{{ role_label(current_user.role) }}</div>
-    <h1>Your instrument</h1>
+    <h1>Your template</h1>
     <p class="version-note">Version {{ version }} &mdash; {{ total }} questions,
       in the order respondents see them. Read-only: this is your organisation's
       own frozen copy, and once a cycle has run it is the record of what was
@@ -42,7 +42,7 @@
 </div>
 {% else %}
 <div class="empty-state"><div class="empty-icon">-</div>
-  <h2>No instrument yet</h2>
+  <h2>No template yet</h2>
   <p>Contact your leadTo administrator.</p></div>
 {% endfor %}
 

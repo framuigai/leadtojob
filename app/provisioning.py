@@ -72,7 +72,7 @@ def clone_instrument_to_org(org_id, version=None):
               .order_by(SurveyItem.sort_order).all())
     if not master:
         raise ProvisioningError(
-            'the master instrument is empty. Run `python seed_templates.py` '
+            'the master template is empty. Run `python seed_templates.py` '
             'before provisioning a client org — an org cloned from an empty '
             'master gets a survey with no questions, and the failure surfaces '
             'only when someone opens the link.'
@@ -80,7 +80,7 @@ def clone_instrument_to_org(org_id, version=None):
     if len(master) != 48:
         raise ProvisioningError(
             f'the master holds {len(master)} items, expected 48. Refusing to '
-            'clone a partial instrument: specification §4 requires 4 domains x '
+            'clone a partial template: specification §4 requires 4 domains x '
             '3 subdomains x 4 questions, and a short clone produces scores '
             'that look valid and are not.'
         )

@@ -223,7 +223,7 @@ def test_cloning_from_an_empty_master_is_refused(db):
     invitation has gone out.
     """
     org = make_org('Acme Ltd')
-    with pytest.raises(ProvisioningError, match='master instrument is empty'):
+    with pytest.raises(ProvisioningError, match='master template is empty'):
         clone_instrument_to_org(org.id)
 
 
@@ -282,7 +282,7 @@ def test_l1_can_read_the_master_instrument(client, db):
 
     login(client, l1)
     body = client.get('/admin/templates').get_data(as_text=True)
-    assert 'Assessment Instrument' in body
+    assert 'Assessment Template' in body
 
     body = client.get('/admin/templates/GEM').get_data(as_text=True)
     assert 'Overall, I am satisfied with my current job.' in body
