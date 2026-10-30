@@ -177,6 +177,39 @@ ORGS = [
         ],
         'hq': {'mood': 3.7, 'shift': 0.12, 'n': 18},
     },
+    {
+        'short': 'HFCB',
+        'name': 'HFCB Kenya',
+        'industry': 'Banking',
+        'brand_colour': 'B8860B',
+        'mood': 3.45,
+        # Satisfied overall, mediocre on the diagnostics — the shape that makes
+        # a report ask "then why?", and the one the GEM-relative sections exist
+        # for. Deliberately NOT KCB's shape, which is the opposite: demanding
+        # work people do not quite trust.
+        'profile': {domains.GEM: 0.35, domains.TID: -0.10,
+                    domains.BIT: -0.05, domains.PIE: -0.25},
+        # TWO branches, not three, and every scope carries 50+ responses. The
+        # `jitter` keys are what stop the three waves of one scope returning
+        # the same n three times, which reads as fabricated at a glance.
+        'branches': [
+            {'name': 'Nairobi Head Office', 'login': 'nairobi',
+             'mood': 3.6, 'shift': 0.14, 'n': 54, 'jitter': 16},
+            {'name': 'Mombasa Branch', 'login': 'mombasa',
+             'mood': 3.2, 'shift': -0.11, 'n': 51, 'jitter': 12},
+        ],
+        'hq': {'mood': 3.45, 'shift': 0.09, 'n': 58, 'jitter': 19},
+        # Quarterly rather than half-yearly, so this tenant reads as a
+        # different measurement rhythm from the other five.
+        'cycles': [
+            {'tag': 'Q1', 'label': 'Employee Satisfaction Q1 2026',
+             'opened': 300, 'closed': 272, 'na': 0.06},
+            {'tag': 'Q2', 'label': 'Employee Satisfaction Q2 2026',
+             'opened': 210, 'closed': 182, 'na': 0.09},
+            {'tag': 'Q3', 'label': 'Employee Satisfaction Q3 2026',
+             'opened': 120, 'closed': 92, 'na': 0.05},
+        ],
+    },
 ]
 
 # Three waves per scope, oldest first. Each carries its own N/A rate so the
@@ -232,6 +265,11 @@ def _build_deployment(cycle, org, branch, spec, items, rng, profile,
     into a twenty-minute one.
     """
     branch_id = branch.id if branch else None
+    # THE RESPONSE COUNT MOVES BETWEEN WAVES. `jitter` defaults to 0, so the
+    # tenants seeded before it was added keep exactly the figures they had;
+    # a scope that sets it draws a different n for each of its three waves,
+    # because the same number three times reads as fabricated at a glance.
+    n = spec['n'] + rng.randint(0, spec.get('jitter', 0))
     deployment = SurveyDeployment(
         id=uuid.uuid4(),
         org_id=org.id, branch_id=branch_id, cycle_id=cycle.id,
@@ -240,9 +278,11 @@ def _build_deployment(cycle, org, branch, spec, items, rng, profile,
         public_slug=_slug(rng),
         delivery_mode='open_link',
         # A response rate that is neither suspiciously perfect nor identical
-        # between scopes.
-        expected_respondents=int(spec['n'] / rng.uniform(0.45, 0.88)) + 1,
-        responses_received=spec['n'],
+        # between scopes. Derived from the ACTUAL n drawn below, not from the
+        # blueprint figure, or a scope whose n jittered upward would show a
+        # rate above 100%.
+        expected_respondents=int(n / rng.uniform(0.45, 0.88)) + 1,
+        responses_received=n,
         deployed_at=cycle.opened_at,
         closes_at=closed_at,
         closed=True,
@@ -254,7 +294,7 @@ def _build_deployment(cycle, org, branch, spec, items, rng, profile,
     centre = spec['mood'] + spec['shift'] * wave
 
     sessions, responses = [], []
-    for _ in range(spec['n']):
+    for _ in range(n):
         started = closed_at - timedelta(days=rng.randint(1, 25),
                                         minutes=rng.randint(0, 900))
         submitted = started + timedelta(minutes=rng.randint(7, 26))
@@ -386,11 +426,15 @@ def seed_org(blueprint, rng):
         branches.append((branch, spec, admin))
 
     prefix = blueprint['short']
+    # A tenant may measure on its own rhythm — HFCB runs quarterly where the
+    # others run half-yearly. Defaulting to CYCLES keeps every existing
+    # blueprint byte-identical.
+    plan = blueprint.get('cycles', CYCLES)
     rows = cycles = 0
 
     # ── Three ORGANISATION-WIDE cycles, chained ────────────────────────────
     previous_id = None
-    for wave, spec in enumerate(CYCLES):
+    for wave, spec in enumerate(plan):
         cycle_na_rate = spec['na']
         cycle = _make_cycle(f"{prefix}-ORG-{spec['tag']}", org, None, spec,
                             spec['label'], previous_id, org_admin.id)
@@ -403,7 +447,7 @@ def seed_org(blueprint, rng):
     # ── Three cycles PER BRANCH, each chain independent ────────────────────
     for branch, bspec, admin in branches:
         previous_id = None
-        for wave, spec in enumerate(CYCLES):
+        for wave, spec in enumerate(plan):
             cycle_na_rate = spec['na']
             cycle = _make_cycle(
                 f"{prefix}-{bspec['login'].upper()}-{spec['tag']}",
