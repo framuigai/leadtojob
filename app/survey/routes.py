@@ -35,6 +35,7 @@ would change — but the draft/abandonment counts would be mostly robots, and th
 first thing anyone asks about a cycle is how many people started it.
 """
 import hashlib
+import logging
 import secrets
 from datetime import datetime, timezone
 
@@ -48,6 +49,8 @@ from app.models import (
     SurveyDeployment, SurveyItem, SurveyResponse,
 )
 from app.survey import survey_bp
+
+logger = logging.getLogger(__name__)
 
 # 60 days. Long enough that a cycle can run over a holiday; short enough that a
 # shared or kiosk browser does not hand someone else's draft to the next
@@ -120,8 +123,17 @@ def _sections(deployment):
     return [(d, [i for i in items if i.domain_code == d]) for d in ordered]
 
 
-def _load_session(deployment):
-    """The caller's draft, from the resume cookie, or None."""
+def _cookie_session(deployment):
+    """
+    Whatever session this browser's resume cookie proves it owns, submitted or
+    not, or None.
+
+    The secret is still checked, so this is not a probe vector: a caller who
+    cannot present it gets None whether the session exists or not. The
+    submitted/void filtering is left to the two callers, because they want
+    opposite answers — see _load_session for the draft and review() for the
+    already-submitted case.
+    """
     raw = request.cookies.get(_resume_cookie_name(deployment.public_slug))
     if not raw or ':' not in raw:
         return None
@@ -129,13 +141,21 @@ def _load_session(deployment):
     session = db.session.get(ResponseSession, session_id)
     if session is None or session.deployment_id != deployment.id:
         return None
-    if session.submitted_at is not None or session.is_void:
-        return None
     # Constant-time, so a timing difference cannot be used to confirm that a
     # given session id exists.
     expected = session.resume_secret_hash or ''
     if not secrets.compare_digest(
             hashlib.sha256(secret.encode()).hexdigest(), expected):
+        return None
+    return session
+
+
+def _load_session(deployment):
+    """The caller's open draft, from the resume cookie, or None."""
+    session = _cookie_session(deployment)
+    if session is None:
+        return None
+    if session.submitted_at is not None or session.is_void:
         return None
     return session
 
@@ -390,6 +410,30 @@ def _save_answers(session, deployment, items):
 
 # ── Review and submit ───────────────────────────────────────────────────────
 
+def _submitted_response(slug):
+    """
+    The one success response a submission produces, cookies included.
+
+    It lives in a function because the duplicate-submit branch must return
+    EXACTLY this and not an approximation of it: a retry that got the redirect
+    but not the cookies would send the respondent back to a landing page that
+    does not know they are done.
+    """
+    response = make_response(redirect(url_for('survey.done', slug=slug)))
+    # Clear the draft cookie: the draft is gone, and leaving a dead pointer
+    # on a shared browser is how the next person gets a 404 they cannot
+    # explain.
+    response.delete_cookie(_resume_cookie_name(slug),
+                           path=url_for('survey.landing', slug=slug))
+    # A NUDGE, NOT A CONTROL, and the landing page says so for this mode.
+    response.set_cookie(_submitted_cookie_name(slug), '1',
+                        max_age=_RESUME_COOKIE_DAYS * 24 * 3600,
+                        httponly=True, samesite='Lax',
+                        secure=request.is_secure,
+                        path=url_for('survey.landing', slug=slug))
+    return response
+
+
 @survey_bp.route('/<slug>/review', methods=['GET', 'POST'])
 def review(slug):
     """
@@ -402,6 +446,31 @@ def review(slug):
     deployment = _load_open_deployment(slug)
     if not _is_live(deployment):
         return render_template('survey/closed.html'), 410
+
+    # A RE-SENT SUBMIT IS NOT A SECOND RESPONDENT.
+    #
+    # A client or middlebox that does not receive the response in time re-sends
+    # the POST with an identical body and a still-valid CSRF token. Nothing in
+    # this product can be duplicated by that — the answers were written during
+    # the section steps under uq_response_identity, and the counter is
+    # incremented once, behind `submitted_at` — but without this branch the
+    # retry resolves to a submitted session, falls through _require_session and
+    # returns 404. An error response invites further retries, and a respondent
+    # who double-clicked would be told their submission failed when it did not.
+    #
+    # Returning the SAME success response is correct rather than merely kind:
+    # from the client's side the submission did succeed. The resume secret is
+    # still required to get here, so this cannot be used to confirm that any
+    # session exists.
+    if request.method == 'POST':
+        prior = _cookie_session(deployment)
+        if prior is not None and prior.submitted_at is not None:
+            logger.warning(
+                'survey: duplicate submit POST for deployment %s ignored '
+                '(session already submitted at %s); re-sending the success '
+                'response', deployment.id, prior.submitted_at)
+            return _submitted_response(slug)
+
     session = _require_session(deployment)
 
     sections = _sections(deployment)
@@ -432,20 +501,7 @@ def review(slug):
         # freeze existed because renaming an option after responses arrived
         # would silently re-group answers given under the old meaning.
         db.session.commit()
-
-        response = make_response(redirect(url_for('survey.done', slug=slug)))
-        # Clear the draft cookie: the draft is gone, and leaving a dead pointer
-        # on a shared browser is how the next person gets a 404 they cannot
-        # explain.
-        response.delete_cookie(_resume_cookie_name(slug),
-                               path=url_for('survey.landing', slug=slug))
-        # A NUDGE, NOT A CONTROL, and the landing page says so for this mode.
-        response.set_cookie(_submitted_cookie_name(slug), '1',
-                            max_age=_RESUME_COOKIE_DAYS * 24 * 3600,
-                            httponly=True, samesite='Lax',
-                            secure=request.is_secure,
-                            path=url_for('survey.landing', slug=slug))
-        return response
+        return _submitted_response(slug)
 
     return render_template('survey/review.html', deployment=deployment,
                            cycle=cycle, answered=answered, total=total,

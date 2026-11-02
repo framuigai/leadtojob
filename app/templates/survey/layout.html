@@ -25,5 +25,38 @@
   <main class="sv-wrap">
     {% block content %}{% endblock %}
   </main>
+  {#
+    DOUBLE-CLICK GUARD. Inline and first-party: the no-external-scripts rule in
+    the comment above is about third-party requests from this page, and this
+    makes none.
+
+    SECONDARY BY DESIGN. The real guarantee is server-side — answers are
+    written under uq_response_identity and the response counter sits behind
+    `submitted_at`, so a re-sent POST cannot duplicate anything, and review()
+    answers a retry with the same success response. A client or middlebox
+    re-sending below the browser's form layer never runs this at all. It is
+    here only so a human double-click does not fire a second request and does
+    not leave the respondent looking at an unresponsive button.
+  #}
+  <script>
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (form.dataset.submitting === '1') {
+        event.preventDefault();
+        return;
+      }
+      form.dataset.submitting = '1';
+      // Disabled AFTER the event, so the button's own name/value still reaches
+      // the server - section.html posts `direction` through it, and disabling
+      // the button synchronously would drop that and silently turn Back into
+      // Next.
+      window.setTimeout(function () {
+        var buttons = form.querySelectorAll('button[type="submit"]');
+        for (var i = 0; i < buttons.length; i++) {
+          buttons[i].disabled = true;
+        }
+      }, 0);
+    });
+  </script>
 </body>
 </html>
