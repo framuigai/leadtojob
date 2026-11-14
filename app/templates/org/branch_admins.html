@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block container_class %}container-wide{% endblock %}
+{% block title %}Branch Admins - leadTo{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="{{ url_for('org.branches_list') }}" class="back-link">← Branches</a>
+    <h1 style="margin-top:.5rem">Branch Admins</h1>
+    <p class="page-sub">A branch admin deploys surveys into their own branch and sees that
+       branch's results — nothing from other branches, and no organisation-wide surveys.
+       Use this page to add one or disable one.</p>
+  </div>
+  <div class="page-actions">
+    <button type="button" class="btn btn-primary" id="new-admin-btn">+ New Branch Admin</button>
+  </div>
+</div>
+
+<div id="new-admin-form" class="card" style="margin-bottom:1.5rem" {% if not open_form %}hidden{% endif %}>
+  <div class="card-body">
+    <p class="card-title">Create Branch Admin</p>
+    {% if branches %}
+    <form method="post" action="{{ url_for('org.branch_admins_new') }}" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="ba-grid">
+        <div class="form-group">
+          <label for="email">Email <span class="req">*</span></label>
+          <input type="email" id="email" name="email" required>
+        </div>
+        <div class="form-group">
+          <label for="full_name">Full name</label>
+          <input type="text" id="full_name" name="full_name">
+        </div>
+        <div class="form-group">
+          <label for="password">Password <span class="req">*</span></label>
+          <input type="password" id="password" name="password" required minlength="8">
+          <small class="muted">At least 8 characters. Give it to them directly; it is not emailed.</small>
+        </div>
+        <div class="form-group">
+          <label for="branch_id">Branch <span class="req">*</span></label>
+          <select id="branch_id" name="branch_id" required>
+            <option value="">Select a branch…</option>
+            {% for b in branches %}
+            <option value="{{ b.id }}" {% if preselect == b.id|string %}selected{% endif %}>{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:.75rem">
+        <button type="submit" class="btn btn-primary">Create Admin</button>
+        <button type="button" class="btn btn-secondary" id="cancel-admin-btn">Cancel</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="muted" style="margin:0">Create an active branch first — a branch admin has to belong to one.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if admins %}
+<div class="card">
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr><th>Email</th><th>Branch</th><th style="text-align:center">Status</th><th>Created</th><th></th></tr>
+      </thead>
+      <tbody>
+      {% for u in admins %}
+        <tr>
+          <td><strong>{{ u.email }}</strong>{% if u.full_name %}<br><span class="muted">{{ u.full_name }}</span>{% endif %}</td>
+          <td>{{ branch_names.get(u.branch_id, '—') }}</td>
+          <td style="text-align:center">
+            <span class="badge ba-{{ 'on' if u.is_active else 'off' }}">{{ 'Active' if u.is_active else 'Disabled' }}</span>
+          </td>
+          <td class="muted">{{ u.created_at.strftime('%d %b %Y') if u.created_at else '—' }}</td>
+          <td style="text-align:right">
+            <form method="post" action="{{ url_for('org.branch_admin_toggle', user_id=u.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-secondary">{{ 'Disable' if u.is_active else 'Enable' }}</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">👤</div>
+  <h2>No branch admins yet</h2>
+  <p>A branch can only be deployed into by its own admin, so add one for each branch that will run a cycle.</p>
+</div>
+{% endif %}
+
+<script>
+(function () {
+  var form = document.getElementById('new-admin-form');
+  function toggle() { form.hidden = !form.hidden; }
+  document.getElementById('new-admin-btn').addEventListener('click', toggle);
+  var cancel = document.getElementById('cancel-admin-btn');
+  if (cancel) cancel.addEventListener('click', toggle);
+})();
+</script>
+{% endblock %}
+
+{% block head %}
+<style>
+.ba-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.ba-grid .form-group { margin: 0; }
+.req { color: var(--red); }
+.ba-on  { background: #dcfce7; color: #16a34a; }
+.ba-off { background: #f3f4f6; color: #374151; }
+</style>
+{% endblock %}

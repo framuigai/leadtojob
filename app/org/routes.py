@@ -15,6 +15,7 @@ this product the data is employee feedback about an employer.
 import hashlib
 import re
 import secrets
+import uuid
 from datetime import datetime, timezone
 
 import io
@@ -32,7 +33,7 @@ from app.audit import (
     BRANCH_CREATE, BRANCH_DEACTIVATE, BRANCH_REACTIVATE, CYCLE_ARCHIVE,
     CYCLE_CLOSE, CYCLE_CREATE, CYCLE_EDIT, CYCLE_OPEN, DEPLOYMENT_CLOSE,
     DEPLOYMENT_CREATE, TICKETS_ISSUE,
-    USER_CREATE, ACTION_COMPLETE, ACTION_CREATE, ACTION_EDIT, ANALYSIS_RUN,
+    USER_CREATE, USER_DEACTIVATE, USER_REACTIVATE, ACTION_COMPLETE, ACTION_CREATE, ACTION_EDIT, ANALYSIS_RUN,
     REPORT_DOWNLOAD, action_payload, branch_payload, cycle_payload,
     deployment_payload, record_audit, user_payload,
 )
@@ -49,7 +50,7 @@ from app.analytics import reports as report_builder
 from app.auth.routes import require_capability, require_role_any
 from app.models import (
     AccessTicket, AiCostEvent, Analysis, Branch, ImprovementActions,
-    MeasurementCycle, Org, ReportEvent,
+    MeasurementCycle, Org, ReportEvent, ResponseSession,
     SurveyDeployment, SurveyItem, User,
 )
 from app.org import org_bp
@@ -251,15 +252,52 @@ def settings():
 @org_bp.route('/branches')
 @require_capability(MANAGE_BRANCHES)
 def branches_list():
+    org_id = current_user.org_id
     branches = (db.session.query(Branch)
-                .filter_by(org_id=current_user.org_id)
+                .filter_by(org_id=org_id)
                 .order_by(Branch.is_active.desc(), Branch.name).all())
-    admins = dict(
-        db.session.query(User.branch_id, func.count(User.id))
-        .filter_by(org_id=current_user.org_id, role=BRANCH_ADMIN)
-        .group_by(User.branch_id).all()
-    )
-    return render_template('org/branches.html', branches=branches, admins=admins)
+
+    def per_branch(query, col):
+        return dict(query.filter(col.isnot(None)).group_by(col).all())
+
+    cycles = per_branch(
+        db.session.query(MeasurementCycle.branch_id, func.count(MeasurementCycle.id))
+        .filter(MeasurementCycle.org_id == org_id,
+                MeasurementCycle.archived_at.is_(None)),
+        MeasurementCycle.branch_id)
+    deployments = per_branch(
+        db.session.query(SurveyDeployment.branch_id, func.count(SurveyDeployment.id))
+        .filter(SurveyDeployment.org_id == org_id,
+                SurveyDeployment.archived_at.is_(None)),
+        SurveyDeployment.branch_id)
+    # Submitted, non-void sessions only: a started-and-abandoned session is
+    # not a response. Counts only - nothing here can identify a respondent.
+    responses = per_branch(
+        db.session.query(ResponseSession.branch_id, func.count(ResponseSession.id))
+        .filter(ResponseSession.org_id == org_id,
+                ResponseSession.submitted_at.isnot(None),
+                ResponseSession.is_void.is_(False)),
+        ResponseSession.branch_id)
+
+    admin_users = {}
+    for u in (db.session.query(User)
+              .filter_by(org_id=org_id, role=BRANCH_ADMIN)
+              .order_by(User.is_active.desc(), User.email).all()):
+        admin_users.setdefault(u.branch_id, []).append(u)
+
+    stats = {b.id: {'admin_users': admin_users.get(b.id, []),
+                    'cycles': cycles.get(b.id, 0),
+                    'deployments': deployments.get(b.id, 0),
+                    'responses': responses.get(b.id, 0)} for b in branches}
+    totals = {
+        'active': sum(1 for b in branches if b.is_active),
+        'admins': sum(1 for us in admin_users.values() for u in us if u.is_active),
+        'deployments': sum(s['deployments'] for s in stats.values()),
+        'responses': sum(s['responses'] for s in stats.values()),
+    }
+    return render_template('org/branches.html', branches=branches,
+                           stats=stats, totals=totals,
+                           can_manage_admins=can(current_user, MANAGE_BRANCH_ADMINS))
 
 
 @org_bp.route('/branches/new', methods=['GET', 'POST'])
@@ -310,42 +348,105 @@ def branch_toggle(branch_id):
     return redirect(url_for('org.branches_list'))
 
 
+@org_bp.route('/branch-admins')
+@require_capability(MANAGE_BRANCH_ADMINS)
+def branch_admins_list():
+    org_id = current_user.org_id
+    admins = (db.session.query(User)
+              .filter_by(org_id=org_id, role=BRANCH_ADMIN)
+              .order_by(User.is_active.desc(), User.email).all())
+    all_branches = db.session.query(Branch).filter_by(org_id=org_id) \
+        .order_by(Branch.name).all()
+    return render_template(
+        'org/branch_admins.html', admins=admins,
+        branches=[b for b in all_branches if b.is_active],
+        branch_names={b.id: b.name for b in all_branches},
+        open_form=request.args.get('new') == '1',
+        preselect=request.args.get('branch_id', ''))
+
+
+def _create_branch_admin(branch):
+    """Shared by both create routes. Returns True when the user was created."""
+    email = (request.form.get('email') or '').strip().lower()
+    password = request.form.get('password') or ''
+    full_name = (request.form.get('full_name') or '').strip() or None
+
+    if not email or '@' not in email:
+        flash('A valid email address is required.', 'error')
+    elif db.session.query(User).filter_by(email=email).first():
+        flash(f'{email} already has an account. Email is unique across the '
+              'whole platform, not per organisation.', 'error')
+    elif len(password) < 8:
+        flash('Choose a password of at least 8 characters.', 'error')
+    else:
+        user = User(org_id=current_user.org_id, branch_id=branch.id,
+                    email=email, role=BRANCH_ADMIN, full_name=full_name,
+                    is_active=True)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.flush()
+        record_audit(USER_CREATE, 'user', user.id,
+                     f'Created branch admin {email} for {branch.name}',
+                     org_id=current_user.org_id, branch_id=branch.id,
+                     payload=user_payload(user))
+        db.session.commit()
+        flash(f'Created {email} for {branch.name}. Give them the password '
+              'directly; it is not emailed.', 'success')
+        return True
+    return False
+
+
+def _own_branch_or_404(branch_id):
+    branch = db.session.get(Branch, branch_id) if branch_id else None
+    if branch is None or branch.org_id != current_user.org_id:
+        abort(404)
+    return branch
+
+
+@org_bp.route('/branch-admins/new', methods=['POST'])
+@require_capability(MANAGE_BRANCH_ADMINS)
+def branch_admins_new():
+    try:
+        branch_id = uuid.UUID(request.form.get('branch_id') or '')
+    except ValueError:
+        flash('Choose the branch this admin belongs to.', 'error')
+        return redirect(url_for('org.branch_admins_list', new=1))
+    branch = _own_branch_or_404(branch_id)
+    if not branch.is_active:
+        flash(f'{branch.name} is inactive. Reactivate it first.', 'error')
+    elif _create_branch_admin(branch):
+        return redirect(url_for('org.branch_admins_list'))
+    return redirect(url_for('org.branch_admins_list', new=1,
+                            branch_id=branch.id))
+
+
 @org_bp.route('/branches/<uuid:branch_id>/admins/new', methods=['GET', 'POST'])
 @require_capability(MANAGE_BRANCH_ADMINS)
 def branch_admin_new(branch_id):
-    branch = db.session.get(Branch, branch_id)
-    if branch is None or branch.org_id != current_user.org_id:
+    """Kept so old links resolve; the form now lives on the Branch Admins page."""
+    branch = _own_branch_or_404(branch_id)
+    if request.method == 'POST' and _create_branch_admin(branch):
+        return redirect(url_for('org.branch_admins_list'))
+    return redirect(url_for('org.branch_admins_list', new=1,
+                            branch_id=branch.id))
+
+
+@org_bp.route('/branch-admins/<uuid:user_id>/toggle', methods=['POST'])
+@require_capability(MANAGE_BRANCH_ADMINS)
+def branch_admin_toggle(user_id):
+    user = db.session.get(User, user_id)
+    if (user is None or user.org_id != current_user.org_id
+            or user.role != BRANCH_ADMIN):
         abort(404)
-
-    if request.method == 'POST':
-        email = (request.form.get('email') or '').strip().lower()
-        password = request.form.get('password') or ''
-        full_name = (request.form.get('full_name') or '').strip() or None
-
-        if not email or '@' not in email:
-            flash('A valid email address is required.', 'error')
-        elif db.session.query(User).filter_by(email=email).first():
-            flash(f'{email} already has an account. Email is unique across the '
-                  'whole platform, not per organisation.', 'error')
-        elif len(password) < 8:
-            flash('Choose a password of at least 8 characters.', 'error')
-        else:
-            user = User(org_id=current_user.org_id, branch_id=branch.id,
-                        email=email, role=BRANCH_ADMIN, full_name=full_name,
-                        is_active=True)
-            user.set_password(password)
-            db.session.add(user)
-            db.session.flush()
-            record_audit(USER_CREATE, 'user', user.id,
-                         f'Created branch admin {email} for {branch.name}',
-                         org_id=current_user.org_id, branch_id=branch.id,
-                         payload=user_payload(user))
-            db.session.commit()
-            flash(f'Created {email} for {branch.name}. Give them the password '
-                  'directly; it is not emailed.', 'success')
-            return redirect(url_for('org.branches_list'))
-
-    return render_template('org/branch_admin_form.html', branch=branch)
+    user.is_active = not user.is_active
+    action = USER_REACTIVATE if user.is_active else USER_DEACTIVATE
+    verb = 'Enabled' if user.is_active else 'Disabled'
+    record_audit(action, 'user', user.id, f'{verb} branch admin {user.email}',
+                 org_id=current_user.org_id, branch_id=user.branch_id,
+                 payload=user_payload(user))
+    db.session.commit()
+    flash(f'{verb} {user.email}.', 'success')
+    return redirect(url_for('org.branch_admins_list'))
 
 
 # ── Measurement cycles ──────────────────────────────────────────────────────

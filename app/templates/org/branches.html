@@ -1,48 +1,176 @@
 {% extends "base.html" %}
+{# board-page opts into the shared board chrome in main.css (stat tiles, panel/
+   table, org cell, pills) — the same layout as the TNA platform's Branches page,
+   so the two products read as one family. There is no Modules column: branches
+   here have no per-branch domain allocation; domains are chosen per cycle. #}
+{% block container_class %}container-wide board-page{% endblock %}
 {% block title %}Branches - leadTo{% endblock %}
-{% block container_class %}container-wide{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <div class="section-label">{{ role_label(current_user.role) }}</div>
-    <h1>Branches</h1>
-    <p class="muted">Departments, divisions or sites. One flat level,
-      deliberately not nestable. A branch is how results are broken down, and
-      how a branch admin's view is scoped.</p>
+    <p class="eyebrow">Org Admin · Structure</p>
+    <h1>Branches &amp; Departments</h1>
+    <p class="page-sub">
+      Each branch runs its own cycles and sees only its own results — you see them all.
+      Deactivating hides a branch from new work; nothing already collected is deleted.
+    </p>
   </div>
   <div class="page-actions">
-    <a href="{{ url_for('org.branch_new') }}" class="btn btn-primary">+ New branch</a>
+    <a href="{{ url_for('org.dashboard') }}" class="btn btn-secondary">‹ Dashboard</a>
+    {% if can_manage_admins %}
+    <a href="{{ url_for('org.branch_admins_list') }}" class="btn btn-secondary">Branch Admins</a>
+    {% endif %}
+    <a href="{{ url_for('org.branch_new') }}" class="btn btn-primary">+ New Branch</a>
   </div>
 </div>
 
-<div class="panel"><div class="table-scroll">
-  <table class="table">
-    <thead><tr><th>Branch</th><th class="num">Admins</th><th>Status</th><th></th></tr></thead>
-    <tbody>
-    {% for b in branches %}
-      <tr>
-        <td><strong>{{ b.name }}</strong></td>
-        <td class="num">{{ admins.get(b.id, 0) }}</td>
-        <td>{% if b.is_active %}Active{% else %}
-            <span class="badge badge-outline">Inactive</span>{% endif %}</td>
-        <td class="row-actions">
-          <a href="{{ url_for('org.branch_admin_new', branch_id=b.id) }}"
-             class="btn btn-sm btn-secondary">+ Branch admin</a>
-          <form method="post" action="{{ url_for('org.branch_toggle', branch_id=b.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-secondary">
-              {{ 'Deactivate' if b.is_active else 'Reactivate' }}</button>
-          </form>
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="4" class="muted">No branches. Branches are optional -
-        a deployment with no branch is organisation-wide.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div></div>
-<p class="muted">Branches are deactivated, never deleted: historical cycles and
-  anonymous responses point at them, and those responses cannot be collected
-  again to repair the link.</p>
+{% if branches %}
+<div class="stats-row">
+  <div class="stat-card" style="--accent:var(--navy)">
+    <div class="stat-val">{{ totals.active }}</div>
+    <div class="stat-label">Active {{ 'Branch' if totals.active == 1 else 'Branches' }}</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--blue)">
+    <div class="stat-val">{{ totals.admins }}</div>
+    <div class="stat-label">Branch Admins</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--amber)">
+    <div class="stat-val">{{ totals.deployments }}</div>
+    <div class="stat-label">Branch Surveys</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--green)">
+    <div class="stat-val">{{ totals.responses }}</div>
+    <div class="stat-label">Branch Responses</div>
+  </div>
+</div>
+
+{# Inactive branches stay listed: they are a soft delete and their history is
+   still live, so hiding them would make reactivation impossible to find. #}
+<div class="admin-section-head">
+  <p class="section-label" style="margin-bottom:0">Your Branches</p>
+  <span class="section-hint">Deactivated branches keep their history</span>
+</div>
+
+<div class="panel" style="margin-bottom:2.25rem">
+  <div class="table-scroll">
+    <table class="table board-table">
+      <thead>
+        <tr>
+          <th>Branch</th>
+          <th>Branch Admin</th>
+          <th class="num">Cycles</th>
+          <th class="num">Surveys</th>
+          <th class="num">Responses</th>
+          <th class="num">Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for b in branches %}
+        {% set s = stats[b.id] %}
+        {% set live = b.is_active %}
+        {% set colour = '#375623' if live else '#9ca3af' %}
+        <tr class="{{ '' if live else 'br-row-off' }}">
+          <td>
+            <div class="org-cell">
+              <span class="org-mono" style="background:{{ colour }}">{{ b.name[:1] | upper }}</span>
+              <span>
+                <span class="org-name">{{ b.name }}</span>
+                <span class="org-industry">
+                  Created {{ b.created_at.strftime('%d %b %Y') if b.created_at else '—' }}
+                </span>
+              </span>
+            </div>
+          </td>
+          <td>
+            {% if s.admin_users %}
+            <div class="br-admin-list">
+              {% for u in s.admin_users %}
+              <span class="br-admin {{ '' if u.is_active else 'br-admin-off' }}"
+                    title="{{ 'Branch admin' if u.is_active else 'Login disabled' }}">{{ u.email }}</span>
+              {% endfor %}
+            </div>
+            {% else %}
+            {# L2 does not hold DEPLOY_TO_BRANCH, so a branch with no admin can
+               never be deployed into — a problem to fix, not a neutral state. #}
+            <span class="br-noadmin">No admin —
+              {% if can_manage_admins %}
+              <a href="{{ url_for('org.branch_admins_list', new=1, branch_id=b.id) }}">add one</a>
+              {% else %}nothing can be deployed here{% endif %}
+            </span>
+            {% endif %}
+          </td>
+          <td class="num metric">{{ s.cycles }}</td>
+          <td class="num metric">{{ s.deployments }}</td>
+          <td class="num metric metric-green">{{ s.responses }}</td>
+          <td class="num">
+            <span class="status-pill"
+                  style="background:{{ colour }}14;color:{{ colour }};border:1px solid {{ colour }}40">
+              <span class="status-dot" style="background:{{ colour }}"></span>
+              {{ 'Active' if live else 'Inactive' }}
+            </span>
+          </td>
+          <td class="num">
+            <details class="br-manage">
+              <summary class="btn btn-sm btn-secondary">Manage</summary>
+              <div class="br-manage-menu">
+                {% if can_manage_admins and live %}
+                <a href="{{ url_for('org.branch_admins_list', new=1, branch_id=b.id) }}"
+                   class="btn btn-sm btn-secondary">+ Branch admin</a>
+                {% endif %}
+                <form method="post" action="{{ url_for('org.branch_toggle', branch_id=b.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm {{ 'btn-danger' if live else 'btn-secondary' }}">
+                    {{ 'Deactivate' if live else 'Reactivate' }}</button>
+                </form>
+                <span class="br-hint">
+                  {% if live %}Hides this branch from new work. Its cycles, surveys and reports are kept.
+                  {% else %}Restores this branch for new work.{% endif %}
+                </span>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">🏢</div>
+  <h2>No branches yet</h2>
+  <p>Your organisation is running as a single unit. Branches are optional — a
+     deployment with no branch is organisation-wide.</p>
+  <a href="{{ url_for('org.branch_new') }}" class="btn btn-primary" style="margin-top:1.25rem">+ New Branch</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block head %}
+<style>
+.section-hint { font-size: .75rem; color: var(--text-subtle); }
+.br-row-off .org-name, .br-row-off .metric { opacity: .55; }
+.br-admin-list { display: flex; flex-direction: column; gap: .2rem; }
+.br-admin { font-size: .78rem; color: var(--text-muted); }
+.br-admin-off { color: #c0c5cd; text-decoration: line-through; }
+.br-noadmin { font-size: .78rem; color: var(--amber); }
+.br-noadmin a { color: var(--amber); font-weight: 600; }
+
+.br-manage { position: relative; display: inline-block; text-align: left; }
+.br-manage > summary { list-style: none; cursor: pointer; }
+.br-manage > summary::-webkit-details-marker { display: none; }
+.br-manage[open] > summary { background: var(--blue); color: #fff; border-color: var(--blue); }
+.br-manage-menu {
+  position: absolute; right: 0; top: calc(100% + .4rem); z-index: 20;
+  width: 240px; padding: .9rem; display: flex; flex-direction: column; gap: .6rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--blue); border-radius: var(--radius);
+  box-shadow: var(--shadow-md); white-space: normal;
+}
+.br-manage-menu .btn { width: 100%; justify-content: center; }
+.br-hint { font-size: .74rem; color: var(--text-subtle); line-height: 1.45; }
+</style>
 {% endblock %}

@@ -210,6 +210,119 @@ ORGS = [
              'opened': 120, 'closed': 92, 'na': 0.05},
         ],
     },
+    {
+        'short': 'IHRM',
+        'name': 'IHRM',
+        'industry': 'Professional Association',
+        'brand_colour': '1F4E79',
+        'mood': 3.55,
+        # A seventh shape again: task satisfaction above the middle, reward
+        # below it, relationships flat. A professional body whose people like
+        # the work and not the pay — the association the GEM-relative sections
+        # read, and not a repeat of any tenant above.
+        'profile': {domains.GEM: 0.10, domains.TID: 0.30,
+                    domains.BIT: 0.00, domains.PIE: -0.35},
+        # ONE branch, and it runs ONE wave where the organisation runs two.
+        # `cycles` on a branch overrides the org's plan for that branch only.
+        'branches': [
+            {'name': 'Nairobi Secretariat', 'login': 'nairobi',
+             'mood': 3.5, 'shift': 0.12, 'n': 23, 'jitter': 7,
+             'cycles': [
+                 {'tag': '2026-H1', 'label': 'Employee Satisfaction 2026 H1',
+                  'opened': 180, 'closed': 152, 'na': 0.07},
+             ]},
+        ],
+        'hq': {'mood': 3.55, 'shift': 0.10, 'n': 24, 'jitter': 9},
+        # TWO organisation-wide waves, chained, so the trend section has a
+        # baseline. Every scope here carries more than 20 responses.
+        'cycles': [
+            {'tag': '2025-H2', 'label': 'Employee Satisfaction 2025 H2',
+             'opened': 330, 'closed': 302, 'na': 0.06},
+            {'tag': '2026-H1', 'label': 'Employee Satisfaction 2026 H1',
+             'opened': 180, 'closed': 152, 'na': 0.08},
+        ],
+    },
+    {
+        'short': 'KDIC',
+        'name': 'Kenya Deposit Insurance Corporation',
+        'industry': 'Financial Regulation',
+        'brand_colour': '0B5394',
+        'mood': 3.6,
+        # Trust and relationships well above the middle, challenge below it:
+        # a small statutory body where people get on and the work has stopped
+        # stretching them. A low (TID, 'D') here reads as UNDER-stretched, and
+        # §6.4 forbids the report calling it pressure either way.
+        'profile': {domains.GEM: 0.05, domains.TID: -0.30,
+                    domains.BIT: 0.40, domains.PIE: 0.10},
+        'branches': [
+            {'name': 'Nairobi Head Office', 'login': 'nairobi',
+             'mood': 3.55, 'shift': 0.10, 'n': 24, 'jitter': 8,
+             'cycles': [
+                 {'tag': '2026-H1', 'label': 'Employee Satisfaction 2026 H1',
+                  'opened': 170, 'closed': 143, 'na': 0.07},
+             ]},
+        ],
+        'hq': {'mood': 3.6, 'shift': 0.08, 'n': 26, 'jitter': 10},
+        # ONE organisation-wide wave, so previous_cycle_id is NULL and the
+        # trend section has nothing to trend against. That is a state the
+        # product must handle — a first cycle — and no other tenant has it.
+        'cycles': [
+            {'tag': '2026-H1', 'label': 'Employee Satisfaction 2026 H1',
+             'opened': 170, 'closed': 143, 'na': 0.06},
+        ],
+    },
+    {
+        'short': 'PARLIAMENT',
+        'name': 'Parliament of Kenya',
+        'industry': 'Public Service',
+        'brand_colour': '7A1F2B',
+        'mood': 3.0,
+        # Reward above the middle, relationships and overall below it: secure
+        # terms inside an organisation people find political. The shape that
+        # makes a report show WHICH items drove it and stop there, because
+        # nothing in the data says why.
+        'profile': {domains.GEM: -0.25, domains.TID: 0.05,
+                    domains.BIT: -0.35, domains.PIE: 0.40},
+        'branches': [
+            {'name': 'Parliamentary Joint Services', 'login': 'joint',
+             'mood': 3.05, 'shift': -0.14, 'n': 25, 'jitter': 11,
+             'cycles': [
+                 {'tag': '2026-H1', 'label': 'Employee Satisfaction 2026 H1',
+                  'opened': 160, 'closed': 131, 'na': 0.10},
+             ]},
+        ],
+        'hq': {'mood': 3.0, 'shift': -0.10, 'n': 27, 'jitter': 12},
+        'cycles': [
+            {'tag': '2026-H1', 'label': 'Employee Satisfaction 2026 H1',
+             'opened': 160, 'closed': 131, 'na': 0.09},
+        ],
+    },
+    {
+        'short': 'CA',
+        'name': 'Communications Authority of Kenya',
+        'industry': 'Regulatory',
+        'brand_colour': 'C8102E',
+        'mood': 3.3,
+        # Challenge and development high, overall satisfaction and reward
+        # below the middle: a technical regulator whose work stretches people
+        # on terms they do not rate. Distinct from KDIC (its near-inverse) and
+        # from Parliament (reward ABOVE the middle).
+        'profile': {domains.GEM: -0.15, domains.TID: 0.45,
+                    domains.BIT: 0.05, domains.PIE: -0.30},
+        'branches': [
+            {'name': 'Nairobi Headquarters', 'login': 'nairobi',
+             'mood': 3.35, 'shift': 0.09, 'n': 25, 'jitter': 9,
+             'cycles': [
+                 {'tag': '2026-H1', 'label': 'Employee Satisfaction 2026 H1',
+                  'opened': 150, 'closed': 122, 'na': 0.08},
+             ]},
+        ],
+        'hq': {'mood': 3.3, 'shift': 0.07, 'n': 28, 'jitter': 11},
+        'cycles': [
+            {'tag': '2026-H1', 'label': 'Employee Satisfaction 2026 H1',
+             'opened': 150, 'closed': 122, 'na': 0.07},
+        ],
+    },
 ]
 
 # Three waves per scope, oldest first. Each carries its own N/A rate so the
@@ -238,8 +351,24 @@ def _ago(days):
 
 
 def _slug(rng):
-    return 'demo-' + ''.join(
-        rng.choice('abcdefghjkmnpqrstuvwxyz23456789') for _ in range(26))
+    """
+    A public slug no deployment already holds.
+
+    THE RNG STREAM RESTARTS EVERY RUN. `--seed` is fixed so the same seed
+    gives the same figures, and an org already present is skipped without
+    drawing anything — so a second run adding one more tenant hands it the
+    draws an earlier run already spent, and `ix_survey_deployments_public_slug`
+    rejects the insert. Redrawing against the table makes the helper correct
+    regardless of where in the stream it is called, and leaves the figures of
+    a from-scratch run untouched.
+    """
+    while True:
+        slug = 'demo-' + ''.join(
+            rng.choice('abcdefghjkmnpqrstuvwxyz23456789') for _ in range(26))
+        taken = (db.session.query(SurveyDeployment.id)
+                 .filter_by(public_slug=slug).first())
+        if not taken:
+            return slug
 
 
 def _answer(rng, centre):
@@ -341,6 +470,13 @@ def _build_deployment(cycle, org, branch, spec, items, rng, profile,
         last_seen_at=closed_at - timedelta(days=2), is_void=False))
 
     db.session.flush()
+    # SHUFFLED BEFORE INSERT, so physical row order carries no information.
+    # Built session by session, the rows arrive in a block per respondent in
+    # item order: anyone reading the table directly could reconstruct one
+    # person's 48 answers from adjacency alone, which is the §13 guarantee
+    # leaking through the storage layer rather than through a column. Scoring
+    # groups by session_id and does not care about order.
+    rng.shuffle(responses)
     db.session.bulk_save_objects(sessions)
     db.session.bulk_save_objects(responses)
     return len(responses)
@@ -447,7 +583,10 @@ def seed_org(blueprint, rng):
     # ── Three cycles PER BRANCH, each chain independent ────────────────────
     for branch, bspec, admin in branches:
         previous_id = None
-        for wave, spec in enumerate(plan):
+        # A branch may run a different number of waves from its organisation
+        # (IHRM runs one where the org runs two). Defaulting to the org's plan
+        # keeps every blueprint that does not set it byte-identical.
+        for wave, spec in enumerate(bspec.get('cycles', plan)):
             cycle_na_rate = spec['na']
             cycle = _make_cycle(
                 f"{prefix}-{bspec['login'].upper()}-{spec['tag']}",
