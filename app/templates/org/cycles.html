@@ -1,79 +1,112 @@
 {% extends "base.html" %}
 {% block title %}Measurement Cycles - leadTo{% endblock %}
-{% block container_class %}container-wide{% endblock %}
+{% block container_class %}container-wide board-page{% endblock %}
+
+{#
+  THE DEPLOYMENTS LIST WAS MERGED INTO THIS PAGE (see cycles_list()). Responses
+  and the deployed date are summed from each cycle's deployments.
+
+  Two tables, split by ownership: "Your cycles" are the ones this viewer runs
+  (org-wide for L2, their own branch for L3); "Branch cycles" are what an L2
+  sees of its branches, read-only — L2 does not hold DEPLOY_TO_BRANCH.
+#}
+{% macro cycle_table(rows, own) %}
+<div class="panel" style="margin-bottom:2.25rem">
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr>
+        <th>Cycle ID</th><th>Name</th><th>Owner</th><th>Status</th>
+        <th class="num">Responses</th><th>Deployed</th><th>Created</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        {% set c = r.cycle %}
+        <tr>
+          <td><code class="cy-id">{{ c.id }}</code>{% if c.is_pilot %}
+              <span class="badge badge-outline">pilot</span>{% endif %}</td>
+          <td><strong>{{ c.cycle_name }}</strong>
+              {% if c.previous_cycle_id %}<br>
+              <span class="muted cy-small">follows {{ c.previous_cycle_id }}</span>{% endif %}</td>
+          <td>
+            {% if c.branch_id %}
+            <span class="cy-branch">{{ c.branch.name if c.branch else 'Branch' }}</span>
+            {% else %}<span class="muted">Organisation-wide</span>{% endif %}
+          </td>
+          <td><span class="cy-pill cy-{{ c.status }}">{{ 'Active' if c.status == 'open' else c.status|capitalize }}</span></td>
+          <td class="num">
+            {% if r.deployed %}{{ r.responses }}<span class="muted"> / {{ r.expected }}</span>
+            {% else %}<span class="muted">-</span>{% endif %}
+          </td>
+          <td class="muted">{{ r.deployed_at.strftime('%d %b %Y') if r.deployed_at else 'Not deployed' }}</td>
+          <td class="muted">{{ c.created_at.strftime('%d %b %Y') if c.created_at else '-' }}</td>
+          <td class="row-actions" style="white-space:nowrap">
+            <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}"
+               class="btn btn-sm btn-secondary">View Cycle</a>
+            {% if own and can_deploy_any and r.can_deploy %}
+            <a href="{{ url_for('org.deploy', cycle_id=c.id) }}"
+               class="btn btn-sm btn-primary">Deploy Survey</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endmacro %}
+
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <div class="section-label">{{ role_label(current_user.role) }}</div>
-    <h1>Measurement Cycles</h1>
-    <p class="muted">A cycle is one measurement round - "Employee Satisfaction
-      Survey 2026 H1" - not a person and not a position.</p>
-    {% if branch_scoped %}
-    <p class="muted">Showing
-      {{ current_user.branch.name if current_user.branch else 'your branch' }} only.</p>
-    {% endif %}
+    <a href="{{ url_for('org.dashboard') }}" class="back-link">← Dashboard</a>
+    <h1 style="margin-top:.5rem">Measurement Cycles</h1>
+    <p class="page-sub">A cycle is one measurement round - "Employee Satisfaction Survey 2026 H1".
+      {% if branch_scoped %}Showing
+      {{ current_user.branch.name if current_user.branch else 'your branch' }} only.{% endif %}</p>
   </div>
   <div class="page-actions">
     {% if can(current_user, 'manage_cycles') %}
-    <a href="{{ url_for('org.cycle_new') }}" class="btn btn-primary">+ New cycle</a>
+    <a href="{{ url_for('org.cycle_new') }}" class="btn btn-primary">+ New Cycle</a>
     {% endif %}
   </div>
 </div>
 
-{#
-  THE DEPLOYMENTS LIST WAS MERGED INTO THIS TABLE.
+<div class="admin-section-head">
+  <p class="section-label" style="margin-bottom:0">Your Cycles</p>
+  {% if not branch_scoped %}<span class="section-hint">Organisation-wide</span>{% endif %}
+</div>
+{% if own_rows %}
+{{ cycle_table(own_rows, true) }}
+{% else %}
+<div class="empty-state" style="margin-bottom:2.25rem">
+  <div class="empty-icon">🗓️</div>
+  <h2>No cycles yet</h2>
+  <p>Create a cycle, open it, then deploy the survey to get a link.</p>
+</div>
+{% endif %}
 
-  There used to be a separate /org/deployments page listing the same rows
-  keyed the other way round. A cycle is 1:1 with its deployment in practice —
-  L2 deploys organisation-wide only and L3 deploys to its own branch, and
-  neither can see the other's cycles — so the two tables were the same table
-  twice, and an admin had to know which one carried the response count.
+{% if branch_rows %}
+<div class="admin-section-head">
+  <p class="section-label" style="margin-bottom:0">Branch Cycles</p>
+  <span class="cy-tag">Oversight — read-only</span>
+</div>
+{{ cycle_table(branch_rows, false) }}
+{% endif %}
+{% endblock %}
 
-  The response, rate and deployed columns below come from the cycle's
-  deployments, summed. `rows` is built in cycles_list().
-#}
-<div class="panel"><div class="table-scroll">
-  <table class="table">
-    <thead><tr><th>Reference</th><th>Name</th><th>Domains</th><th>Status</th>
-      <th>Scope</th><th class="num">Responses</th><th>Rate</th>
-      <th>Deployed</th><th></th></tr></thead>
-    <tbody>
-    {% for r in rows %}
-      {% set c = r.cycle %}
-      <tr>
-        <td><code>{{ c.id }}</code>{% if c.is_pilot %}
-            <span class="badge badge-outline">pilot</span>{% endif %}</td>
-        <td><strong>{{ c.cycle_name }}</strong>
-            {% if c.previous_cycle_id %}<br>
-            <span class="muted">follows {{ c.previous_cycle_id }}</span>{% endif %}</td>
-        <td>{{ (c.assessed_domains or [])|length }} of 4</td>
-        <td><span class="status-pill status-{{ 'green' if c.status == 'open'
-             else 'amber' if c.status == 'draft' else 'red' }}">{{ c.status }}</span></td>
-        <td>
-          {% if r.deployed %}{{ r.scope }}
-          {% else %}<span class="muted">not deployed</span>{% endif %}
-        </td>
-        <td class="num">
-          {% if r.deployed %}{{ r.responses }} / {{ r.expected }}
-          {% else %}<span class="muted">-</span>{% endif %}
-        </td>
-        <td>
-          {% if r.deployed %}{{ r.rate }}%
-          {% else %}<span class="muted">-</span>{% endif %}
-        </td>
-        <td>
-          {% if r.deployed_at %}{{ r.deployed_at.strftime('%d %b %Y') }}
-          {% else %}<span class="muted">-</span>{% endif %}
-        </td>
-        <td class="row-actions">
-          <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}"
-             class="btn btn-sm btn-secondary">Open</a>
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="9" class="muted">No cycles yet.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div></div>
+{% block head %}
+<style>
+.section-hint { font-size:.75rem; color:var(--text-subtle); }
+.cy-id { font-size:.8rem; background:var(--border-light); padding:.15rem .45rem; border-radius:var(--radius-sm); }
+.cy-small { font-size:.78rem; }
+.cy-tag { font-size:.68rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+          color:var(--text-muted); border:1px solid var(--border); border-radius:999px; padding:.15rem .6rem; }
+.cy-branch { display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem; font-weight:600;
+             color:#3730a3; background:#eef2ff; border:1px solid #c7d2fe; border-radius:999px; padding:.15rem .65rem; }
+.cy-branch::before { content:""; width:7px; height:7px; border-radius:2px; background:#4f46e5; }
+.cy-pill { font-size:.75rem; font-weight:600; padding:.18rem .6rem; border-radius:999px; white-space:nowrap; }
+.cy-open   { background:#dcfce7; color:#16a34a; }
+.cy-draft  { background:var(--orange-light); color:var(--amber); }
+.cy-closed { background:var(--border-light); color:var(--text-muted); }
+</style>
 {% endblock %}

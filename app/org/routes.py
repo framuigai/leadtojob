@@ -496,9 +496,22 @@ def cycles_list():
             'deployed_at': min(dates) if dates else None,
             'scope': ('branch' if any(d.branch_id for d in found)
                       else 'organisation-wide'),
+            # Same rule as cycle_detail()'s can_deploy and deploy() itself:
+            # an open cycle with no live deployment.
+            'can_deploy': cycle.status == 'open' and not any(
+                not d.closed for d in found),
         })
 
-    return render_template('org/cycles.html', rows=rows,
+    # Split by ownership. "Yours" is the tier the viewer deploys at: org-wide
+    # for L2, their own branch for L3. Everything else _scoped() lets them see
+    # (branch cycles, for L2) is oversight and rendered read-only.
+    mine = _my_branch_id()
+    own_rows = [r for r in rows if r['cycle'].branch_id == mine]
+    branch_rows = [r for r in rows if r['cycle'].branch_id != mine]
+
+    return render_template('org/cycles.html', own_rows=own_rows,
+                           branch_rows=branch_rows,
+                           can_deploy_any=can(current_user, DEPLOY_SURVEYS),
                            branch_scoped=is_branch_scoped(current_user))
 
 
