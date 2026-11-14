@@ -962,24 +962,60 @@ def _validate_cycle(form, creating):
 
 # ── Instrument (read-only for both tiers) ───────────────────────────────────
 
-@org_bp.route('/instrument')
-@require_capability(VIEW_TEMPLATES)
-def instrument():
-    """
-    The org's own frozen copy of the 48 items. READ ONLY for L2 and L3 —
-    editing is L1's.
-    """
+def _org_items():
     version = latest_version(current_user.org_id)
     items = (db.session.query(SurveyItem)
              .filter_by(org_id=current_user.org_id, version=version)
              .order_by(SurveyItem.sort_order).all())
-    grouped = []
-    for domain_code in domains.DOMAINS:
-        in_domain = [i for i in items if i.domain_code == domain_code]
-        if in_domain:
-            grouped.append((domain_code, in_domain))
-    return render_template('org/instrument.html', grouped=grouped,
-                           version=version, total=len(items))
+    return version, items
+
+
+@org_bp.route('/instrument')
+@require_capability(VIEW_TEMPLATES)
+def instrument():
+    """
+    The survey library: one card per domain, one row per subdomain. READ ONLY
+    for L2 and L3 - editing is L1's. The questions are on instrument_domain().
+    """
+    version, items = _org_items()
+    modules = []
+    for code in domains.DOMAINS:
+        in_domain = [i for i in items if i.domain_code == code]
+        if not in_domain:
+            continue
+        modules.append({
+            'code': code,
+            'label': domains.DOMAIN_LABELS[code],
+            'is_outcome': code == domains.OUTCOME_DOMAIN,
+            'subdomains': [
+                {'code': sub,
+                 'label': domains.subdomain_label(code, sub),
+                 'questions': sum(1 for i in in_domain
+                                  if i.subdomain_code == sub and i.is_active)}
+                for sub in domains.SUBDOMAINS[code]],
+        })
+    return render_template('org/instrument.html', modules=modules,
+                           version=version,
+                           total=sum(1 for i in items if i.is_active))
+
+
+@org_bp.route('/instrument/<domain_code>')
+@require_capability(VIEW_TEMPLATES)
+def instrument_domain(domain_code):
+    if domain_code not in domains.DOMAINS:
+        abort(404)
+    version, items = _org_items()
+    questions = [i for i in items if i.domain_code == domain_code]
+    order = domains.SUBDOMAINS[domain_code]
+    questions.sort(key=lambda i: (order.index(i.subdomain_code), i.sort_order))
+    return render_template(
+        'org/instrument_domain.html', domain_code=domain_code,
+        label=domains.DOMAIN_LABELS[domain_code],
+        is_outcome=domain_code == domains.OUTCOME_DOMAIN,
+        questions=questions, version=version,
+        subdomains=[(sub, domains.subdomain_label(domain_code, sub),
+                     sum(1 for i in questions if i.subdomain_code == sub))
+                    for sub in order])
 
 
 # ── Placeholders ────────────────────────────────────────────────────────────

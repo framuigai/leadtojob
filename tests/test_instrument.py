@@ -314,8 +314,16 @@ def test_an_org_admin_sees_their_instrument_read_only(client, db):
     db.session.commit()
 
     login(client, admin)
-    body = client.get('/org/instrument').get_data(as_text=True)
+    library = client.get('/org/instrument').get_data(as_text=True)
+    assert 'Overall Satisfaction' in library
+    assert 'Appropriate Challenge and Development' in library
+    assert 'Daunting' not in library
+    assert 'read-only' in library.lower()
+    # The questions themselves are on each domain's page.
+    body = client.get('/org/instrument/GEM').get_data(as_text=True)
     assert 'Overall, I am satisfied with my current job.' in body
+    assert client.get('/org/instrument/XYZ').status_code == 404
+    assert 'Daunting' not in client.get('/org/instrument/TID').get_data(as_text=True)
     # Read-only: no internal keys, and no edit affordance.
     assert 'GEM-G-01' not in body
     assert 'Read-only' in body or 'read-only' in body.lower()

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block container_class %}container-wide{% endblock %}
+{% block title %}{{ label }} - leadTo{% endblock %}
+
+{% block head %}
+<style>
+  .sv-eyebrow { font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+                color:var(--text-subtle); margin:.5rem 0 .25rem; }
+  .sv-phase { display:inline-flex; align-items:center; gap:.4rem; font-size:.75rem; font-weight:600;
+              padding:.25rem .7rem; border-radius:999px; background:var(--blue-light); color:var(--blue); }
+  .sv-phase::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .sv-phase.outcome { background:var(--orange-light); color:var(--orange); }
+
+  .sv-summary { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem; }
+  .sv-stat { flex:1 1 170px; background:var(--surface); border:1px solid var(--border);
+             border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:.9rem 1.2rem;
+             border-top:3px solid var(--blue); }
+  .sv-stat:nth-child(2) { border-top-color:var(--orange); }
+  .sv-stat:nth-child(3) { border-top-color:var(--navy); }
+  .sv-stat-value { font-size:1.45rem; font-weight:700; color:var(--navy); line-height:1.25; }
+  .sv-stat-label { font-size:.8rem; color:var(--text-muted); }
+
+  .sv-note { background:var(--blue-faint); border:1px solid var(--blue-light); border-left:4px solid var(--blue);
+             border-radius:var(--radius); padding:.8rem 1.1rem; font-size:.875rem; color:var(--text-muted);
+             margin-bottom:1.25rem; }
+  .sv-note strong { color:var(--navy); }
+
+  .sv-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+             box-shadow:var(--shadow-sm); overflow:hidden; }
+  .sv-card-scroll { overflow-x:auto; }
+  .sv-table { width:100%; border-collapse:collapse; }
+  .sv-table thead th { background:linear-gradient(135deg, var(--navy), var(--navy-light)); color:#fff;
+                       font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em;
+                       padding:.8rem 1rem; text-align:left; }
+  .sv-table td { padding:.7rem 1rem; border-bottom:1px solid var(--border-light); vertical-align:middle; }
+  .sv-table tbody tr.sv-q:hover td { background:var(--blue-faint); }
+  .sv-table tr.sv-group td { background:#f8fafc; border-bottom:1px solid var(--border);
+                             border-top:1px solid var(--border); padding:.55rem 1rem; }
+  .sv-group-name { font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+                   color:var(--navy); border-left:3px solid var(--orange); padding-left:.6rem; }
+  .sv-group-count { font-size:.75rem; color:var(--text-subtle); margin-left:.5rem; font-weight:500; }
+  .sv-num { width:56px; }
+  .sv-num span { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px;
+                 border-radius:50%; background:var(--border-light); color:var(--text-muted);
+                 font-size:.8rem; font-weight:600; }
+  .sv-text { color:var(--text); font-size:.92rem; }
+  .sv-sub { color:var(--text-muted); font-size:.83rem; width:260px; }
+  .sv-status { width:110px; text-align:center; }
+  .sv-pill { font-size:.72rem; font-weight:600; padding:.15rem .6rem; border-radius:999px; white-space:nowrap; }
+  .sv-pill.on  { background:#e8f0e2; color:#375623; }
+  .sv-pill.off { background:var(--border-light); color:var(--text-subtle); }
+  tr.sv-q.inactive .sv-text { color:var(--text-subtle); }
+  @media (max-width: 720px) { .sv-sub { display:none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set active_n = questions|selectattr('is_active')|list|length %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="{{ url_for('org.instrument') }}" class="back-link">← All domains</a>
+    <p class="sv-eyebrow">Job Satisfaction Survey</p>
+    <h1>{{ label }}</h1>
+    <p>{{ 'The outcome domain. Its three subdomains are reported separately, never as one score.'
+          if is_outcome else 'A diagnostic domain, reported in relation to Overall Satisfaction.' }}</p>
+  </div>
+  <div class="page-actions">
+    <span class="sv-phase {{ 'outcome' if is_outcome }}">{{ 'Outcome' if is_outcome else 'Diagnostic' }}</span>
+  </div>
+</div>
+
+<div class="sv-summary">
+  <div class="sv-stat">
+    <div class="sv-stat-value">{{ active_n }}</div>
+    <div class="sv-stat-label">Active questions{% if active_n != questions|length %} of {{ questions|length }}{% endif %}</div>
+  </div>
+  <div class="sv-stat">
+    <div class="sv-stat-value">{{ subdomains|length }}</div>
+    <div class="sv-stat-label">Subdomains covered</div>
+  </div>
+  <div class="sv-stat">
+    <div class="sv-stat-value">v{{ version }}</div>
+    <div class="sv-stat-label">Current version</div>
+  </div>
+</div>
+
+<div class="sv-note">
+  <strong>Managed by leadTo.</strong> Question wording, subdomains and which questions are active are
+  set for your organisation and shown here for reference only. Read-only.
+</div>
+
+<div class="sv-card">
+  <div class="sv-card-scroll">
+    <table class="sv-table">
+      <thead>
+        <tr><th class="sv-num">#</th><th>Question</th><th class="sv-sub">Subdomain</th><th class="sv-status">Status</th></tr>
+      </thead>
+      <tbody>
+      {% for sub_code, sub_label, sub_n in subdomains %}
+        <tr class="sv-group" id="sub-{{ sub_code }}">
+          <td colspan="4">
+            <span class="sv-group-name">{{ sub_label }}</span>
+            <span class="sv-group-count">{{ sub_n }} questions</span>
+          </td>
+        </tr>
+        {% for q in questions if q.subdomain_code == sub_code %}
+        <tr class="sv-q {{ '' if q.is_active else 'inactive' }}">
+          <td class="sv-num"><span>{{ q.sort_order }}</span></td>
+          <td class="sv-text">{{ q.item_text }}</td>
+          <td class="sv-sub">{{ sub_label }}</td>
+          <td class="sv-status">
+            {% if q.is_active %}<span class="sv-pill on">Active</span>
+            {% else %}<span class="sv-pill off">Inactive</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">No questions configured for this domain.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,55 +1,123 @@
 {% extends "base.html" %}
-{% block title %}Templates - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
+{% block title %}Templates - leadTo{% endblock %}
+
+{% block head %}
+<style>
+  .sl-eyebrow { font-size:.75rem; font-weight:700; text-transform:uppercase;
+                letter-spacing:.08em; color:var(--text-subtle); margin:.5rem 0 .25rem; }
+  .sl-summary { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.75rem; }
+  .sl-stat { flex:1 1 180px; background:var(--surface); border:1px solid var(--border);
+             border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:1rem 1.25rem;
+             border-top:3px solid var(--blue); }
+  .sl-stat:nth-child(2) { border-top-color:var(--orange); }
+  .sl-stat:nth-child(3) { border-top-color:var(--navy); }
+  .sl-stat-value { font-size:1.6rem; font-weight:700; color:var(--navy); line-height:1.2; }
+  .sl-stat-label { font-size:.8rem; color:var(--text-muted); }
+
+  .sl-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap:1.25rem; }
+
+  .sl-module { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+               box-shadow:var(--shadow-sm); overflow:hidden; display:flex; flex-direction:column; }
+  .sl-module-head { background:linear-gradient(135deg, var(--navy), var(--navy-light));
+                    color:#fff; padding:1rem 1.25rem; display:flex; align-items:center;
+                    justify-content:space-between; gap:.75rem; text-decoration:none; }
+  .sl-module-head h2 { font-size:1.05rem; font-weight:600; margin:0; color:#fff; }
+  .sl-module-count { font-size:.75rem; background:rgba(255,255,255,.14); padding:.2rem .6rem;
+                     border-radius:999px; white-space:nowrap; }
+
+  .sl-phase { padding:.85rem 1.25rem .35rem; font-size:.7rem; font-weight:700; text-transform:uppercase;
+              letter-spacing:.08em; display:flex; align-items:center; gap:.5rem; color:var(--text-muted); }
+  .sl-phase::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--blue); }
+  .sl-phase.outcome::before { background:var(--orange); }
+
+  .sl-survey { display:flex; align-items:center; gap:1rem; padding:.75rem 1.25rem;
+               border-top:1px solid var(--border-light); text-decoration:none; color:inherit;
+               transition:background .15s; }
+  .sl-survey:hover { background:var(--blue-faint); }
+  .sl-survey-body { flex:1; min-width:0; }
+  .sl-survey-title { font-weight:600; color:var(--text); }
+  .sl-survey-side { display:flex; align-items:center; gap:.6rem; flex-shrink:0; }
+  .sl-chip { font-size:.72rem; font-weight:600; padding:.15rem .55rem; border-radius:999px;
+             background:var(--border-light); color:var(--text-muted); white-space:nowrap; }
+  .sl-chip.ver { background:var(--blue-light); color:var(--blue); }
+  .sl-arrow { color:var(--text-subtle); font-size:1.1rem; transition:transform .15s, color .15s; }
+  .sl-survey:hover .sl-arrow { color:var(--blue); transform:translateX(3px); }
+  .sl-module > :last-child { padding-bottom:.25rem; }
+
+  .sl-note { margin-top:1.75rem; background:var(--blue-faint); border:1px solid var(--blue-light);
+             border-left:4px solid var(--blue); border-radius:var(--radius); padding:.9rem 1.1rem;
+             font-size:.875rem; color:var(--text-muted); }
+  .sl-note strong { color:var(--navy); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <div class="section-label">{{ role_label(current_user.role) }}</div>
-    <h1>Your template</h1>
-    <p class="version-note">Version {{ version }} &mdash; {{ total }} questions,
-      in the order respondents see them. Read-only: this is your organisation's
-      own frozen copy, and once a cycle has run it is the record of what was
-      asked.</p>
+    <a href="{{ url_for('org.dashboard') }}" class="back-link">← Dashboard</a>
+    <p class="sl-eyebrow">Survey Library</p>
+    <h1>Your Survey</h1>
+    <p>The job satisfaction questions tailored for your organisation, grouped by domain.
+       Open any domain to preview its questions. Read-only.</p>
   </div>
 </div>
 
-{% for domain_code, items in grouped %}
-<div class="panel">
-  <div class="panel-head">
-    <div class="panel-title">{{ domain_label(domain_code) }}</div>
-    <span class="badge badge-outline">{{ items|length }} questions</span>
-  </div>
-  <table class="instrument-table">
-    <thead><tr>
-      <th class="col-num">#</th>
-      <th>Question text</th>
-      <th>Subdomain</th>
-      <th>Anchor type</th>
-      <th class="col-check">N/A</th>
-    </tr></thead>
-    <tbody>
-    {% for i in items %}
-      <tr>
-        <td class="col-num">{{ i.sort_order }}</td>
-        <td>{{ i.item_text }}</td>
-        <td class="cell-sub">{{ subdomain_label(domain_code, i.subdomain_code) }}</td>
-        <td class="cell-meta">{{ i.anchor_type }}</td>
-        <td class="col-check">{{ 'Yes' if i.allows_na else '-' }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+{% if not modules %}
+<div class="empty-state">
+  <div class="empty-icon">📋</div>
+  <h2>No template yet</h2>
+  <p>Contact your leadTo administrator.</p>
 </div>
 {% else %}
-<div class="empty-state"><div class="empty-icon">-</div>
-  <h2>No template yet</h2>
-  <p>Contact your leadTo administrator.</p></div>
-{% endfor %}
 
-<p class="muted">
-  Every question is answered on a five-point agreement scale, with a separate
-  "{{ not_applicable_label }}" choice where a question does not apply. That
-  choice is not counted as a neutral answer: it is excluded from the score and
-  reported separately as coverage.
-</p>
+<div class="sl-summary">
+  <div class="sl-stat">
+    <div class="sl-stat-value">{{ modules|length }}</div>
+    <div class="sl-stat-label">Domains</div>
+  </div>
+  <div class="sl-stat">
+    <div class="sl-stat-value">{{ total }}</div>
+    <div class="sl-stat-label">Active questions</div>
+  </div>
+  <div class="sl-stat">
+    <div class="sl-stat-value">v{{ version }}</div>
+    <div class="sl-stat-label">Current version · one anonymous link</div>
+  </div>
+</div>
+
+<div class="sl-grid">
+  {% for m in modules %}
+  <section class="sl-module">
+    <a class="sl-module-head" href="{{ url_for('org.instrument_domain', domain_code=m.code) }}">
+      <h2>{{ m.label }}</h2>
+      <span class="sl-module-count">{{ m.subdomains|sum(attribute='questions') }} questions</span>
+    </a>
+    <div class="sl-phase {{ 'outcome' if m.is_outcome }}">
+      {{ 'Outcome · Reported separately' if m.is_outcome else 'Diagnostic · Read alongside Overall Satisfaction' }}
+    </div>
+    {% for s in m.subdomains %}
+    <a class="sl-survey"
+       href="{{ url_for('org.instrument_domain', domain_code=m.code) }}#sub-{{ s.code }}">
+      <div class="sl-survey-body">
+        <div class="sl-survey-title">{{ s.label }}</div>
+      </div>
+      <div class="sl-survey-side">
+        <span class="sl-chip">{{ s.questions }} questions</span>
+        <span class="sl-chip ver">v{{ version }}</span>
+        <span class="sl-arrow">›</span>
+      </div>
+    </a>
+    {% endfor %}
+  </section>
+  {% endfor %}
+</div>
+
+<div class="sl-note">
+  <strong>Managed by leadTo.</strong> Every question is answered on a five-point agreement
+  scale, with a separate "{{ not_applicable_label }}" choice that is excluded from the score and
+  reported as coverage. Question wording is maintained for your organisation by leadTo; once a
+  cycle has run, this is the record of what was asked.
+</div>
+{% endif %}
 {% endblock %}
