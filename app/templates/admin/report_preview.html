@@ -1,16 +1,53 @@
 {% extends "base.html" %}
 {% block title %}{{ context.title }} - leadTo{% endblock %}
 {% block container_class %}container-wide{% endblock %}
+
+{#
+  L1's read-only view of a client report.
+
+  Colour encodes the RESPONSE ANCHOR (1-5, from charts.ANCHOR_COLOURS), never
+  a judgement of the score (§10.5). No band labels, no GEM composite (§10.3):
+  the three Overall Satisfaction subdomains get one card each and are never
+  averaged. The "where to look" list prints the association caveat beside it
+  (§10.4) and uses the priority view's investigative labels only.
+#}
+
+{% macro dist_bar(d) -%}
+  {%- set answered = d.answered -%}
+  <div class="rp-dist" role="img"
+       aria-label="{% for s in [1,2,3,4,5] %}{{ s }}: {{ d.counts.get(s, 0) }}{{ ', ' if not loop.last }}{% endfor %}">
+    {% if answered %}
+      {% for s in [1,2,3,4,5] %}{% set c = d.counts.get(s, 0) %}{% if c %}
+      <span class="rp-a{{ s }}" style="width:{{ '%.2f'|format(c / answered * 100) }}%"
+            title="{{ s }} — {{ c }} ({{ '%.0f'|format(c / answered * 100) }}%)"></span>
+      {% endif %}{% endfor %}
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro score_row(label, result) %}
+  <div class="rp-row">
+    <div class="rp-row-label">{{ label }}</div>
+    {% if result %}
+      <div class="rp-row-score">{{ '%.2f'|format(result.mean) }}</div>
+      <div class="rp-row-bar">{{ dist_bar(result.distribution) }}</div>
+      <div class="rp-row-split">
+        <span class="rp-fav">{{ '%.0f'|format(result.distribution.favourable_pct or 0) }}%</span>
+        <span class="rp-sep">/</span>
+        <span class="rp-unfav">{{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}%</span>
+      </div>
+    {% else %}
+      <div class="rp-row-wide"><span class="status-pill status-suppressed">{{ result.label }}</span></div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
     <div class="section-label">Master Admin / {{ org.name }}</div>
     <h1>{{ context.title }}</h1>
-    <p class="muted">
-      {{ cycle.cycle_name }} &middot; {{ context.scope_label }}
-      &middot; n = {{ context.n }}
-      &middot; threshold n &ge; {{ context.min_reporting_n }}
-    </p>
+    <p class="muted">{{ cycle.cycle_name }} &middot; {{ context.scope_label }}</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary"
@@ -24,38 +61,112 @@
   </div>
 </div>
 
-<div class="flash flash-info">
-  <strong>Read-only.</strong> You are seeing a client's results as the platform
-  operator. There is no interpretation action here: a narrative about a
-  client's workforce is written by that client's own administrator, who is
-  accountable for it. Every download you make is recorded in the audit log.
-</div>
+<p class="rp-readonly"><strong>Read-only.</strong> Interpretation is
+  written by that client's own administrator. Downloads are recorded in the audit log.</p>
 
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">Overall Satisfaction</div></div>
-  <div class="panel-body">
-    <table class="table">
-      <thead><tr><th>Subdomain</th><th class="num">Score</th><th class="num">n</th>
-        <th class="num">Agree</th><th class="num">Disagree</th></tr></thead>
-      <tbody>
-      {% for pair, result in context.outcome_rows %}
-        <tr><td>{{ subdomain_label(pair[0], pair[1]) }}</td>
-        {% if result %}
-          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
-          <td class="num">{{ result.n }}</td>
-          <td class="num">{{ '%.0f'|format(result.distribution.favourable_pct or 0) }}%</td>
-          <td class="num">{{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}%</td>
-        {% else %}
-          <td colspan="4"><span class="status-pill status-suppressed">
-            {{ result.label }}</span></td>
-        {% endif %}
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    <p class="panel-note">{{ context.bands_note }}</p>
+{# ── Key figures ─────────────────────────────────────────────────────── #}
+<div class="rp-kpis">
+  <div class="rp-kpi">
+    <div class="rp-kpi-value">{{ context.n }}</div>
+    <div class="rp-kpi-label">Respondents</div>
+  </div>
+  <div class="rp-kpi">
+    <div class="rp-kpi-value">
+      {{ '%.0f'|format(context.response_rate) ~ '%' if context.response_rate is not none else '—' }}</div>
+    <div class="rp-kpi-label">Response rate
+      {% if context.expected %}<span class="muted">of {{ context.expected }}</span>{% endif %}</div>
+  </div>
+  <div class="rp-kpi">
+    <div class="rp-kpi-value">{{ context.domain_rows|length + 1 }}</div>
+    <div class="rp-kpi-label">Domains assessed</div>
+  </div>
+  <div class="rp-kpi">
+    <div class="rp-kpi-value rp-kpi-status">
+      {% if context.provisional %}<span class="status-pill status-amber">Provisional</span>
+      {% else %}<span class="status-pill status-green">Final</span>{% endif %}</div>
+    <div class="rp-kpi-label">Threshold n &ge; {{ context.min_reporting_n }}</div>
   </div>
 </div>
+
+{% if context.provisional %}
+<div class="flash flash-warning">{{ context.provisional_note }}</div>
+{% endif %}
+
+<div class="rp-legend">
+  <span><i class="rp-a1"></i>Strongly disagree</span>
+  <span><i class="rp-a2"></i>Disagree</span>
+  <span><i class="rp-a3"></i>Neutral</span>
+  <span><i class="rp-a4"></i>Agree</span>
+  <span><i class="rp-a5"></i>Strongly agree</span>
+</div>
+
+{# ── Outcome: three cards, never combined (§10.3) ─────────────────────── #}
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Overall Satisfaction</div>
+    <span class="muted rp-head-note">The outcome — each measure reported on its own</span></div>
+  <div class="panel-body">
+    <div class="rp-cards">
+    {% for pair, result in context.outcome_rows %}
+      <div class="rp-card">
+        <div class="rp-card-label">{{ subdomain_label(pair[0], pair[1]) }}</div>
+        {% if result %}
+          <div class="rp-card-score">{{ '%.2f'|format(result.mean) }}<span>/ 5</span></div>
+          {{ dist_bar(result.distribution) }}
+          <div class="rp-card-split">
+            <span><b class="rp-fav">{{ '%.0f'|format(result.distribution.favourable_pct or 0) }}%</b> agree</span>
+            <span><b>{{ '%.0f'|format(result.distribution.neutral_pct or 0) }}%</b> neutral</span>
+            <span><b class="rp-unfav">{{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}%</b> disagree</span>
+          </div>
+          <div class="rp-card-foot">n = {{ result.n }} &middot; spread &sigma; {{ '%.2f'|format(result.dispersion.sd) }}</div>
+        {% else %}
+          <span class="status-pill status-suppressed">{{ result.label }}</span>
+        {% endif %}
+      </div>
+    {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ── Diagnostic domains ───────────────────────────────────────────────── #}
+{% if context.domain_rows %}
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Diagnostic domains</div>
+    <span class="muted rp-head-note">Score &middot; responses &middot; agree / disagree</span></div>
+  <div class="panel-body">
+    {% for code, result in context.domain_rows %}
+      {{ score_row(domain_label(code), result) }}
+    {% endfor %}
+
+    {% if report_type != 'executive' and context.subdomain_rows %}
+    <div class="rp-subhead">By subdomain</div>
+    {% for pair, result in context.subdomain_rows %}
+      {{ score_row(subdomain_label(pair[0], pair[1]), result) }}
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Where to look first (§10.4 priority view) ────────────────────────── #}
+{% if context.priority and context.priority.investigate_first() %}
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Where to look first</div></div>
+  <div class="panel-body">
+    <p class="rp-lede">Below this group's median score and differing most between
+      the least and most satisfied thirds on {{ context.priority.outcome_label }}.</p>
+    <ol class="rp-look">
+    {% for entry in context.priority.investigate_first() %}
+      <li>
+        <span class="rp-look-label">{{ entry.label }}</span>
+        <span class="rp-look-fig">{{ '%.2f'|format(entry.score) }}</span>
+        <span class="rp-look-fig muted">thirds differ by {{ '%.2f'|format(entry.contrast.size) }}</span>
+      </li>
+    {% endfor %}
+    </ol>
+    <p class="panel-note">{{ context.priority.caveat }}</p>
+  </div>
+</div>
+{% endif %}
 
 {% if context.narrative %}
 <div class="panel">
@@ -63,10 +174,12 @@
     <span class="badge badge-outline">written by the client</span></div>
   <div class="panel-body">
     {% for key, text in context.narrative.items() %}
-    <h3 style="font-size:1rem;margin-top:1rem">{{ key.replace('_', ' ')|capitalize }}</h3>
+    <h3 class="rp-narr-head">{{ key.replace('_', ' ')|capitalize }}</h3>
     <p>{{ text }}</p>
     {% endfor %}
   </div>
 </div>
 {% endif %}
+
+<p class="panel-note">{{ context.bands_note }}</p>
 {% endblock %}

@@ -1909,3 +1909,81 @@ a.group-card-title:hover { color: var(--blue); }
     cursor: not-allowed;
     text-decoration: line-through;
 }
+
+/* ── L1 report preview (admin/report_preview.html) ───────────────────────
+   Segment colours are the RESPONSE-ANCHOR ramp from charts.ANCHOR_COLOURS,
+   kept identical so the screen and the PDF read the same. They encode the
+   1-5 answer, never a judgement of a score (§10.5). */
+.rp-a1 { background: #A33A3A; } .rp-a2 { background: #D18A6A; }
+.rp-a3 { background: #C9C4BC; } .rp-a4 { background: #7FA7C4; }
+.rp-a5 { background: #2E6B8A; }
+.rp-fav   { color: #2E6B8A; }
+.rp-unfav { color: #A33A3A; }
+
+.rp-readonly { font-size: .85rem; color: var(--text-muted); margin: -.25rem 0 1.25rem;
+               padding-left: .75rem; border-left: 3px solid var(--blue); }
+
+.rp-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+.rp-kpi { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+          padding: 1.1rem 1.25rem; border-top: 3px solid var(--navy); }
+.rp-kpi:first-child { border-top-color: var(--orange); }
+.rp-kpi-value { font-size: 1.85rem; font-weight: 700; color: var(--navy); line-height: 1.2;
+                font-variant-numeric: tabular-nums; }
+.rp-kpi-status { font-size: 1rem; padding: .45rem 0 .3rem; }
+.rp-kpi-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em;
+                color: var(--text-muted); font-weight: 600; margin-top: .2rem; }
+.rp-kpi-label .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+.rp-legend { display: flex; flex-wrap: wrap; gap: 1.1rem; font-size: .78rem;
+             color: var(--text-muted); margin: 0 0 .9rem .25rem; }
+.rp-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.rp-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+.rp-head-note { font-size: .8rem; }
+
+.rp-dist { display: flex; height: 12px; border-radius: 6px; overflow: hidden;
+           background: var(--border-light); }
+.rp-dist span { display: block; height: 100%; }
+.rp-dist span + span { border-left: 1px solid var(--surface); }
+
+.rp-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.rp-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.2rem;
+           background: linear-gradient(180deg, var(--blue-faint), var(--surface) 60%); }
+.rp-card-label { font-weight: 600; color: var(--navy); font-size: .92rem; }
+.rp-card-score { font-size: 2.2rem; font-weight: 700; color: var(--navy); margin: .3rem 0 .6rem;
+                 font-variant-numeric: tabular-nums; line-height: 1.1; }
+.rp-card-score span { font-size: .9rem; font-weight: 500; color: var(--text-subtle); margin-left: .3rem; }
+.rp-card-split { display: flex; justify-content: space-between; font-size: .8rem;
+                 color: var(--text-muted); margin-top: .6rem; }
+.rp-card-split b { font-size: .95rem; color: var(--text); }
+.rp-card-split b.rp-fav { color: #2E6B8A; } .rp-card-split b.rp-unfav { color: #A33A3A; }
+.rp-card-foot { font-size: .75rem; color: var(--text-subtle); margin-top: .55rem;
+                padding-top: .55rem; border-top: 1px solid var(--border-light); }
+
+.rp-row { display: grid; grid-template-columns: minmax(180px, 1.3fr) 56px 2fr 92px;
+          align-items: center; gap: 1rem; padding: .7rem 0; border-bottom: 1px solid var(--border-light); }
+.rp-row:last-child { border-bottom: 0; }
+.rp-row-label { font-size: .92rem; }
+.rp-row-score { font-weight: 700; color: var(--navy); text-align: right; font-variant-numeric: tabular-nums; }
+.rp-row-split { font-size: .82rem; text-align: right; font-variant-numeric: tabular-nums; }
+.rp-sep { color: var(--text-subtle); margin: 0 .2rem; }
+.rp-row-wide { grid-column: 2 / -1; }
+.rp-subhead { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+              color: var(--orange); margin: 1.4rem 0 .2rem; }
+
+.rp-lede { color: var(--text-muted); font-size: .9rem; margin-bottom: .8rem; }
+.rp-look { list-style: none; counter-reset: look; }
+.rp-look li { counter-increment: look; display: flex; align-items: center; gap: 1rem;
+              padding: .65rem .9rem; margin-bottom: .5rem; border-radius: var(--radius);
+              background: var(--orange-faint); border-left: 3px solid var(--orange); }
+.rp-look li::before { content: counter(look); font-weight: 700; color: var(--orange); width: 1.2rem; }
+.rp-look-label { flex: 1; font-weight: 600; }
+.rp-look-fig { font-size: .85rem; font-variant-numeric: tabular-nums; }
+.rp-narr-head { font-size: 1rem; margin-top: 1rem; }
+
+@media (max-width: 900px) {
+  .rp-kpis { grid-template-columns: repeat(2, 1fr); }
+  .rp-cards { grid-template-columns: 1fr; }
+  .rp-row { grid-template-columns: 1fr 48px; }
+  .rp-row-bar, .rp-row-split { grid-column: 1 / -1; text-align: left; }
+}
