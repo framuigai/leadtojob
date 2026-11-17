@@ -169,13 +169,38 @@ def dashboard():
             'rate': (round(cycle_responses / cycle_expected * 100)
                      if cycle_expected else None),
             'state': _report_state(cycle, cycle_deployments, cycle_responses),
+            'last_deployed': max((d.deployed_at for d in cycle_deployments
+                                  if d.deployed_at), default=None),
         })
+
+    # Split the board the way the sibling's L2 dashboard does: org-wide cycles
+    # this admin runs, then one row per branch showing that branch's CURRENT
+    # (most recent) cycle — view only. `rows` is already newest-first.
+    org_rows = [r for r in rows if not r['cycle'].branch_id]
+    branch_cycle_rows = [r for r in rows if r['cycle'].branch_id]
+
+    branches = []
+    if current_user.org_id is not None:
+        q = db.session.query(Branch).filter_by(org_id=current_user.org_id,
+                                               is_active=True)
+        if is_branch_scoped(current_user):
+            q = q.filter(Branch.id == current_user.branch_id)
+        branches = q.order_by(Branch.name).all()
+    latest_by_branch = {}
+    for r in branch_cycle_rows:
+        latest_by_branch.setdefault(r['cycle'].branch_id, r)
+    branch_rows = [{'branch': b, 'row': latest_by_branch.get(b.id),
+                    'cycles': sum(1 for r in branch_cycle_rows
+                                  if r['cycle'].branch_id == b.id)}
+                   for b in branches]
 
     return render_template(
         'org/dashboard.html',
         branch_scoped=is_branch_scoped(current_user),
         purpose_reminder=_purpose_reminder(),
         rows=rows,
+        org_rows=org_rows,
+        branch_rows=branch_rows,
         stats={
             'cycles': len(cycles),
             'responses': responses,
@@ -183,6 +208,13 @@ def dashboard():
             'rate': round(responses / expected * 100) if expected else None,
             'open_deployments': len(open_deployments),
             'ready': sum(1 for r in rows if r['state']['key'] == 'ready'),
+            'org_cycles': len(org_rows),
+            'org_ready': sum(1 for r in org_rows
+                             if r['state']['key'] == 'ready'),
+            'branches': len(branches),
+            'live_branch': sum(r['open'] for r in branch_cycle_rows),
+            'branch_ready': sum(1 for r in branch_cycle_rows
+                                if r['state']['key'] == 'ready'),
         },
     )
 

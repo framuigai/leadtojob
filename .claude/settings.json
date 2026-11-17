@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python -)",
-      "Bash(venv/Scripts/python.exe -m pytest -q tests/test_instrument.py)"
+      "Bash(venv/Scripts/python.exe -m pytest -q tests/test_instrument.py)",
+      "PowerShell(.\\\\venv\\\\Scripts\\\\python -m pytest tests -q -k \"dashboard or board\" 2>&1)"
     ]
   }
 }

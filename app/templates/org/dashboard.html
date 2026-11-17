@@ -2,37 +2,62 @@
 {% block title %}Dashboard — leadTo Job Satisfaction{% endblock %}
 {% block container_class %}container-wide board-page{% endblock %}
 
+{% macro status_pill(c) -%}
+    {% if c.status == 'open' %}
+    <span class="status-pill" style="background:#e7f3e2;color:var(--green);">
+        <span class="status-dot" style="background:var(--green);"></span>Live
+    </span>
+    {% elif c.status == 'draft' %}
+    <span class="status-pill status-amber">Draft</span>
+    {% else %}
+    <span class="status-pill" style="background:var(--border-light);color:var(--text-muted);">
+        {{ c.status|title }}
+    </span>
+    {% endif %}
+{%- endmacro %}
+
+{#  THE REPORTING STATE, from the same _report_state() the Reports screen uses.
+    It sits where the sibling shows "Latest score" / "Weakest module": this
+    product has no single cycle score to put there (§10.3 — no GEM composite;
+    §10.5 — no band), so the column says whether the cycle can be read yet. #}
+{% macro reporting_pill(row) -%}
+    {% if row.state.key == 'ready' %}
+    <span class="status-pill status-{{ 'amber' if row.state.provisional else 'green' }}">
+        {{ 'provisional' if row.state.provisional else 'reportable' }}
+    </span>
+    {% elif row.state.key == 'below_threshold' %}
+    <span class="status-pill status-suppressed">below threshold</span>
+    {% else %}
+    <span class="status-pill status-amber">not deployed</span>
+    {% endif %}
+{%- endmacro %}
+
+{% macro responses_cell(row) -%}
+    <span class="metric">{{ row.responses }}{% if row.expected %} / {{ row.expected }}{% endif %}</span>
+    <span class="cell-quiet" style="display:block;">
+        {% if row.rate is not none %}{{ row.rate }}% response rate
+        {% else %}not yet invited{% endif %}
+    </span>
+{%- endmacro %}
+
 {% block content %}
 <div class="page-header">
     <div class="page-header-left">
-        <div class="section-label">
-            {{ role_label(current_user.role) }}
-            {% if current_user.branch %} · {{ current_user.branch.name }}{% endif %}
-        </div>
         <h1>{{ current_user.org.name if current_user.org else 'Organisation' }}</h1>
-        <p class="page-sub">
-            {% if branch_scoped %}
-            Measurement cycles and responses for
-            {{ current_user.branch.name if current_user.branch else 'your branch' }} only.
-            {% else %}
-            Every measurement cycle in the organisation and how far its
-            responses have got.
-            {% endif %}
-        </p>
     </div>
     <div class="page-actions">
-        <a href="{{ url_for('org.cycles_list') }}" class="btn btn-secondary">Cycles</a>
-        <a href="{{ url_for('org.reports') }}" class="btn btn-primary">Reports</a>
+        {% if not branch_scoped %}
+        <a href="{{ url_for('org.branches_list') }}" class="btn btn-secondary">Manage Branches</a>
+        {% endif %}
+        <a href="{{ url_for('org.cycles_list') }}" class="btn btn-secondary">Measurement Cycles</a>
+        <a href="{{ url_for('org.reports') }}" class="btn btn-primary">Reports &amp; Progress</a>
     </div>
 </div>
 
 {#
   THE §9.2 REMINDER. Shown until the organisation's statement to respondents
   exists, and then never again — a CONDITION rather than a dismissible
-  first-login notice, because a notice is clicked away once while the
-  statement is still missing. On a brand-new org it is true by construction,
-  which is what makes it the L2 admin's first-login prompt without a
-  first-login column.
+  first-login notice.
 #}
 {% if purpose_reminder %}
 <div class="flash flash-warning">
@@ -45,203 +70,220 @@
 </div>
 {% endif %}
 
-{# ────────────────────────────────────────────────────────────────────────────
-   WHAT IS NOT ON THIS PAGE, AND WHY.
-
-   No "Organisational Satisfaction 3.4 / 5" headline, and no domain breakdown.
-
-     §10.3 — the three Overall Satisfaction subdomains "should initially be
-             reported separately. An overall GEM composite should only be
-             introduced if validation supports its interpretation and the
-             intended use."
-     §10.5 — a band label on that number would not be validated merely because
-             the scale runs 1 to 5.
-
-   The domain cards that used to fill this page said "Awaiting responses" beside
-   a paragraph of definitions, twelve times over. That is a glossary, not a
-   dashboard: it carried no figure an admin could act on and buried the three
-   that it did carry. Scores belong to a cycle's analysis and its reports, where
-   they have a subject, an n and a threshold attached. The sibling product
-   reached the same conclusion for the same reason and keeps domain detail out
-   of this slot.
-
-   What is left is what an admin can act on: how much is open, and what each
-   cycle is still waiting for.
-   ──────────────────────────────────────────────────────────────────────────── #}
+{# No "Organisational Satisfaction 3.4 / 5" headline and no per-cycle score
+   column: §10.3 forbids the GEM composite and §10.5 the band it would imply.
+   Scores live in a cycle's analysis and reports, with an n and threshold. #}
 <div class="stats-row">
-    <div class="card stat-card" style="--accent:var(--blue);">
-        <div class="stat-val">{{ stats.cycles }}</div>
-        <div class="stat-label">Cycles</div>
+    {% if not branch_scoped %}
+    <div class="card stat-card" style="--accent:var(--navy);">
+        <div class="stat-val">{{ stats.org_cycles }}</div>
+        <div class="stat-label">Org-wide cycles</div>
     </div>
+    <div class="card stat-card" style="--accent:var(--green);">
+        <div class="stat-val">{{ stats.org_ready }}</div>
+        <div class="stat-label">Org-wide reportable</div>
+    </div>
+    <div class="card stat-card" style="--accent:var(--navy);">
+        <div class="stat-val">{{ stats.branches }}</div>
+        <div class="stat-label">Total branches</div>
+    </div>
+    {% endif %}
+    {# Scoped by the route: an L3 admin sees only their branch's total. #}
     <div class="card stat-card" style="--accent:var(--navy);">
         <div class="stat-val">{{ stats.responses }}</div>
         <div class="stat-label">Responses</div>
     </div>
-    <div class="card stat-card" style="--accent:var(--navy);">
-        <div class="stat-val">{% if stats.rate is not none %}{{ stats.rate }}%{% else %}—{% endif %}</div>
-        <div class="stat-label">Response rate</div>
-    </div>
-    <div class="card stat-card" style="--accent:var(--amber);">
-        <div class="stat-val">{{ stats.open_deployments }}</div>
-        <div class="stat-label">Open deployments</div>
+    <div class="card stat-card" style="--accent:var(--blue);">
+        <div class="stat-val">{{ stats.live_branch }}</div>
+        <div class="stat-label">Live branch surveys</div>
     </div>
     <div class="card stat-card" style="--accent:var(--green);">
-        <div class="stat-val">{{ stats.ready }}</div>
-        <div class="stat-label">Reportable</div>
+        <div class="stat-val">{{ stats.branch_ready }}</div>
+        <div class="stat-label">Branch reportable</div>
     </div>
 </div>
 
-<div class="section-label">Measurement cycles</div>
+{% if not branch_scoped %}
+<div class="section-head" style="display:flex;align-items:baseline;gap:.75rem;margin:1.5rem 0 .75rem;">
+    <h2 style="margin:0;">Org-wide Surveys</h2>
+    <span class="cell-quiet">Cycles you deployed across the whole organisation</span>
+</div>
 
-{% if rows %}
+{% if org_rows %}
 <div class="panel">
-
-    {# The ONE shared filter component (static/js/filters.js). Display-only:
-       it runs over rows the route already scoped and can never reveal one it
-       did not send. #}
-    <div class="filter-bar filter-bar-flush" data-filter-for="cycle-table"
+    <div class="filter-bar filter-bar-flush" data-filter-for="org-cycle-table"
          data-noun="cycle" data-noun-plural="cycles">
         <div class="filter-field">
-            <label for="f-status">Status</label>
-            <select id="f-status" data-key="status">
+            <label for="fo-status">Status</label>
+            <select id="fo-status" data-key="status">
                 <option value="">All statuses</option>
                 <option value="draft">Draft</option>
-                <option value="open">Open</option>
+                <option value="open">Live</option>
                 <option value="closed">Closed</option>
             </select>
         </div>
-        <div class="filter-field">
-            <label for="f-scope">Scope</label>
-            <select id="f-scope" data-key="scope">
-                <option value="">All scopes</option>
-                <option value="org">Organisation-wide</option>
-                <option value="branch">Branch</option>
-            </select>
-        </div>
-        <div class="filter-field">
-            <label for="f-state">Reporting</label>
-            <select id="f-state" data-key="state">
-                <option value="">Any state</option>
-                <option value="ready">Reportable</option>
-                <option value="below_threshold">Below threshold</option>
-                <option value="not_deployed">Not deployed</option>
-            </select>
-        </div>
         <div class="filter-field filter-grow">
-            <label for="f-search">Search</label>
-            <input id="f-search" type="search" data-key="name" data-match="search"
-                   placeholder="Cycle name or reference…">
+            <label for="fo-search">Search</label>
+            <input id="fo-search" type="search" data-key="name" data-match="search"
+                   placeholder="Cycle name…">
         </div>
         <button type="button" class="filter-clear btn btn-sm btn-secondary">Clear</button>
     </div>
 
     <div class="table-scroll">
-    <table class="table" id="cycle-table">
+    <table class="table" id="org-cycle-table">
         <thead>
             <tr>
                 <th class="sortable" data-sort="name">Cycle</th>
-                <th>Scope</th>
-                <th class="num sortable" data-sort="deployments" data-type="number">Deployments</th>
+                <th class="num sortable" data-sort="deployments" data-type="number">Surveys</th>
+                <th class="num sortable" data-sort="live" data-type="number">Live</th>
                 <th class="num sortable" data-sort="responses" data-type="number">Responses</th>
-                <th class="num">Threshold</th>
-                <th>Status</th>
                 <th>Reporting</th>
+                <th class="sortable" data-sort="deployed">Last deployed</th>
+                <th>Status</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
-        {% for row in rows %}
+        {% for row in org_rows %}
             {% set c = row.cycle %}
             <tr data-name="{{ c.cycle_name }} {{ c.id }}"
                 data-status="{{ c.status }}"
-                data-scope="{{ 'branch' if c.branch_id else 'org' }}"
-                data-state="{{ row.state.key }}"
                 data-deployments="{{ row.deployments|length }}"
-                data-responses="{{ row.responses }}">
+                data-live="{{ row.open }}"
+                data-responses="{{ row.responses }}"
+                data-deployed="{{ row.last_deployed.isoformat() if row.last_deployed else '' }}">
                 <td>
                     <a class="org-name"
                        href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">{{ c.cycle_name }}</a>
                     <span class="org-industry"><code>{{ c.id }}</code></span>
                 </td>
-                <td>
-                    {% if c.branch_id %}
-                        <span class="cycle-owner cycle-owner-branch">
-                            {{ c.branch.name if c.branch else 'Branch' }}</span>
-                    {% else %}
-                        <span class="cycle-owner cycle-owner-org">Organisation-wide</span>
-                    {% endif %}
-                </td>
-                <td class="num">
-                    <span class="metric">{{ row.deployments|length }}</span>
-                    <span class="cell-quiet" style="display:block;">
-                        {% if row.open %}{{ row.open }} still open
-                        {% elif row.deployments %}all closed
-                        {% else %}none yet{% endif %}
-                    </span>
-                </td>
-                {#  Denominator is the INVITED count, and the rate is printed
-                    beneath it. A response count without the number invited is
-                    the figure people quote; it is also the one that cannot be
-                    interpreted.  #}
-                <td class="num">
-                    <span class="metric">{{ row.responses }}{% if row.expected %} / {{ row.expected }}{% endif %}</span>
-                    <span class="cell-quiet" style="display:block;">
-                        {% if row.rate is not none %}{{ row.rate }}% response rate
-                        {% else %}not yet invited{% endif %}
-                    </span>
-                </td>
-                <td class="num cell-quiet">n &ge; {{ c.min_reporting_n }}</td>
-                <td>
-                    {% if c.status == 'open' %}
-                    <span class="status-pill" style="background:#e7f3e2;color:var(--green);">
-                        <span class="status-dot" style="background:var(--green);"></span>Open
-                    </span>
-                    {% elif c.status == 'draft' %}
-                    <span class="status-pill status-amber">Draft</span>
-                    {% else %}
-                    <span class="status-pill" style="background:var(--border-light);color:var(--text-muted);">
-                        {{ c.status|title }}
-                    </span>
-                    {% endif %}
-                </td>
-                {#  THE STATE, AND WHAT IT IS WAITING FOR. Three states, never
-                    collapsed into "unavailable" — they are three different
-                    jobs, and "below threshold" is not a job at all. The
-                    sentence comes from the same _report_state() the Reports
-                    screen uses, so the two cannot disagree.  #}
-                <td>
-                    {% if row.state.key == 'ready' %}
-                    <span class="status-pill status-{{ 'amber' if row.state.provisional else 'green' }}">
-                        {{ 'provisional' if row.state.provisional else 'reportable' }}
-                    </span>
-                    {% elif row.state.key == 'below_threshold' %}
-                    <span class="status-pill status-suppressed">below threshold</span>
-                    {% else %}
-                    <span class="status-pill status-amber">not deployed</span>
-                    {% endif %}
-                </td>
+                <td class="num cell-quiet">{{ row.deployments|length }}
+                    survey{{ '' if row.deployments|length == 1 else 's' }}</td>
+                <td class="num"><span class="metric">{{ row.open }}</span></td>
+                <td class="num">{{ responses_cell(row) }}</td>
+                <td>{{ reporting_pill(row) }}</td>
+                <td class="cell-quiet">{{ row.last_deployed.strftime('%d %b %Y') if row.last_deployed else '—' }}</td>
+                <td>{{ status_pill(c) }}</td>
                 <td>
                     <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}"
                        class="btn btn-sm btn-secondary">View</a>
                 </td>
             </tr>
         {% endfor %}
-            <tr class="filter-empty" data-empty-for="cycle-table" style="display:none;">
+            <tr class="filter-empty" data-empty-for="org-cycle-table" style="display:none;">
                 <td colspan="8" class="table-empty">No cycle matches these filters.</td>
             </tr>
         </tbody>
     </table>
     </div>
-
-    <p class="filter-count filter-count-inset" data-count-for="cycle-table"></p>
+    <p class="filter-count filter-count-inset" data-count-for="org-cycle-table"></p>
 </div>
 {% else %}
 <div class="empty-state">
     <div class="empty-icon">—</div>
-    <h2>No measurement cycles yet</h2>
+    <h2>No org-wide cycles yet</h2>
     <p>A cycle is one measurement round. Create one, deploy its anonymous link,
        then read the results once enough people have answered.</p>
-    <a href="{{ url_for('org.cycles_list') }}" class="btn btn-primary">Cycles</a>
+    <a href="{{ url_for('org.cycles_list') }}" class="btn btn-primary">Measurement Cycles</a>
+</div>
+{% endif %}
+{% endif %}
+
+<div class="section-head" style="display:flex;align-items:baseline;gap:.75rem;margin:1.5rem 0 .75rem;">
+    <h2 style="margin:0;">Branch Activity</h2>
+    <span class="cell-quiet">Each branch's own current cycle and result{% if not branch_scoped %} — view only{% endif %}</span>
+</div>
+
+{% if branch_rows %}
+<div class="panel">
+    <div class="filter-bar filter-bar-flush" data-filter-for="branch-table"
+         data-noun="branch" data-noun-plural="branches">
+        <div class="filter-field">
+            <label for="fb-status">Status</label>
+            <select id="fb-status" data-key="status">
+                <option value="">All statuses</option>
+                <option value="draft">Draft</option>
+                <option value="open">Live</option>
+                <option value="closed">Closed</option>
+                <option value="none">No cycle</option>
+            </select>
+        </div>
+        <div class="filter-field filter-grow">
+            <label for="fb-search">Search</label>
+            <input id="fb-search" type="search" data-key="name" data-match="search"
+                   placeholder="Branch name…">
+        </div>
+        <button type="button" class="filter-clear btn btn-sm btn-secondary">Clear</button>
+    </div>
+
+    <div class="table-scroll">
+    <table class="table" id="branch-table">
+        <thead>
+            <tr>
+                <th class="sortable" data-sort="name">Branch</th>
+                <th>Current cycle</th>
+                <th class="num sortable" data-sort="live" data-type="number">Live</th>
+                <th class="num sortable" data-sort="responses" data-type="number">Responses</th>
+                <th>Reporting</th>
+                <th class="sortable" data-sort="deployed">Last deployed</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for br in branch_rows %}
+            {% set row = br.row %}
+            <tr data-name="{{ br.branch.name }}{% if row %} {{ row.cycle.cycle_name }}{% endif %}"
+                data-status="{{ row.cycle.status if row else 'none' }}"
+                data-live="{{ row.open if row else 0 }}"
+                data-responses="{{ row.responses if row else 0 }}"
+                data-deployed="{{ row.last_deployed.isoformat() if row and row.last_deployed else '' }}">
+                <td>
+                    <span class="org-name">{{ br.branch.name }}</span>
+                    <span class="org-industry">{{ br.cycles }} cycle{{ '' if br.cycles == 1 else 's' }}</span>
+                </td>
+                {% if row %}
+                {% set c = row.cycle %}
+                <td>
+                    <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">{{ c.cycle_name }}</a>
+                    <span class="org-industry"><code>{{ c.id }}</code></span>
+                </td>
+                <td class="num"><span class="metric">{{ row.open }}</span></td>
+                <td class="num">{{ responses_cell(row) }}</td>
+                <td>{{ reporting_pill(row) }}</td>
+                <td class="cell-quiet">{{ row.last_deployed.strftime('%d %b %Y') if row.last_deployed else '—' }}</td>
+                <td>{{ status_pill(c) }}</td>
+                <td>
+                    <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}"
+                       class="btn btn-sm btn-secondary">View</a>
+                </td>
+                {% else %}
+                <td class="cell-quiet">No cycle yet</td>
+                <td class="num cell-quiet">—</td>
+                <td class="num cell-quiet">—</td>
+                <td class="cell-quiet">—</td>
+                <td class="cell-quiet">—</td>
+                <td class="cell-quiet">—</td>
+                <td></td>
+                {% endif %}
+            </tr>
+        {% endfor %}
+            <tr class="filter-empty" data-empty-for="branch-table" style="display:none;">
+                <td colspan="8" class="table-empty">No branch matches these filters.</td>
+            </tr>
+        </tbody>
+    </table>
+    </div>
+    <p class="filter-count filter-count-inset" data-count-for="branch-table"></p>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">—</div>
+    <h2>No branches yet</h2>
+    {% if not branch_scoped %}
+    <a href="{{ url_for('org.branches_list') }}" class="btn btn-primary">Manage Branches</a>
+    {% endif %}
 </div>
 {% endif %}
 {% endblock %}
