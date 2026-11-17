@@ -1,69 +1,59 @@
 {% extends "base.html" %}
 {% block title %}{{ cycle.cycle_name }} - leadTo{% endblock %}
-{% block container_class %}container-wide{% endblock %}
-{% block content %}
+{% block container_class %}container-wide board-page{% endblock %}
 
 {#
   THE ONE PAGE FOR A CYCLE.
 
-  Reading order follows what an admin actually does, which is not the order
-  the data happens to sit in:
+  Same chrome as the dashboard (board-page stat cards and panels). Reading
+  order follows what an admin actually does:
 
-    1. header   — what this is, and the actions on it
-    2. stats    — how far it has got
-    3. live     — the survey link, FIRST, because on an open cycle it is the
-                  only thing anyone comes here to copy
-    4. told     — what respondents read, with its own Edit
-    5. method   — scope and method, which is reference material
+    1. header   — what this is, its state, and the actions on it
+    2. cards    — how far it has got
+    3. left     — the deployment (the survey link, FIRST: on an open cycle it
+                  is the only thing anyone comes here to copy), then what
+                  respondents are told
+    4. right    — scope and method, which is reference material
 
-  Before the merge, the link lived on a second page and this one opened with
-  the purpose statement — so the most-used thing on the product was two clicks
-  and a page load away from the place people looked for it.
+  The reporting threshold has no card of its own: it is the same platform
+  floor on every cycle, so a headline tile for it said nothing. It is still
+  documented under Scope and method.
 #}
 
+{% block content %}
+{% set invited = rows | sum(attribute='deployment.expected_respondents') %}
+{% set rate = ((responses / invited * 100) | round | int) if invited else none %}
+{% set dates = rows | map(attribute='deployment.deployed_at') | select | list %}
+{% set first_deployed = dates | min if dates else none %}
+{% set show_deploy = can(current_user, 'manage_cycles') and cycle.status in ('draft', 'open') and can_deploy %}
 <div class="page-header">
   <div class="page-header-left">
-    <div class="section-label">{{ role_label(current_user.role) }} / Cycle</div>
-    <h1>{{ cycle.cycle_name }}</h1>
-    <div class="meta-row">
-      <code>{{ cycle.id }}</code>
-      <span class="meta-sep">&bull;</span>
-      <span class="status-pill status-{{ 'green' if cycle.status == 'open'
-           else 'amber' if cycle.status == 'draft' else 'red' }}">{{ cycle.status }}</span>
-      {% if cycle.is_pilot %}
-      <span class="badge badge-outline">pilot</span>
+    <a href="{{ url_for('org.cycles_list') }}" class="back-link">← Measurement Cycles</a>
+    <h1 style="margin-top:.5rem">{{ cycle.cycle_name }}</h1>
+    <div class="cd-meta">
+      <code class="cd-id">{{ cycle.id }}</code>
+      {% if cycle.status == 'open' %}
+      <span class="status-pill cd-pill-live"><span class="status-dot"></span>Live</span>
+      {% elif cycle.status == 'draft' %}
+      <span class="status-pill status-amber">Draft</span>
+      {% else %}
+      <span class="status-pill cd-pill-closed">{{ cycle.status|title }}</span>
       {% endif %}
+      {% if cycle.is_pilot %}<span class="badge badge-outline">pilot</span>{% endif %}
       {% if cycle.branch %}
-      <span class="meta-sep">&bull;</span>
-      <span class="badge pill-branch">{{ cycle.branch.name }}</span>
+      <span class="cd-branch"><span class="status-dot"></span>{{ cycle.branch.name }}</span>
+      {% else %}
+      <span class="cd-quiet">Organisation-wide</span>
       {% endif %}
       {% if cycle.previous_cycle_id %}
-      <span class="meta-sep">&bull;</span>
-      <span>follows <code>{{ cycle.previous_cycle_id }}</code></span>
+      <span class="cd-quiet">follows <code class="cd-id">{{ cycle.previous_cycle_id }}</code></span>
       {% endif %}
     </div>
   </div>
   <div class="page-actions">
-    {% if can(current_user, 'manage_actions') %}
-      <a href="{{ url_for('org.actions_list', cycle_id=cycle.id) }}"
-         class="btn btn-secondary">Follow-up actions</a>
-    {% endif %}
-    {% if can(current_user, 'view_reports') %}
-      <a href="{{ url_for('org.report_preview', cycle_id=cycle.id,
-                          report_type='executive') }}"
-         class="btn btn-secondary">Reports</a>
-    {% endif %}
     {% if can(current_user, 'manage_cycles') %}
       <a href="{{ url_for('org.cycle_edit', cycle_id=cycle.id) }}"
          class="btn btn-secondary">Edit</a>
-      {# No separate "Open" step: deploying a draft opens it (see deploy()).
-         `can_deploy` comes from the route and follows uq_open_deployment:
-         an archived or closed deployment frees the slot, so the button comes
-         back. #}
-      {% if cycle.status in ('draft', 'open') and can_deploy %}
-      <a href="{{ url_for('org.deploy', cycle_id=cycle.id) }}"
-         class="btn btn-primary">Deploy</a>
-      {% endif %}
       {% if cycle.status == 'open' %}
       <form method="post" action="{{ url_for('org.cycle_status', cycle_id=cycle.id) }}"
             style="display:inline">
@@ -73,193 +63,263 @@
       </form>
       {% endif %}
     {% endif %}
-  </div>
-</div>
-
-{% set invited = rows | sum(attribute='deployment.expected_respondents') %}
-<div class="stats-row">
-  <div class="stat-card">
-    <div class="stat-val">{{ responses }}{% if invited %}<span
-      class="stat-of">/ {{ invited }}</span>{% endif %}</div>
-    <div class="stat-label">Responses</div></div>
-  <div class="stat-card">
-    <div class="stat-val">{{ (responses / invited * 100) | round | int
-                             if invited else 0 }}%</div>
-    <div class="stat-label">Response rate</div></div>
-  <div class="stat-card"><div class="stat-val">n &ge; {{ cycle.min_reporting_n }}</div>
-    <div class="stat-label">Reporting threshold</div></div>
-  <div class="stat-card"><div class="stat-val">{{ cycle.retention_months }}</div>
-    <div class="stat-label">Retention (months)</div></div>
-</div>
-
-{# ── The link, first ──────────────────────────────────────────────────── #}
-<div class="panel">
-  <div class="panel-head">
-    <div class="panel-title">Deployment</div>
-    {% if rows %}
-    <span class="panel-note">
-      {{ rows | length }} deployment{{ '' if rows | length == 1 else 's' }}
-    </span>
+    {% if can(current_user, 'manage_actions') %}
+      <a href="{{ url_for('org.actions_list', cycle_id=cycle.id) }}"
+         class="btn btn-secondary">Follow-up actions</a>
     {% endif %}
-  </div>
-  <div class="panel-body">
-  {% if rows %}
-    {% for row in rows %}
-    {% set w = row.deployment %}
-    <div class="deployment-block{% if not loop.last %} deployment-block-sep{% endif %}">
-
-      <div class="deployment-head">
-        <div class="meta-row" style="margin-top:0">
-          <strong>{% if w.branch_id %}Branch{% else %}Organisation-wide{% endif %}</strong>
-          <span class="meta-sep">&bull;</span>
-          <span class="status-pill status-{{ 'red' if w.closed else 'green' }}">
-            {{ 'closed' if w.closed else 'open' }}</span>
-          <span class="meta-sep">&bull;</span>
-          <span>{{ w.responses_received }} of {{ w.expected_respondents }}
-            invited &middot;
-            {{ w.response_rate_pct | round | int if w.response_rate_pct else 0 }}%</span>
-          {% if w.deployed_at %}
-          <span class="meta-sep">&bull;</span>
-          <span>deployed {{ w.deployed_at.strftime('%d %b %Y') }}</span>
-          {% endif %}
-        </div>
-        {% if not w.closed and can(current_user, 'edit_deployment') %}
-        <form method="post"
-              action="{{ url_for('org.deployment_close', deployment_id=w.id) }}"
-              style="display:inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-sm btn-secondary">Close</button>
-        </form>
-        {% endif %}
-      </div>
-
-      {% if not w.closed %}
-      <div class="link-row">
-        <label class="link-row-label" for="link-{{ w.id }}">Survey link</label>
-        {# `.link-copy` wraps input + button; copy.js reads the input inside
-           the same wrapper, so N deployments cannot collide. #}
-        <div class="link-copy">
-          <input type="text" readonly onclick="this.select()"
-                 id="link-{{ w.id }}" value="{{ row.link }}">
-          <button type="button" data-copy data-copy-label="Copy">Copy</button>
-        </div>
-        <p class="link-row-note">
-          The only way in. It is not recoverable from anywhere else, and anyone
-          holding it can respond - so share it with the invited population and
-          not more widely.
-        </p>
-      </div>
-      {% else %}
-      <p class="link-none">This deployment is closed. Its link no longer
-        accepts responses.</p>
-      {% endif %}
-
-      {% if w.delivery_mode == 'ticketed' and not w.closed %}
-      {# Only reachable for a deployment created before the delivery choice
-         was removed. New deployments are always open links. #}
-      <div class="link-row">
-        <label class="link-row-label" for="count-{{ w.id }}">Access codes
-          <span class="badge badge-outline">{{ row.unused }} unused of
-            {{ row.tickets }}</span></label>
-        <form method="post" class="inline-form"
-              action="{{ url_for('org.issue_tickets', deployment_id=w.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="number" id="count-{{ w.id }}" name="count" min="1" max="2000"
-                 value="{{ w.expected_respondents }}">
-          <button type="submit" class="btn btn-sm btn-primary">Issue codes</button>
-        </form>
-        <p class="link-row-note">
-          Codes are shown <strong>once</strong>, when you issue them. The system
-          keeps only a one-way fingerprint, so they cannot be listed again - and
-          it never records who received which.
-        </p>
-      </div>
-      {% endif %}
-
-    </div>
-    {% endfor %}
-  {% else %}
-    <div class="empty-state">
-      <p class="empty-state-title">Not deployed yet.</p>
-      <p class="empty-state-note">
-        Deploy this cycle to mint its anonymous survey link.
-        {% if cycle.status == 'draft' %}Deploying also opens the cycle.{% endif %}
-      </p>
-      {% if cycle.status in ('draft', 'open') and can_deploy
-            and can(current_user, 'deploy_surveys') %}
+    {# One blue button: Deploy while there is something to deploy, otherwise
+       Reports. No separate "Open" step — deploying a draft opens it (see
+       deploy()); `can_deploy` follows uq_open_deployment. #}
+    {% if can(current_user, 'view_reports') %}
+      <a href="{{ url_for('org.report_preview', cycle_id=cycle.id,
+                          report_type='executive') }}"
+         class="btn {{ 'btn-secondary' if show_deploy else 'btn-primary' }}">Reports</a>
+    {% endif %}
+    {% if show_deploy %}
       <a href="{{ url_for('org.deploy', cycle_id=cycle.id) }}"
          class="btn btn-primary">Deploy</a>
-      {% endif %}
-    </div>
-  {% endif %}
-  </div>
-</div>
-
-{# ── What respondents read ────────────────────────────────────────────── #}
-<div class="panel">
-  <div class="panel-head">
-    <div class="panel-title">What respondents are told</div>
-    {% if can(current_user, 'manage_cycles') %}
-    <a href="{{ url_for('org.cycle_edit', cycle_id=cycle.id) }}#purpose_statement"
-       class="btn btn-sm btn-secondary">Edit</a>
     {% endif %}
   </div>
-  <div class="panel-body">
-    <blockquote class="purpose-quote">{{ cycle.purpose_statement }}</blockquote>
-    <p class="panel-note" style="margin-top:.75rem">
-      Rendered on the survey landing page, before the first question. Editing it
-      changes this cycle only, not the organisation default.
-    </p>
+</div>
+
+<div class="stats-row">
+  <div class="card stat-card" style="--accent:var(--navy);">
+    <div class="stat-val">{{ responses }}{% if invited %}<span class="stat-of"> / {{ invited }}</span>{% endif %}</div>
+    <div class="stat-label">Responses</div>
+  </div>
+  <div class="card stat-card" style="--accent:var(--green);">
+    <div class="stat-val">{% if rate is not none %}{{ rate }}%{% else %}—{% endif %}</div>
+    <div class="stat-label">Response rate</div>
+  </div>
+  <div class="card stat-card" style="--accent:var(--blue);">
+    <div class="stat-val cd-stat-date">{{ first_deployed.strftime('%d %b %Y') if first_deployed else '—' }}</div>
+    <div class="stat-label">Deployed</div>
+  </div>
+  <div class="card stat-card" style="--accent:var(--amber);">
+    <div class="stat-val">{{ cycle.retention_months }}<span class="stat-of"> months</span></div>
+    <div class="stat-label">Retention after close</div>
   </div>
 </div>
 
-{# ── Reference material, last ─────────────────────────────────────────── #}
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">Scope and method</div></div>
-  <div class="panel-body">
-    <dl class="kv-grid">
-      <dt>Domains measured</dt>
-      <dd>
-        {% for d in cycle.assessed_domains or [] %}
-        <span class="badge badge-outline">{{ domain_label(d) }}</span>
-        {% endfor %}
-      </dd>
+<div class="cd-grid">
+  <div class="cd-col">
 
-      <dt>Domain scoring method</dt>
-      <dd>
-        {% if cycle.scoring_method == 'mean_of_subdomains' %}
-          Mean of the three subdomain scores
-        {% else %}Mean of all valid domain items{% endif %}
-        <span class="kv-note">Frozen for this cycle, and printed in every
-          report generated from it.</span>
-      </dd>
-
-      <dt>Minimum reporting threshold</dt>
-      <dd>
-        n &ge; {{ cycle.min_reporting_n }}
-        <span class="kv-note">
-        {% if cycle.min_reporting_n < 2 %}
-          At this threshold a result can rest on a single respondent.
-        {% else %}
-          Any group below this is suppressed, and its next-smallest sibling
-          with it, so the suppressed figure cannot be recovered by subtraction.
+    {# ── The link, first ─────────────────────────────────────────────── #}
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Deployment</div>
+        {% if rows | length > 1 %}
+        <span class="panel-note">{{ rows | length }} deployments</span>
         {% endif %}
-        </span>
-      </dd>
+      </div>
+      <div class="panel-body">
+      {% if rows %}
+        {% for row in rows %}
+        {% set w = row.deployment %}
+        <div class="deployment-block{% if not loop.last %} deployment-block-sep{% endif %}">
+          <div class="cd-dep-head">
+            <div class="cd-dep-facts">
+              <span class="cd-dep-scope">{% if w.branch_id %}{{ cycle.branch.name if cycle.branch else 'Branch' }}{% else %}Organisation-wide{% endif %}</span>
+              {% if w.closed %}
+              <span class="status-pill cd-pill-closed">Closed</span>
+              {% else %}
+              <span class="status-pill cd-pill-live"><span class="status-dot"></span>Live</span>
+              {% endif %}
+              <span class="cd-quiet">{{ w.responses_received }} of {{ w.expected_respondents }} invited
+                · {{ w.response_rate_pct | round | int if w.response_rate_pct else 0 }}%</span>
+              {% if w.deployed_at %}
+              <span class="cd-quiet">deployed {{ w.deployed_at.strftime('%d %b %Y') }}</span>
+              {% endif %}
+            </div>
+            {% if not w.closed and can(current_user, 'edit_deployment') %}
+            <form method="post"
+                  action="{{ url_for('org.deployment_close', deployment_id=w.id) }}"
+                  style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-secondary">Close deployment</button>
+            </form>
+            {% endif %}
+          </div>
 
-      <dt>Retention</dt>
-      <dd>
-        {{ cycle.retention_months }} months after the cycle closes
-        <span class="kv-note">The clock starts at close, not at open. Nothing
-          is deleted automatically.</span>
-      </dd>
+          {% if not w.closed %}
+          <div class="link-row">
+            <label class="link-row-label" for="link-{{ w.id }}">Survey link</label>
+            {# `.link-copy` wraps input + button; copy.js reads the input inside
+               the same wrapper, so N deployments cannot collide. #}
+            <div class="link-copy">
+              <input type="text" readonly onclick="this.select()"
+                     id="link-{{ w.id }}" value="{{ row.link }}">
+              <button type="button" data-copy data-copy-label="Copy">Copy</button>
+            </div>
+            <p class="link-row-note">
+              The only way in. It is not recoverable from anywhere else, and anyone
+              holding it can respond - so share it with the invited population and
+              not more widely.
+            </p>
+          </div>
+          {% else %}
+          <p class="link-none">This deployment is closed. Its link no longer
+            accepts responses.</p>
+          {% endif %}
 
-      <dt>Previous cycle</dt>
-      <dd>
-        {% if cycle.previous_cycle_id %}<code>{{ cycle.previous_cycle_id }}</code>
-        {% else %}<span class="muted">none - this is a baseline</span>{% endif %}
-      </dd>
-    </dl>
+          {% if w.delivery_mode == 'ticketed' and not w.closed %}
+          {# Only reachable for a deployment created before the delivery choice
+             was removed. New deployments are always open links. #}
+          <div class="link-row">
+            <label class="link-row-label" for="count-{{ w.id }}">Access codes
+              <span class="badge badge-outline">{{ row.unused }} unused of
+                {{ row.tickets }}</span></label>
+            <form method="post" class="inline-form"
+                  action="{{ url_for('org.issue_tickets', deployment_id=w.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="number" id="count-{{ w.id }}" name="count" min="1" max="2000"
+                     value="{{ w.expected_respondents }}">
+              <button type="submit" class="btn btn-sm btn-primary">Issue codes</button>
+            </form>
+            <p class="link-row-note">
+              Codes are shown <strong>once</strong>, when you issue them. The system
+              keeps only a one-way fingerprint, so they cannot be listed again - and
+              it never records who received which.
+            </p>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="cd-empty">
+          <p class="cd-empty-title">Not deployed yet.</p>
+          <p class="cd-quiet">
+            Deploy this cycle to mint its anonymous survey link.
+            {% if cycle.status == 'draft' %}Deploying also opens the cycle.{% endif %}
+          </p>
+          {% if cycle.status in ('draft', 'open') and can_deploy
+                and can(current_user, 'deploy_surveys') %}
+          <a href="{{ url_for('org.deploy', cycle_id=cycle.id) }}"
+             class="btn btn-primary">Deploy</a>
+          {% endif %}
+        </div>
+      {% endif %}
+      </div>
+    </div>
+
+    {# ── What respondents read ───────────────────────────────────────── #}
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">What respondents are told</div>
+        {% if can(current_user, 'manage_cycles') %}
+        <a href="{{ url_for('org.cycle_edit', cycle_id=cycle.id) }}#purpose_statement"
+           class="btn btn-sm btn-secondary">Edit</a>
+        {% endif %}
+      </div>
+      <div class="panel-body">
+        <blockquote class="purpose-quote">{{ cycle.purpose_statement }}</blockquote>
+        <p class="cd-note">
+          Shown on the survey landing page, before the first question. Editing it
+          changes this cycle only, not the organisation default.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {# ── Reference material ──────────────────────────────────────────────── #}
+  <div class="cd-col">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Scope and method</div></div>
+      <div class="panel-body">
+        <div class="cd-fact">
+          <div class="cd-fact-label">Domains measured</div>
+          <div class="cd-chips">
+            {% for d in cycle.assessed_domains or [] %}
+            <span class="cd-chip"><span class="status-dot"></span>{{ domain_label(d) }}</span>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="cd-fact">
+          <div class="cd-fact-label">Domain scoring method</div>
+          <div class="cd-fact-val">
+            {% if cycle.scoring_method == 'mean_of_subdomains' %}
+              Mean of the three subdomain scores
+            {% else %}Mean of all valid domain items{% endif %}
+          </div>
+          <p class="cd-note">Frozen for this cycle, and printed in every report generated from it.</p>
+        </div>
+
+        <div class="cd-fact">
+          <div class="cd-fact-label">Minimum reporting threshold</div>
+          <div class="cd-fact-val">n &ge; {{ cycle.min_reporting_n }}</div>
+          <p class="cd-note">
+          {% if cycle.min_reporting_n < 2 %}
+            At this threshold a result can rest on a single respondent.
+          {% else %}
+            Any group below this is suppressed, and its next-smallest sibling
+            with it, so the suppressed figure cannot be recovered by subtraction.
+          {% endif %}
+          </p>
+        </div>
+
+        <div class="cd-fact">
+          <div class="cd-fact-label">Retention</div>
+          <div class="cd-fact-val">{{ cycle.retention_months }} months after the cycle closes</div>
+          <p class="cd-note">The clock starts at close, not at open. Nothing is deleted automatically.</p>
+        </div>
+
+        <div class="cd-fact">
+          <div class="cd-fact-label">Previous cycle</div>
+          <div class="cd-fact-val">
+            {% if cycle.previous_cycle_id %}<code class="cd-id">{{ cycle.previous_cycle_id }}</code>
+            {% else %}<span class="cd-quiet">None — this is a baseline</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
+{% endblock %}
+
+{% block head %}
+<style>
+.cd-meta { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; margin-top:.6rem; }
+.cd-id { font-size:.76rem; background:var(--border-light); padding:.12rem .45rem; border-radius:var(--radius-sm); }
+.cd-quiet { font-size:.82rem; color:var(--text-muted); }
+.cd-pill-live { background:var(--blue-faint); color:var(--blue); border:1px solid #cfe0f3; }
+.cd-pill-live .status-dot { background:var(--blue); }
+.cd-pill-closed { background:var(--border-light); color:var(--text-muted); }
+.cd-branch {
+  display:inline-flex; align-items:center; gap:.4rem; padding:.2rem .7rem; border-radius:999px;
+  font-size:.78rem; font-weight:600; background:#eef0ff; color:#4338ca; border:1px solid #d9dcff;
+}
+.cd-branch .status-dot { background:#4338ca; }
+.cd-stat-date { font-size:1.6rem !important; }
+
+.cd-grid { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); gap:1.5rem; align-items:start; }
+.cd-col { display:flex; flex-direction:column; gap:1.5rem; min-width:0; }
+.cd-col > .panel { margin:0; }
+@media (max-width: 980px) { .cd-grid { grid-template-columns:1fr; } }
+
+.cd-dep-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.cd-dep-facts { display:flex; align-items:center; flex-wrap:wrap; gap:.6rem; }
+.cd-dep-scope { font-weight:700; color:var(--text); }
+
+.cd-empty { text-align:center; padding:1.5rem 1rem; }
+.cd-empty-title { font-weight:700; margin:0 0 .35rem; }
+.cd-empty .btn { margin-top:1rem; }
+
+.cd-note { font-size:.76rem; color:var(--text-subtle); line-height:1.5; margin:.5rem 0 0; }
+
+.cd-fact { padding:.9rem 0; border-bottom:1px solid var(--border-light); }
+.cd-fact:first-child { padding-top:0; }
+.cd-fact:last-child { border-bottom:0; padding-bottom:0; }
+.cd-fact-label {
+  font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--text-subtle); margin-bottom:.45rem;
+}
+.cd-fact-val { font-size:.9rem; color:var(--text); }
+.cd-chips { display:flex; flex-wrap:wrap; gap:.45rem; }
+.cd-chip {
+  display:inline-flex; align-items:center; gap:.4rem; padding:.3rem .75rem; border-radius:999px;
+  font-size:.8rem; font-weight:600; background:var(--blue-faint); color:var(--blue); border:1px solid #cfe0f3;
+}
+.cd-chip .status-dot { background:var(--blue); }
+</style>
 {% endblock %}
