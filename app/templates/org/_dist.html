@@ -32,6 +32,47 @@
   </div>
 {%- endmacro %}
 
+{#
+  The Overall Satisfaction cards, one per subdomain, side by side — never
+  combined (§10.3). The split figures and the bar carry the response-category
+  colours; the mean marker stays one neutral colour (§10.5).
+  rows: [(pair, result), ...]   definition: optional callable(pair) -> text
+#}
+{% macro outcome_cards(rows, anchors, definition=none) -%}
+  {% set disagree, neutral, agree = anchors[0].colour, '#8A8378', anchors[4].colour %}
+  <div class="rp-cards">
+  {% for pair, result in rows %}
+    <div class="rp-card">
+      <div class="rp-card-title">{{ subdomain_label(pair[0], pair[1]) }}</div>
+      {% if result %}
+        {% set d = result.distribution %}
+        <div class="rp-card-score">
+          <span class="rp-score">{{ '%.2f'|format(result.mean) }}</span><span class="rp-of">/ 5</span>
+        </div>
+        {{ scale(result.mean) }}
+        <div class="rp-card-bar">{{ bar(result, anchors) }}</div>
+        <div class="rp-split">
+          <div><span class="rp-split-val" style="color:{{ agree }}">{{ '%.0f'|format(d.favourable_pct or 0) }}%</span>
+               <span class="rp-split-lbl"><i style="background:{{ agree }}"></i>agree</span></div>
+          <div><span class="rp-split-val" style="color:{{ neutral }}">{{ '%.0f'|format(d.neutral_pct or 0) }}%</span>
+               <span class="rp-split-lbl"><i style="background:{{ anchors[2].colour }}"></i>neutral</span></div>
+          <div><span class="rp-split-val" style="color:{{ disagree }}">{{ '%.0f'|format(d.unfavourable_pct or 0) }}%</span>
+               <span class="rp-split-lbl"><i style="background:{{ disagree }}"></i>disagree</span></div>
+        </div>
+        {% if definition %}<p class="rp-def">{{ definition(pair[0], pair[1]) }}</p>{% endif %}
+        <div class="rp-card-foot">
+          n = {{ result.n }}{% if d.na_pct %} · {{ '%.0f'|format(d.na_pct) }}% answered N/A{% endif %}
+          · spread σ {{ '%.2f'|format(result.dispersion.sd) }}
+        </div>
+      {% else %}
+        <span class="status-pill status-suppressed">{{ result.label }}</span>
+      {% endif %}
+    </div>
+  {% endfor %}
+  </div>
+  <div class="rp-cards-legend">{{ legend(anchors) }}</div>
+{%- endmacro %}
+
 {# Position of a mean on the 1–5 scale, in ONE neutral colour. #}
 {% macro scale(mean) -%}
   <div class="rp-scale" aria-hidden="true">

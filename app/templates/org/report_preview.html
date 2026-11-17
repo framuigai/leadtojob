@@ -14,7 +14,7 @@
       it, not above it.
 #}
 
-{% import "org/_dist.html" as dist %}
+{% import "org/_dist.html" as dist with context %}
 
 {% block content %}
 {% set scope_name = cycle.branch.name if cycle.branch else context.scope_label %}
@@ -128,65 +128,11 @@
   <div class="panel-body">
     <p class="rp-lede">
       How people feel about their job as a whole, in three parts. Each bar shows
-      how the answers were spread across the five-point scale; the score is the
+      how the answers were spread across the five-point scale, coloured by answer; the score is the
       average on that scale, from 1 to 5. The three are not added together.
     </p>
 
-    <div class="rp-cards">
-    {% for pair, result in context.outcome_rows %}
-      <div class="rp-card">
-        <div class="rp-card-title">{{ subdomain_label(pair[0], pair[1]) }}</div>
-        {% if result %}
-          {% set d = result.distribution %}
-          <div class="rp-card-score">
-            <span class="rp-score">{{ '%.2f'|format(result.mean) }}</span><span class="rp-of">/ 5</span>
-          </div>
-          {# Position on the 1–5 scale, drawn in ONE neutral colour. #}
-          <div class="rp-scale" aria-hidden="true">
-            <span class="rp-scale-dot" style="left:{{ (result.mean - 1) / 4 * 100 }}%"></span>
-          </div>
-          <div class="rp-scale-ends"><span>1</span><span>3</span><span>5</span></div>
-
-          <div class="rp-split">
-            <div><span class="rp-split-val">{{ '%.0f'|format(d.favourable_pct or 0) }}%</span>
-                 <span class="rp-split-lbl">agree</span></div>
-            <div><span class="rp-split-val">{{ '%.0f'|format(d.neutral_pct or 0) }}%</span>
-                 <span class="rp-split-lbl">neutral</span></div>
-            <div><span class="rp-split-val">{{ '%.0f'|format(d.unfavourable_pct or 0) }}%</span>
-                 <span class="rp-split-lbl">disagree</span></div>
-          </div>
-          <div class="rp-card-foot">
-            n = {{ result.n }}
-            {% if d.na_pct %} · {{ '%.0f'|format(d.na_pct) }}% answered N/A{% endif %}
-            · spread σ {{ '%.2f'|format(result.dispersion.sd) }}
-          </div>
-        {% else %}
-          <span class="status-pill status-suppressed">{{ result.label }}</span>
-        {% endif %}
-      </div>
-    {% endfor %}
-    </div>
-
-    <div class="rp-dist">
-      <div class="rp-dist-head">
-        <div class="rp-dist-title">How the answers were spread</div>
-        <div class="rp-legend">
-          {% for a in anchors %}
-          <span><i style="background:{{ a.colour }}"></i>{{ a.label }}</span>
-          {% endfor %}
-        </div>
-      </div>
-      {% for pair, result in context.outcome_rows %}
-      <div class="rp-dist-row">
-        <div class="rp-dist-label">{{ subdomain_label(pair[0], pair[1]) }}</div>
-        {% if result %}
-          {{ dist.bar(result, anchors, tall=true) }}
-        {% else %}
-          <div class="rp-bar rp-bar-tall rp-bar-empty">{{ result.label }}</div>
-        {% endif %}
-      </div>
-      {% endfor %}
-    </div>
+    {{ dist.outcome_cards(context.outcome_rows, anchors) }}
   </div>
 </div>
 
