@@ -1,26 +1,57 @@
 {% extends "base.html" %}
 {% block title %}{{ context.title }} - leadTo{% endblock %}
-{% block container_class %}container-wide{% endblock %}
+{% block container_class %}container-wide board-page{% endblock %}
+
+{#
+  REPORT PREVIEW — the on-screen report and the page the downloads live on.
+
+  What the visuals may and may not say (CLAUDE.md, rules 2 and 3):
+    • Colour encodes the RESPONSE CATEGORY (the 1–5 anchors), never a
+      judgement of the score. There is no red/amber/green on a mean.
+    • The three Overall Satisfaction subdomains are shown SIDE BY SIDE and
+      never combined: there is no GEM headline figure on this page.
+    • The distribution is the primary display (§10.5); the mean sits beside
+      it, not above it.
+#}
+
+{% macro dist_bar(result, tall=false) -%}
+  {% set d = result.distribution %}
+  {% set answered = d.answered %}
+  <div class="rp-bar{{ ' rp-bar-tall' if tall }}" role="img"
+       aria-label="{% for a in anchors %}{{ a.label }} {{ ((d.counts.get(a.score, 0) / answered * 100) if answered else 0)|round|int }}%{{ ', ' if not loop.last }}{% endfor %}">
+    {% for a in anchors %}
+      {% set c = d.counts.get(a.score, 0) %}
+      {% if c %}
+      {% set pct = c / answered * 100 %}
+      <span class="rp-seg" style="width:{{ pct }}%;background:{{ a.colour }};{% if a.score == 3 %}color:#2B2F38;text-shadow:none{% endif %}"
+            title="{{ a.label }}: {{ c }} ({{ pct|round|int }}%)">
+        {% if pct >= 9 %}{{ pct|round|int }}%{% endif %}
+      </span>
+      {% endif %}
+    {% endfor %}
+  </div>
+{%- endmacro %}
+
 {% block content %}
+{% set scope_name = cycle.branch.name if cycle.branch else context.scope_label %}
+
 <div class="page-header">
   <div class="page-header-left">
-    <div class="section-label">{{ role_label(current_user.role) }} / Report</div>
-    <h1>{{ context.title }}</h1>
-    <p class="muted">
-      {{ context.cycle.cycle_name }} &middot; {{ context.scope_label }}
-      &middot; n = {{ context.n }}
-      &middot; threshold n &ge; {{ context.min_reporting_n }}
+    <a href="{{ url_for('org.cycle_detail', cycle_id=cycle.id) }}" class="back-link">← {{ cycle.cycle_name }}</a>
+    <h1 style="margin-top:.5rem">{{ context.title }}</h1>
+    <p class="rp-sub">
+      <strong>{{ context.cycle.cycle_name }}</strong>
+      <span class="rp-sep">·</span>
+      <strong>{{ scope_name }}</strong>
+      <span class="rp-sep">·</span>
+      <span>{{ context.n }} respondent{{ '' if context.n == 1 else 's' }}</span>
     </p>
   </div>
-  <div class="page-actions">
-    <a class="btn btn-primary"
-       href="{{ url_for('org.report_download', cycle_id=context.cycle.id,
-                        report_type=report_type, fmt='pdf',
-                        branch=(branch.id if branch else None)) }}">Download PDF</a>
-    <a class="btn btn-secondary"
-       href="{{ url_for('org.report_download', cycle_id=context.cycle.id,
-                        report_type=report_type, fmt='xlsx',
-                        branch=(branch.id if branch else None)) }}">Download Excel</a>
+  <div class="page-actions rp-tabs">
+    {% for rt, label in [('executive', 'Executive'), ('hr_od', 'HR & OD'), ('management', 'Management')] %}
+    <a href="{{ url_for('org.report_preview', cycle_id=cycle.id, report_type=rt) }}"
+       class="btn {{ 'btn-primary' if rt == report_type else 'btn-secondary' }}">{{ label }}</a>
+    {% endfor %}
   </div>
 </div>
 
@@ -30,65 +61,148 @@
 </div>
 {% endif %}
 
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">Interpretation</div></div>
-  <div class="panel-body">
-    {% if context.narrative %}
-      {% for key, text in context.narrative.items() %}
-      <h3 style="font-size:1rem;margin-top:1rem">
-        {{ key.replace('_', ' ')|capitalize }}</h3>
-      <p>{{ text }}</p>
-      {% endfor %}
-      <p class="muted">Regenerating replaces this text. Every figure in the
-        report is computed independently and does not change.</p>
-    {% else %}
-      <p class="panel-note">
-        No interpretation has been written for this report yet. Every figure
-        stands on its own without one — the interpretation narrates them, it
-        does not produce them.
-      </p>
-    {% endif %}
-    {% if context.provisional %}
-    <p class="muted">An interpretation is written once and quoted long
-      afterwards, so it waits for the cycle to close. The figures above do
-      not.</p>
-    {% elif can_interpret and can(current_user, 'run_analysis') %}
-    <form method="post"
-          action="{{ url_for('org.report_interpret', cycle_id=context.cycle.id,
-                             report_type=report_type) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-secondary">
-        {{ 'Regenerate the interpretation' if context.narrative
-           else 'Write the interpretation' }}</button>
-    </form>
-    {% elif not can_interpret %}
-    <p class="muted">Interpretation is not configured on this installation.</p>
-    {% endif %}
+{# ── Generate Report ─────────────────────────────────────────────────────── #}
+<div class="panel rp-generate">
+  <div class="panel-head">
+    <div class="panel-title">Generate Report</div>
+    <span class="panel-note">Two steps — the second works without the first</span>
+  </div>
+  <div class="rp-steps">
+
+    <div class="rp-step">
+      <div class="rp-step-num {{ 'rp-step-done' if context.narrative }}">{{ '✓' if context.narrative else '1' }}</div>
+      <div class="rp-step-body">
+        <div class="rp-step-title">Interpretation</div>
+        {% if context.narrative %}
+          <p class="rp-step-text">Written. It is included in the Interpretation
+            section of both downloads.</p>
+        {% else %}
+          <p class="rp-step-text">Optional. A written reading of the figures below, added to
+            the Interpretation section of the PDF. Every figure stands on its own
+            without it — it narrates them, it does not produce them.</p>
+        {% endif %}
+
+        {% if context.provisional %}
+          <p class="rp-step-hint">Waits for the cycle to close — an interpretation is quoted
+            long afterwards. The figures do not wait.</p>
+        {% elif can_interpret and can(current_user, 'run_analysis') %}
+          <form method="post"
+                action="{{ url_for('org.report_interpret', cycle_id=context.cycle.id,
+                                   report_type=report_type) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm {{ 'btn-secondary' if context.narrative else 'btn-primary' }}">
+              {{ 'Regenerate interpretation' if context.narrative else 'Generate interpretation' }}</button>
+          </form>
+          {% if context.narrative %}
+          <p class="rp-step-hint">Regenerating replaces the text. The figures do not change.</p>
+          {% endif %}
+        {% elif not can_interpret %}
+          <p class="rp-step-hint">Interpretation is not configured on this installation.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="rp-step">
+      <div class="rp-step-num">2</div>
+      <div class="rp-step-body">
+        <div class="rp-step-title">Download</div>
+        <p class="rp-step-text">The PDF and the Excel file carry the same figures, wording and
+          caveats — both are built from one set of results.</p>
+        <div class="rp-dl">
+          <a class="btn btn-sm btn-primary"
+             href="{{ url_for('org.report_download', cycle_id=context.cycle.id,
+                              report_type=report_type, fmt='pdf',
+                              branch=(branch.id if branch else None)) }}">Download PDF</a>
+          <a class="btn btn-sm btn-secondary"
+             href="{{ url_for('org.report_download', cycle_id=context.cycle.id,
+                              report_type=report_type, fmt='xlsx',
+                              branch=(branch.id if branch else None)) }}">Download Excel</a>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
+{% if context.narrative %}
 <div class="panel">
-  <div class="panel-head"><div class="panel-title">Overall Satisfaction</div></div>
+  <div class="panel-head"><div class="panel-title">Interpretation</div></div>
+  <div class="panel-body rp-narrative">
+    {% for key, text in context.narrative.items() %}
+    <h3>{{ key.replace('_', ' ')|capitalize }}</h3>
+    <p>{{ text }}</p>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Overall Satisfaction ────────────────────────────────────────────────── #}
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-title">Overall Satisfaction</div>
+    <span class="panel-note">Three measures, reported separately</span>
+  </div>
   <div class="panel-body">
-    <table class="table">
-      <thead><tr><th>Subdomain</th><th class="num">Score</th><th class="num">n</th>
-        <th class="num">Agree</th><th class="num">Disagree</th></tr></thead>
-      <tbody>
-      {% for pair, result in context.outcome_rows %}
-        <tr><td>{{ subdomain_label(pair[0], pair[1]) }}</td>
+    <p class="rp-lede">
+      How people feel about their job as a whole, in three parts. Each bar shows
+      how the answers were spread across the five-point scale; the score is the
+      average on that scale, from 1 to 5. The three are not added together.
+    </p>
+
+    <div class="rp-cards">
+    {% for pair, result in context.outcome_rows %}
+      <div class="rp-card">
+        <div class="rp-card-title">{{ subdomain_label(pair[0], pair[1]) }}</div>
         {% if result %}
-          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
-          <td class="num">{{ result.n }}</td>
-          <td class="num">{{ '%.0f'|format(result.distribution.favourable_pct or 0) }}%</td>
-          <td class="num">{{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}%</td>
+          {% set d = result.distribution %}
+          <div class="rp-card-score">
+            <span class="rp-score">{{ '%.2f'|format(result.mean) }}</span><span class="rp-of">/ 5</span>
+          </div>
+          {# Position on the 1–5 scale, drawn in ONE neutral colour. #}
+          <div class="rp-scale" aria-hidden="true">
+            <span class="rp-scale-dot" style="left:{{ (result.mean - 1) / 4 * 100 }}%"></span>
+          </div>
+          <div class="rp-scale-ends"><span>1</span><span>3</span><span>5</span></div>
+
+          <div class="rp-split">
+            <div><span class="rp-split-val">{{ '%.0f'|format(d.favourable_pct or 0) }}%</span>
+                 <span class="rp-split-lbl">agree</span></div>
+            <div><span class="rp-split-val">{{ '%.0f'|format(d.neutral_pct or 0) }}%</span>
+                 <span class="rp-split-lbl">neutral</span></div>
+            <div><span class="rp-split-val">{{ '%.0f'|format(d.unfavourable_pct or 0) }}%</span>
+                 <span class="rp-split-lbl">disagree</span></div>
+          </div>
+          <div class="rp-card-foot">
+            n = {{ result.n }}
+            {% if d.na_pct %} · {{ '%.0f'|format(d.na_pct) }}% answered N/A{% endif %}
+            · spread σ {{ '%.2f'|format(result.dispersion.sd) }}
+          </div>
         {% else %}
-          <td colspan="4"><span class="status-pill status-suppressed">
-            {{ result.label }}</span></td>
+          <span class="status-pill status-suppressed">{{ result.label }}</span>
         {% endif %}
-        </tr>
+      </div>
+    {% endfor %}
+    </div>
+
+    <div class="rp-dist">
+      <div class="rp-dist-head">
+        <div class="rp-dist-title">How the answers were spread</div>
+        <div class="rp-legend">
+          {% for a in anchors %}
+          <span><i style="background:{{ a.colour }}"></i>{{ a.label }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% for pair, result in context.outcome_rows %}
+      <div class="rp-dist-row">
+        <div class="rp-dist-label">{{ subdomain_label(pair[0], pair[1]) }}</div>
+        {% if result %}
+          {{ dist_bar(result, tall=true) }}
+        {% else %}
+          <div class="rp-bar rp-bar-tall rp-bar-empty">{{ result.label }}</div>
+        {% endif %}
+      </div>
       {% endfor %}
-      </tbody>
-    </table>
+    </div>
   </div>
 </div>
 
@@ -98,7 +212,8 @@
     <div class="panel-title">Change since {{ context.trend.previous_cycle_id }}</div>
   </div>
   <div class="panel-body">
-    <table class="table">
+    <div class="table-scroll">
+    <table class="table table-dark-head">
       <thead><tr><th>Measure</th><th class="num">Previous</th>
         <th class="num">Now</th><th class="num">Change</th></tr></thead>
       <tbody>
@@ -108,25 +223,90 @@
           <td>{{ change.measure_label }}</td>
           <td class="num">{{ '%.2f'|format(change.previous.mean) }}</td>
           <td class="num">{{ '%.2f'|format(change.current.mean) }}</td>
-          <td class="num">{{ '%+.2f'|format(change.difference) }}</td>
+          <td class="num"><span class="rp-delta">{{ '%+.2f'|format(change.difference) }}</span></td>
         {% else %}
           <td>{{ change.measure_label if change.measure_label is defined else measure }}</td>
-          <td colspan="3" class="muted">{{ change.reason }}</td>
+          <td colspan="3" class="cell-quiet">{{ change.reason }}</td>
         {% endif %}
         </tr>
       {% endfor %}
       </tbody>
     </table>
+    </div>
     {% if context.trend.composition_note %}
-    <div class="flash flash-info">{{ context.trend.composition_note }}</div>
+    <div class="flash flash-info" style="margin-top:1rem">{{ context.trend.composition_note }}</div>
     {% endif %}
-    <p class="panel-note">{{ context.trend_caveat }}</p>
+    <p class="rp-note">{{ context.trend_caveat }}</p>
   </div>
 </div>
 {% endif %}
+{% endblock %}
 
-<p class="muted">
-  The PDF and the Excel file contain the same figures, the same wording and the
-  same caveats — both are built from one set of results.
-</p>
+{% block head %}
+<style>
+.rp-sub { margin:.45rem 0 0; font-size:.92rem; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:.45rem; align-items:baseline; }
+.rp-sub strong { color:var(--text); font-weight:700; }
+.rp-sep { color:var(--text-subtle); }
+.rp-tabs .btn { min-width:0; }
+
+/* Generate Report */
+.rp-steps { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); }
+.rp-step { display:flex; gap:1rem; padding:1.35rem 1.5rem; }
+.rp-step + .rp-step { border-left:1px solid var(--border-light); }
+@media (max-width: 700px) { .rp-step + .rp-step { border-left:0; border-top:1px solid var(--border-light); } }
+.rp-step-num {
+  flex:0 0 2.1rem; height:2.1rem; border-radius:50%; display:grid; place-items:center;
+  font-weight:800; font-size:.9rem; color:var(--blue); background:var(--blue-faint); border:1px solid #cfe0f3;
+}
+.rp-step-done { color:#fff; background:var(--green); border-color:var(--green); }
+.rp-step-body { min-width:0; }
+.rp-step-title { font-weight:700; font-size:.98rem; color:var(--text); margin-bottom:.3rem; }
+.rp-step-text { font-size:.84rem; color:var(--text-muted); line-height:1.55; margin:0 0 .85rem; }
+.rp-step-hint { font-size:.76rem; color:var(--text-subtle); margin:.55rem 0 0; }
+.rp-dl { display:flex; gap:.5rem; flex-wrap:wrap; }
+
+.rp-narrative h3 { font-size:.95rem; margin:1.1rem 0 .35rem; color:var(--text); }
+.rp-narrative h3:first-child { margin-top:0; }
+.rp-narrative p { font-size:.9rem; line-height:1.65; color:var(--text); margin:0; }
+
+/* Overall Satisfaction */
+.rp-lede { font-size:.86rem; color:var(--text-muted); line-height:1.6; margin:0 0 1.25rem; max-width:70ch; }
+.rp-cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:1rem; }
+.rp-card {
+  background:var(--surface); border:1px solid var(--border); border-top:3px solid var(--navy);
+  border-radius:var(--radius); padding:1.1rem 1.2rem 1rem; box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,.04));
+}
+.rp-card-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); min-height:2.2em; }
+.rp-card-score { margin:.35rem 0 .7rem; }
+.rp-score { font-size:2.1rem; font-weight:800; color:var(--navy); font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+.rp-of { font-size:.85rem; color:var(--text-subtle); margin-left:.3rem; }
+.rp-scale { position:relative; height:6px; border-radius:999px; background:var(--border-light); }
+.rp-scale-dot {
+  position:absolute; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%;
+  background:var(--navy); border:2px solid #fff; box-shadow:0 0 0 1px var(--navy);
+}
+.rp-scale-ends { display:flex; justify-content:space-between; font-size:.68rem; color:var(--text-subtle); margin-top:.3rem; }
+.rp-split { display:grid; grid-template-columns:repeat(3, 1fr); gap:.4rem; margin:.95rem 0 .8rem; padding:.7rem 0; border-top:1px solid var(--border-light); border-bottom:1px solid var(--border-light); text-align:center; }
+.rp-split-val { display:block; font-weight:700; font-size:1.02rem; color:var(--text); font-variant-numeric:tabular-nums; }
+.rp-split-lbl { font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-subtle); }
+.rp-card-foot { font-size:.74rem; color:var(--text-subtle); }
+
+.rp-dist { margin-top:1.75rem; padding-top:1.4rem; border-top:1px solid var(--border-light); }
+.rp-dist-head { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
+.rp-dist-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); }
+.rp-legend { display:flex; flex-wrap:wrap; gap:.4rem 1rem; font-size:.74rem; color:var(--text-muted); }
+.rp-legend span { display:inline-flex; align-items:center; gap:.35rem; }
+.rp-legend i { width:.75rem; height:.75rem; border-radius:3px; display:inline-block; }
+.rp-dist-row { display:grid; grid-template-columns:minmax(150px, 230px) 1fr; gap:1rem; align-items:center; padding:.45rem 0; }
+@media (max-width: 640px) { .rp-dist-row { grid-template-columns:1fr; gap:.35rem; } }
+.rp-dist-label { font-size:.86rem; font-weight:600; color:var(--text); }
+.rp-bar { display:flex; height:22px; border-radius:6px; overflow:hidden; background:var(--border-light); }
+.rp-bar-tall { height:30px; }
+.rp-seg { display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; color:#fff; white-space:nowrap; text-shadow:0 1px 1px rgba(0,0,0,.18); }
+.rp-seg + .rp-seg { box-shadow:inset 1px 0 0 rgba(255,255,255,.55); }
+.rp-bar-empty { align-items:center; padding:0 .75rem; font-size:.76rem; color:var(--text-muted); }
+
+.rp-delta { font-weight:700; font-variant-numeric:tabular-nums; }
+.rp-note { font-size:.76rem; color:var(--text-subtle); line-height:1.5; margin:.9rem 0 0; }
+</style>
 {% endblock %}

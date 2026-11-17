@@ -1671,9 +1671,16 @@ def report_preview(cycle_id, report_type):
                                title=report_builder.report_title(report_type),
                                reason=str(exc)), 200
 
+    # Colour encodes the RESPONSE CATEGORY (the 1-5 anchors), never a
+    # judgement of the score (§10.5) — the same ramp the PDF charts use.
+    from app.analytics.charts import ANCHOR_COLOURS, NA_COLOUR
+    anchors = [{'score': i + 1, 'label': label, 'colour': ANCHOR_COLOURS[i]}
+               for i, label in enumerate(domains.anchor_labels(domains.DEFAULT_ANCHOR))]
+
     return render_template('org/report_preview.html', cycle=cycle,
                            context=context, report_type=report_type,
-                           branch=scope_branch,
+                           branch=scope_branch, anchors=anchors,
+                           na_colour=NA_COLOUR,
                            can_interpret=ai_service.api_key_present())
 
 
