@@ -56,22 +56,15 @@
     {% if can(current_user, 'manage_cycles') %}
       <a href="{{ url_for('org.cycle_edit', cycle_id=cycle.id) }}"
          class="btn btn-secondary">Edit</a>
-      {% if cycle.status == 'draft' %}
-      <form method="post" action="{{ url_for('org.cycle_status', cycle_id=cycle.id) }}"
-            style="display:inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="status" value="open">
-        <button type="submit" class="btn btn-primary">Open the cycle</button>
-      </form>
-      {% elif cycle.status == 'open' %}
-      {# `can_deploy` comes from the route and follows uq_open_deployment:
+      {# No separate "Open" step: deploying a draft opens it (see deploy()).
+         `can_deploy` comes from the route and follows uq_open_deployment:
          an archived or closed deployment frees the slot, so the button comes
-         back. Gating on "has any deployment" was stricter than the index and
-         left no way to redo a deployment made with the wrong headcount. #}
-      {% if can_deploy %}
+         back. #}
+      {% if cycle.status in ('draft', 'open') and can_deploy %}
       <a href="{{ url_for('org.deploy', cycle_id=cycle.id) }}"
          class="btn btn-primary">Deploy</a>
       {% endif %}
+      {% if cycle.status == 'open' %}
       <form method="post" action="{{ url_for('org.cycle_status', cycle_id=cycle.id) }}"
             style="display:inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -189,14 +182,10 @@
     <div class="empty-state">
       <p class="empty-state-title">Not deployed yet.</p>
       <p class="empty-state-note">
-        {% if cycle.status == 'draft' %}
-          Open the cycle first. Opening it freezes the domains measured, so
-          check them before you do.
-        {% else %}
-          Deploy this cycle to mint its anonymous survey link.
-        {% endif %}
+        Deploy this cycle to mint its anonymous survey link.
+        {% if cycle.status == 'draft' %}Deploying also opens the cycle.{% endif %}
       </p>
-      {% if cycle.status == 'open' and can_deploy
+      {% if cycle.status in ('draft', 'open') and can_deploy
             and can(current_user, 'deploy_surveys') %}
       <a href="{{ url_for('org.deploy', cycle_id=cycle.id) }}"
          class="btn btn-primary">Deploy</a>

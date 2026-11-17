@@ -717,6 +717,56 @@ def test_the_deploy_form_ignores_a_posted_delivery_mode(client, db, org_world):
     assert deployment.delivery_mode == 'open_link'
 
 
+def test_deploying_a_draft_opens_it_and_audits_the_open(client, db, org_world):
+    """
+    THERE IS NO SEPARATE OPEN STEP. Deploy opens a draft in the same
+    transaction, with the same CYCLE_OPEN audit line cycle_status() writes.
+    """
+    from app.models import AuditEvent
+    cycle = make_cycle(org_world['org'], 'ACME-DEP-DRAFT', status='draft')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.post(f'/org/cycles/{cycle.id}/deploy',
+                data={'expected_respondents': '25'}, follow_redirects=True)
+
+    db.session.refresh(cycle)
+    assert cycle.status == 'open'
+    assert cycle.opened_at is not None
+    assert db.session.query(SurveyDeployment).filter_by(
+        cycle_id=cycle.id).count() == 1
+    assert db.session.query(AuditEvent).filter_by(
+        action='cycle.open', target_id=str(cycle.id)).count() == 1
+
+
+def test_a_draft_left_undeployed_stays_a_draft(client, db, org_world):
+    """A headcount error must not open the cycle as a side effect."""
+    cycle = make_cycle(org_world['org'], 'ACME-DEP-DRAFT2', status='draft')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.post(f'/org/cycles/{cycle.id}/deploy',
+                data={'expected_respondents': ''}, follow_redirects=True)
+
+    db.session.refresh(cycle)
+    assert cycle.status == 'draft'
+
+
+def test_a_closed_cycle_cannot_be_deployed(client, db, org_world):
+    """Closed is final (cycle_status()); deploy must not be a way round it."""
+    cycle = make_cycle(org_world['org'], 'ACME-DEP-CLOSED', status='closed')
+    db.session.commit()
+
+    login(client, org_world['admin'])
+    client.post(f'/org/cycles/{cycle.id}/deploy',
+                data={'expected_respondents': '25'}, follow_redirects=True)
+
+    db.session.refresh(cycle)
+    assert cycle.status == 'closed'
+    assert db.session.query(SurveyDeployment).filter_by(
+        cycle_id=cycle.id).count() == 0
+
+
 def test_the_deploy_form_still_requires_a_headcount(client, db, org_world):
     """
     The only thing the screen asks for now, so it had better still bind. It is

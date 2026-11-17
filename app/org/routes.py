@@ -562,8 +562,8 @@ def cycles_list():
             'scope': ('branch' if any(d.branch_id for d in found)
                       else 'organisation-wide'),
             # Same rule as cycle_detail()'s can_deploy and deploy() itself:
-            # an open cycle with no live deployment.
-            'can_deploy': cycle.status == 'open' and not any(
+            # a draft or open cycle with no live deployment.
+            'can_deploy': cycle.status in ('draft', 'open') and not any(
                 not d.closed for d in found),
         })
 
@@ -626,9 +626,9 @@ def cycle_new():
                      org_id=current_user.org_id, branch_id=cycle.branch_id,
                      payload=cycle_payload(cycle))
         db.session.commit()
-        flash(f'Created {cycle.cycle_name} ({cycle.id}). It is a draft until '
-              'you open it — open it to review what respondents will be told '
-              'and start collecting.', 'success')
+        flash(f'Created {cycle.cycle_name} ({cycle.id}). It stays a draft '
+              'until you deploy it — deploying opens the cycle and starts '
+              'collecting.', 'success')
         return redirect(url_for('org.cycle_detail', cycle_id=cycle.id))
 
     return render_template('org/cycle_form.html', cycle=None,
@@ -1127,10 +1127,15 @@ def deploy(cycle_id):
     """
     cycle = _cycle_or_404(cycle_id)
 
-    if cycle.status != 'open':
-        flash(f'{cycle.cycle_name} is {cycle.status}. Open the cycle before '
-              'deploying it — the link would otherwise be live before '
-              'respondents have been told anything.', 'error')
+    # DEPLOYING A DRAFT OPENS IT. There used to be a separate "Open the cycle"
+    # step, there so the respondent statement was reviewed before a link went
+    # live. Every cycle now gets the org's purpose statement at creation (and
+    # cannot be created without one), so the step guarded nothing and cost a
+    # click. Draft still exists for a cycle that is created but not launched.
+    # A CLOSED cycle is never reopened — see cycle_status().
+    if cycle.status not in ('draft', 'open'):
+        flash(f'{cycle.cycle_name} is {cycle.status} and cannot be deployed. '
+              'Run a new cycle instead.', 'error')
         return redirect(url_for('org.cycle_detail', cycle_id=cycle.id))
 
     branch_id = _my_branch_id()
@@ -1181,6 +1186,15 @@ def deploy(cycle_id):
             closes_at=cycle.closes_at,
             created_by=current_user.id,
         )
+        if cycle.status == 'draft':
+            # Same transition and audit line as cycle_status(), so the log
+            # reads the same whichever way a cycle was opened.
+            cycle.status = 'open'
+            cycle.opened_at = deployment.deployed_at
+            record_audit(CYCLE_OPEN, 'cycle', cycle.id,
+                         f'{cycle.cycle_name} is open (on deploy)',
+                         org_id=current_user.org_id, branch_id=cycle.branch_id,
+                         payload=cycle_payload(cycle))
         db.session.add(deployment)
         db.session.flush()
         record_audit(DEPLOYMENT_CREATE, 'deployment', deployment.id,
