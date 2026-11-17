@@ -1,242 +1,398 @@
 {% extends "base.html" %}
+{% import "org/_dist.html" as dist %}
 {% block title %}Analysis - {{ cycle.cycle_name }}{% endblock %}
-{% block container_class %}container-wide{% endblock %}
+{% block container_class %}container-wide board-page{% endblock %}
+
+{#
+  THE ON-SCREEN ANALYSIS, laid out like the TNA cycle report: a contents rail
+  on the left and lettered section cards on the right.
+
+  Rules that hold on every visual here (CLAUDE.md 2–4):
+    • bars are coloured by RESPONSE CATEGORY, means by one neutral marker —
+      no band, no red/amber/green on a score;
+    • the three Overall Satisfaction subdomains are side by side, never
+      combined;
+    • every association figure sits beside ASSOCIATION_CAVEAT, which comes
+      from the result object, not from this template.
+#}
+
 {% block content %}
+{% set scope_name = cycle.branch.name if cycle.branch else 'Organisation-wide' %}
+{% set gjs = subdomain_label('GEM', 'G') %}
 
 <div class="page-header">
   <div class="page-header-left">
-    <div class="section-label">{{ role_label(current_user.role) }} / Analysis</div>
-    <h1>{{ cycle.cycle_name }}</h1>
-    <p class="muted">
-      {{ respondents }} responses &middot; threshold n &ge; {{ cycle.min_reporting_n }}
-      &middot;
-      {% if cycle.scoring_method == 'mean_of_subdomains' %}
-        domain scores are the mean of the three subdomain scores
-      {% else %}
-        domain scores are the mean of all valid domain items
+    <a href="{{ url_for('org.cycle_detail', cycle_id=cycle.id) }}" class="back-link">← {{ cycle.cycle_name }}</a>
+    <p class="ar-eyebrow">Cycle analysis · {{ scope_name }}</p>
+    <h1 class="ar-title">Analysis: <span>{{ cycle.cycle_name }}</span></h1>
+    <div class="ar-meta">
+      <code class="ar-id">{{ cycle.id }}</code>
+      <span>{{ respondents }} response{{ '' if respondents == 1 else 's' }}</span>
+      {% if cycle.status == 'open' %}
+      <span class="status-pill ar-pill-live"><span class="status-dot"></span>Live — provisional</span>
       {% endif %}
-    </p>
+    </div>
   </div>
   <div class="page-actions">
-    <a href="{{ url_for('org.reports') }}" class="btn btn-secondary">All reports</a>
+    <a href="{{ url_for('org.report_preview', cycle_id=cycle.id, report_type='executive') }}"
+       class="btn btn-primary">Reports</a>
   </div>
 </div>
 
-{# §10.5: no bands while they are unvalidated. Stated once, at the top. #}
-<div class="flash flash-info">{{ BANDS_DEFERRED_NOTE }}</div>
+<div class="ar-layout">
 
-{# ── 1. The outcome, reported as three separate subdomains (§10.3) ────── #}
-<div class="panel">
-  <div class="panel-head">
-    <div class="panel-title">{{ domain_label(OUTCOME_DOMAIN) }}</div>
-  </div>
-  <div class="panel-body">
-    <p class="panel-note">
-      Reported as three separate subdomains. They are related but not
-      interchangeable, and there is no single overall satisfaction score.
-    </p>
-    <table class="table">
-      <thead><tr><th>Subdomain</th><th class="num">Score</th><th class="num">n</th>
-        <th>Response distribution</th><th class="num">Not applicable</th></tr></thead>
-      <tbody>
+  {# ── Contents rail ─────────────────────────────────────────────────────── #}
+  <aside class="ar-rail">
+    <p class="ar-rail-label">Contents</p>
+    <nav class="ar-toc">
+      <a href="#sec-a"><b>A</b>Overview</a>
+      <a href="#sec-b"><b>B</b>Overall satisfaction</a>
+      <a href="#sec-c"><b>C</b>Diagnostic domains</a>
+      <a href="#sec-d"><b>D</b>In relation to satisfaction</a>
+      <a href="#sec-e"><b>E</b>Where to look first</a>
+      {% for comparison in comparisons %}
+      <a href="#sec-g{{ loop.index }}"><b>·</b>{{ comparison.segment_label }}</a>
+      {% endfor %}
+      <a href="#sec-f"><b>F</b>What this does not show</a>
+    </nav>
+    <div class="ar-rail-actions">
+      <a href="{{ url_for('org.cycle_detail', cycle_id=cycle.id) }}" class="btn btn-sm btn-secondary">‹ Back to cycle</a>
+      <a href="{{ url_for('org.reports') }}" class="btn btn-sm btn-secondary">All reports</a>
+    </div>
+  </aside>
+
+  <div class="ar-main">
+
+    {# ── A. Overview ─────────────────────────────────────────────────────── #}
+    <section class="ar-sec" id="sec-a">
+      <h2 class="ar-sec-head"><span class="ar-letter">A</span>Overview</h2>
+      <div class="ar-tiles">
+        <div class="ar-tile" style="--accent:var(--navy)">
+          <div class="ar-tile-val">{{ respondents }}{% if invited %}<span> / {{ invited }}</span>{% endif %}</div>
+          <div class="ar-tile-lbl">Responses</div>
+        </div>
+        <div class="ar-tile" style="--accent:var(--green)">
+          <div class="ar-tile-val">{% if invited %}{{ (respondents / invited * 100)|round|int }}%{% else %}—{% endif %}</div>
+          <div class="ar-tile-lbl">Response rate</div>
+        </div>
+        <div class="ar-tile" style="--accent:var(--blue)">
+          <div class="ar-tile-val">{{ (cycle.assessed_domains or [])|length }}</div>
+          <div class="ar-tile-lbl">Domains measured</div>
+        </div>
+        <div class="ar-tile" style="--accent:var(--amber)">
+          <div class="ar-tile-val">{{ deployments|length }}</div>
+          <div class="ar-tile-lbl">Deployment{{ '' if deployments|length == 1 else 's' }}</div>
+        </div>
+      </div>
+
+      <div class="ar-callout">
+        <p>This analysis covers every response to <strong>{{ cycle.cycle_name }}</strong>.
+          {{ domain_label(OUTCOME_DOMAIN) }} is the outcome; Task, Relationships and
+          Reward are diagnostic, and are read <em>in relation to</em> it.</p>
+        <p class="ar-callout-small">
+          Scoring:
+          {% if cycle.scoring_method == 'mean_of_subdomains' %}
+            domain scores are the mean of the three subdomain scores.
+          {% else %}
+            domain scores are the mean of all valid domain items.
+          {% endif %}
+          {# §10.5: no bands while they are unvalidated. #}
+          {{ BANDS_DEFERRED_NOTE }}
+        </p>
+      </div>
+    </section>
+
+    {# ── B. The outcome, three separate subdomains (§10.3) ───────────────── #}
+    <section class="ar-sec" id="sec-b">
+      <div class="ar-sec-top">
+        <h2 class="ar-sec-head"><span class="ar-letter">B</span>{{ domain_label(OUTCOME_DOMAIN) }}</h2>
+        <span class="ar-chip">Three measures, reported separately</span>
+      </div>
+      <p class="ar-lede">Reported as three separate subdomains. They are related but not
+        interchangeable, and there is no single overall satisfaction score.</p>
+
+      <div class="rp-cards">
       {% for measure, result in outcome_results %}
-        <tr>
-          <td><strong>{{ subdomain_label(measure[0], measure[1]) }}</strong><br>
-            <span class="muted">{{ subdomain_definition(measure[0], measure[1]) }}</span></td>
-          {% if result is sameas false or not result %}
-          <td colspan="4"><span class="status-pill status-suppressed">
-            {{ result.label }}</span></td>
+        <div class="rp-card">
+          <div class="rp-card-title">{{ subdomain_label(measure[0], measure[1]) }}</div>
+          {% if result %}
+            {% set d = result.distribution %}
+            <div class="rp-card-score">
+              <span class="rp-score">{{ '%.2f'|format(result.mean) }}</span><span class="rp-of">/ 5</span>
+            </div>
+            {{ dist.scale(result.mean) }}
+            <div class="rp-split">
+              <div><span class="rp-split-val">{{ '%.0f'|format(d.favourable_pct or 0) }}%</span><span class="rp-split-lbl">agree</span></div>
+              <div><span class="rp-split-val">{{ '%.0f'|format(d.neutral_pct or 0) }}%</span><span class="rp-split-lbl">neither</span></div>
+              <div><span class="rp-split-val">{{ '%.0f'|format(d.unfavourable_pct or 0) }}%</span><span class="rp-split-lbl">disagree</span></div>
+            </div>
+            <p class="ar-def">{{ subdomain_definition(measure[0], measure[1]) }}</p>
+            <div class="rp-card-foot">n = {{ result.n }} · {{ d.not_applicable }} not applicable · spread σ {{ '%.2f'|format(result.dispersion.sd) }}</div>
           {% else %}
-          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
-          <td class="num">{{ result.n }}</td>
-          <td>
-            {% for score in [1, 2, 3, 4, 5] %}
-            <span class="badge badge-outline">{{ score }}: {{ result.distribution.counts[score] }}</span>
-            {% endfor %}
-            <br><span class="muted">
-              {{ '%.0f'|format(result.distribution.favourable_pct or 0) }}% agree &middot;
-              {{ '%.0f'|format(result.distribution.neutral_pct or 0) }}% neither &middot;
-              {{ '%.0f'|format(result.distribution.unfavourable_pct or 0) }}% disagree
-            </span>
-          </td>
-          <td class="num">{{ result.distribution.not_applicable }}</td>
+            <span class="status-pill status-suppressed">{{ result.label }}</span>
           {% endif %}
-        </tr>
+        </div>
       {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+      </div>
 
-{# ── 2. The diagnostic domains ────────────────────────────────────────── #}
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">Diagnostic domains</div></div>
-  <div class="panel-body">
-    <table class="table">
-      <thead><tr><th>Domain</th><th class="num">Score</th><th class="num">n</th>
-        <th class="num">Spread</th><th class="num">Not applicable</th></tr></thead>
-      <tbody>
+      <div class="rp-dist">
+        <div class="rp-dist-head">
+          <div class="rp-dist-title">How the answers were spread</div>
+          {{ dist.legend(anchors) }}
+        </div>
+        {% for measure, result in outcome_results %}
+        <div class="rp-dist-row">
+          <div class="rp-dist-label">{{ subdomain_label(measure[0], measure[1]) }}</div>
+          {% if result %}{{ dist.bar(result, anchors, tall=true) }}
+          {% else %}<div class="rp-bar rp-bar-tall rp-bar-empty">{{ result.label }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    {# ── C. The diagnostic domains ───────────────────────────────────────── #}
+    <section class="ar-sec" id="sec-c">
+      <h2 class="ar-sec-head"><span class="ar-letter">C</span>Diagnostic domains</h2>
+      <p class="ar-lede">The three areas that help explain {{ domain_label(OUTCOME_DOMAIN)|lower }}.
+        Each row shows the score on the 1–5 scale and how the answers were spread.</p>
+
+      <div class="ar-diag">
       {% for code, result in diagnostic_results %}
-        <tr>
-          <td><strong>{{ domain_label(code) }}</strong>
-            {% if domain_scope_note(code) %}<br>
-            <span class="muted">{{ domain_scope_note(code) }}</span>{% endif %}</td>
+        <div class="ar-diag-row">
+          <div class="ar-diag-name">
+            <strong>{{ domain_label(code) }}</strong>
+            {% if domain_scope_note(code) %}<span class="ar-def">{{ domain_scope_note(code) }}</span>{% endif %}
+          </div>
           {% if not result %}
-          <td colspan="4"><span class="status-pill status-suppressed">
-            {{ result.label }}</span></td>
+            <div class="ar-diag-bar"><span class="status-pill status-suppressed">{{ result.label }}</span></div>
           {% else %}
-          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
-          <td class="num">{{ result.n }}</td>
-          <td class="num">{{ '%.2f'|format(result.dispersion.sd) }}</td>
-          <td class="num">{{ result.distribution.not_applicable }}</td>
+            <div class="ar-diag-score"><span class="rp-score ar-score-sm">{{ '%.2f'|format(result.mean) }}</span><span class="rp-of">/ 5</span></div>
+            <div class="ar-diag-bar">{{ dist.bar(result, anchors) }}
+              <div class="ar-diag-foot">n = {{ result.n }} · spread σ {{ '%.2f'|format(result.dispersion.sd) }} · {{ result.distribution.not_applicable }} not applicable</div>
+            </div>
           {% endif %}
-        </tr>
+        </div>
       {% endfor %}
-      </tbody>
-    </table>
-    <p class="panel-note">
-      A wide spread within a group is a finding in itself: it means the group
-      is not one place. It is a prompt to look further, not a problem with the
-      data.
-    </p>
-  </div>
-</div>
+      </div>
+      <div class="ar-legend-row">{{ dist.legend(anchors) }}</div>
+      <p class="ar-note">A wide spread within a group is a finding in itself: it means the group
+        is not one place. It is a prompt to look further, not a problem with the data.</p>
+    </section>
 
-{# ── 3. §10.4's first three bullets, one per diagnostic domain ────────── #}
-<div class="panel">
-  <div class="panel-head">
-    <div class="panel-title">
-      Each diagnostic domain, in relation to
-      {{ subdomain_label('GEM', 'G') }}</div>
-  </div>
-  <div class="panel-body">
-    <p class="panel-note">
-      Comparing the third of respondents reporting the lowest
-      {{ subdomain_label('GEM', 'G') }} with the third reporting the highest.
-    </p>
-    {% for domain_code, contrast in contrasts %}
-    <div class="note-card" style="margin-bottom:1rem">
-      <strong>{{ domain_label(domain_code) }}</strong><br>
-      {% if contrast %}
-        {{ contrast.sentence() }}<br>
-        <span class="muted">Difference:
-          {{ '%+.2f'|format(contrast.difference) }}</span>
+    {# ── D. §10.4: each diagnostic domain against General Job Satisfaction ─ #}
+    <section class="ar-sec" id="sec-d">
+      <h2 class="ar-sec-head"><span class="ar-letter">D</span>In relation to {{ gjs }}</h2>
+      <p class="ar-lede">Comparing the third of respondents reporting the lowest {{ gjs }}
+        with the third reporting the highest.</p>
+
+      <div class="ar-contrasts">
+      {% for domain_code, contrast in contrasts %}
+        <div class="ar-contrast">
+          <div class="ar-contrast-name">{{ domain_label(domain_code) }}</div>
+          {% if contrast %}
+            <div class="ar-pair">
+              <div class="ar-pair-row">
+                <span class="ar-pair-lbl">Lowest third</span>
+                <div class="rp-scale"><span class="rp-scale-dot ar-dot-hollow" style="left:{{ (contrast.lower_mean - 1) / 4 * 100 }}%"></span></div>
+                <span class="ar-pair-val">{{ '%.1f'|format(contrast.lower_mean) }}</span>
+              </div>
+              <div class="ar-pair-row">
+                <span class="ar-pair-lbl">Highest third</span>
+                <div class="rp-scale"><span class="rp-scale-dot" style="left:{{ (contrast.upper_mean - 1) / 4 * 100 }}%"></span></div>
+                <span class="ar-pair-val">{{ '%.1f'|format(contrast.upper_mean) }}</span>
+              </div>
+            </div>
+            <p class="ar-contrast-text">{{ contrast.sentence() }}</p>
+            <span class="ar-chip">Difference {{ '%+.2f'|format(contrast.difference) }}</span>
+          {% else %}
+            <p class="ar-contrast-text ar-muted">{{ contrast.reason }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+      </div>
+      {# THE CAVEAT COMES FROM THE RESULT OBJECT'S MODULE, imported once. #}
+      <p class="ar-caveat">{{ ASSOCIATION_CAVEAT }}</p>
+    </section>
+
+    {# ── E. Priority view ────────────────────────────────────────────────── #}
+    <section class="ar-sec" id="sec-e">
+      <h2 class="ar-sec-head"><span class="ar-letter">E</span>Where to look first</h2>
+      {% if priority %}
+        <p class="ar-lede">The nine diagnostic subdomains, ordered by how much they differ between
+          the least and most satisfied thirds. Positions are relative to this group's own
+          median score ({{ '%.2f'|format(priority.score_median) }}), not to any fixed scale.</p>
+        <ol class="ar-points">
+        {% for entry in priority.entries %}
+          <li class="ar-point ar-q-{{ entry.quadrant }}">
+            <span class="ar-point-num">{{ loop.index }}</span>
+            <span class="ar-point-body"><strong>{{ entry.label }}</strong>
+              — scores {{ '%.2f'|format(entry.score) }}, difference
+              {{ '%+.2f'|format(entry.contrast.difference) }} between thirds</span>
+            <span class="ar-point-tag">{{ entry.quadrant_label }}</span>
+          </li>
+        {% endfor %}
+        </ol>
+        <p class="ar-caveat">{{ priority.caveat }}</p>
+        <p class="ar-note">&ldquo;Investigate first&rdquo; means a subdomain scoring below this
+          group's median that also differs most between the least and most satisfied thirds.
+          It is a suggested order for looking, not a judgement and not a ranking of anyone.</p>
       {% else %}
-        <span class="muted">{{ contrast.reason }}</span>
+        <div class="ar-empty">
+          <p class="ar-empty-title">Not enough respondents yet</p>
+          <p>{{ priority.reason }}</p>
+          <p class="ar-muted">A contrast needs at least {{ contrast_floor }} respondents,
+            because each third is reported like any other group.</p>
+        </div>
       {% endif %}
-    </div>
+    </section>
+
+    {# ── §10.4's fourth bullet: differences across groups (none since
+         segments were removed; the loop renders nothing) ─────────────────── #}
+    {% for comparison in comparisons %}
+    <section class="ar-sec" id="sec-g{{ loop.index }}">
+      <div class="ar-sec-top">
+        <h2 class="ar-sec-head"><span class="ar-letter">·</span>{{ comparison.segment_label }}</h2>
+        {% if comparison.spread is not none %}<span class="ar-chip">spread {{ '%.2f'|format(comparison.spread) }}</span>{% endif %}
+      </div>
+      <p class="ar-lede">{{ gjs }} by {{ comparison.segment_label|lower }}, shown as each
+        group's difference from the whole. <strong>This is not a ranking.</strong> Groups appear
+        in their defined order, and the figure to read is the spread between them.</p>
+      <div class="table-scroll">
+      <table class="table table-dark-head">
+        <thead><tr><th>Group</th><th class="num">Score</th><th class="num">n</th><th class="num">vs whole</th></tr></thead>
+        <tbody>
+        {% for code, label, result, difference in comparison.cells %}
+          <tr>
+            <td>{{ label }}</td>
+            {% if not result %}
+            <td colspan="3"><span class="status-pill status-suppressed">{{ result.label }}</span></td>
+            {% else %}
+            <td class="num">{{ '%.2f'|format(result.mean) }}</td>
+            <td class="num">{{ result.n }}</td>
+            <td class="num">{{ '%+.2f'|format(difference) if difference is not none else '-' }}</td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% if comparison.suppressed_count %}
+      <p class="ar-note">{{ comparison.suppressed_count }} group(s) suppressed. Where one group
+        falls below the threshold, the next smallest is suppressed with it, so the hidden figure
+        cannot be recovered by subtracting the rest from the total.</p>
+      {% endif %}
+      <p class="ar-caveat">{{ comparison.caveat }}</p>
+    </section>
     {% endfor %}
-    {# THE CAVEAT COMES FROM THE RESULT OBJECT, not from this template, so a
-       new view cannot omit it by forgetting it exists. #}
-    <p class="panel-note"><strong>{{ ASSOCIATION_CAVEAT }}</strong></p>
-  </div>
-</div>
 
-{# ── 4. Priority view, ordered by the size of the contrast ────────────── #}
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">Where to look first</div></div>
-  <div class="panel-body">
-    {% if priority %}
-    <p class="panel-note">
-      The nine diagnostic subdomains, ordered by how much they differ between
-      the least and most satisfied thirds. Positions are relative to this
-      group's own median score ({{ '%.2f'|format(priority.score_median) }}),
-      not to any fixed scale.
-    </p>
-    <table class="table">
-      <thead><tr><th>Subdomain</th><th class="num">Score</th>
-        <th class="num">Difference</th><th>Reading order</th></tr></thead>
-      <tbody>
-      {% for entry in priority.entries %}
-        <tr>
-          <td><strong>{{ entry.label }}</strong></td>
-          <td class="num">{{ '%.2f'|format(entry.score) }}</td>
-          <td class="num">{{ '%+.2f'|format(entry.contrast.difference) }}</td>
-          <td><span class="badge badge-outline">{{ entry.quadrant_label }}</span></td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    <p class="panel-note"><strong>{{ priority.caveat }}</strong></p>
-    <p class="muted">
-      &ldquo;Investigate first&rdquo; means a subdomain scoring below this
-      group's median that also differs most between the least and most
-      satisfied thirds. It is a suggested order for looking, not a judgement
-      and not a ranking of anyone.
-    </p>
-    {% else %}
-    <div class="empty-state">
-      <div class="empty-icon">-</div>
-      <p>{{ priority.reason }}</p>
-      <p class="muted">A contrast needs at least {{ contrast_floor }}
-        respondents, because each third is reported like any other group.</p>
-    </div>
-    {% endif %}
+    {# ── F. Limits ───────────────────────────────────────────────────────── #}
+    <section class="ar-sec" id="sec-f">
+      <h2 class="ar-sec-head"><span class="ar-letter">F</span>What this does not show</h2>
+      <ul class="ar-limits">
+        <li>No individual response, and nothing that identifies a respondent.</li>
+        <li>No causal claim. {{ ASSOCIATION_CAVEAT }}</li>
+        <li>No score band or label: {{ BANDS_DEFERRED_NOTE|lower }}</li>
+        <li>No single overall satisfaction figure. The three
+          {{ domain_label(OUTCOME_DOMAIN) }} subdomains are reported separately
+          because they measure related but different things.</li>
+        <li>{{ PERCEPTION_CAVEAT }}</li>
+      </ul>
+    </section>
   </div>
 </div>
+{% endblock %}
 
-{# ── 5. §10.4's fourth bullet: differences across groups ──────────────── #}
-{% for comparison in comparisons %}
-<div class="panel">
-  <div class="panel-head">
-    <div class="panel-title">{{ comparison.segment_label }}</div>
-    {% if comparison.spread is not none %}
-    <span class="badge badge-outline">spread
-      {{ '%.2f'|format(comparison.spread) }}</span>
-    {% endif %}
-  </div>
-  <div class="panel-body">
-    <p class="panel-note">
-      {{ subdomain_label('GEM', 'G') }} by {{ comparison.segment_label|lower }},
-      shown as each group's difference from the whole.
-      <strong>This is not a ranking.</strong> Groups appear in their defined
-      order, and the figure to read is the spread between them: a wide spread
-      means the organisation is not one place.
-    </p>
-    <table class="table">
-      <thead><tr><th>Group</th><th class="num">Score</th><th class="num">n</th>
-        <th class="num">vs whole</th></tr></thead>
-      <tbody>
-      {% for code, label, result, difference in comparison.cells %}
-        <tr>
-          <td>{{ label }}</td>
-          {% if not result %}
-          <td colspan="3"><span class="status-pill status-suppressed">
-            {{ result.label }}</span></td>
-          {% else %}
-          <td class="num">{{ '%.2f'|format(result.mean) }}</td>
-          <td class="num">{{ result.n }}</td>
-          <td class="num">{{ '%+.2f'|format(difference) if difference is not none else '-' }}</td>
-          {% endif %}
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    {% if comparison.suppressed_count %}
-    <p class="muted">
-      {{ comparison.suppressed_count }} group(s) suppressed. Where one group
-      falls below the threshold, the next smallest is suppressed with it, so
-      the hidden figure cannot be recovered by subtracting the rest from the
-      total.
-    </p>
-    {% endif %}
-    <p class="panel-note"><strong>{{ comparison.caveat }}</strong></p>
-  </div>
-</div>
-{% endfor %}
+{% block head %}
+<style>
+.ar-eyebrow { margin:.9rem 0 .2rem; padding-left:.6rem; border-left:3px solid var(--orange, #e8590c);
+  font-size:.72rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--orange, #e8590c); }
+.ar-title { margin:.2rem 0 0; }
+.ar-title span { color:var(--orange, #e8590c); }
+.ar-meta { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; margin-top:.55rem; font-size:.85rem; color:var(--text-muted); }
+.ar-id { font-size:.74rem; background:var(--surface); border:1px solid var(--border); padding:.12rem .45rem; border-radius:var(--radius-sm); }
+.ar-pill-live { background:var(--blue-faint); color:var(--blue); border:1px solid #cfe0f3; }
+.ar-pill-live .status-dot { background:var(--blue); }
 
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">What this does not show</div></div>
-  <div class="panel-body">
-    <ul>
-      <li>No individual response, and nothing that identifies a respondent.</li>
-      <li>No causal claim. {{ ASSOCIATION_CAVEAT }}</li>
-      <li>No score band or label: {{ BANDS_DEFERRED_NOTE|lower }}</li>
-      <li>No single overall satisfaction figure. The three
-        {{ domain_label(OUTCOME_DOMAIN) }} subdomains are reported separately
-        because they measure related but different things.</li>
-      <li>{{ PERCEPTION_CAVEAT }}</li>
-    </ul>
-  </div>
-</div>
+.ar-layout { display:grid; grid-template-columns:200px minmax(0,1fr); gap:1.75rem; align-items:start; }
+@media (max-width: 900px) { .ar-layout { grid-template-columns:1fr; } .ar-rail { position:static !important; } }
+.ar-rail { position:sticky; top:calc(env(safe-area-inset-top, 0px) + 1rem); }
+.ar-rail-label { font-size:.7rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-subtle); margin:0 0 .6rem; }
+.ar-toc { display:flex; flex-direction:column; gap:.15rem; }
+.ar-toc a { display:flex; gap:.75rem; align-items:center; padding:.55rem .75rem; border-radius:var(--radius);
+  font-size:.86rem; color:var(--text-muted); text-decoration:none; border-left:3px solid transparent; }
+.ar-toc a b { width:.9rem; color:var(--text-subtle); font-weight:700; }
+.ar-toc a:hover { background:var(--surface); color:var(--text); border-left-color:var(--orange, #e8590c); box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,.05)); }
+.ar-toc a:hover b { color:var(--orange, #e8590c); }
+.ar-rail-actions { display:flex; flex-direction:column; gap:.5rem; margin-top:1.25rem; }
+.ar-rail-actions .btn { justify-content:flex-start; background:var(--surface); }
+
+.ar-main { display:flex; flex-direction:column; gap:1.5rem; min-width:0; }
+.ar-sec { background:var(--surface); border:1px solid var(--border); border-radius:calc(var(--radius) * 1.6);
+  padding:1.6rem 1.75rem; box-shadow:var(--shadow-md, 0 4px 14px rgba(15,23,42,.06)); scroll-margin-top:1rem; }
+.ar-sec-top { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; }
+.ar-sec-head { display:flex; align-items:center; gap:.8rem; font-size:1.25rem; margin:0 0 1rem; color:var(--text); }
+.ar-sec-top .ar-sec-head { margin-bottom:1rem; }
+.ar-letter { display:inline-grid; place-items:center; width:2rem; height:2rem; border-radius:6px;
+  background:var(--navy); color:#fff; font-size:.9rem; font-weight:800; flex:0 0 auto; }
+.ar-chip { display:inline-block; padding:.25rem .7rem; border-radius:999px; font-size:.74rem; font-weight:600;
+  background:var(--border-light); color:var(--text-muted); }
+.ar-lede { font-size:.88rem; color:var(--text-muted); line-height:1.6; margin:0 0 1.25rem; max-width:72ch; }
+.ar-note { font-size:.78rem; color:var(--text-subtle); line-height:1.55; margin:1rem 0 0; }
+.ar-muted { color:var(--text-muted); }
+.ar-caveat { margin:1.1rem 0 0; padding:.75rem 1rem; border-radius:var(--radius); background:#f7f8fb;
+  border-left:3px solid var(--navy); font-size:.82rem; font-weight:600; color:var(--text); line-height:1.5; }
+.ar-def { display:block; font-size:.76rem; color:var(--text-muted); line-height:1.5; margin:.25rem 0 .6rem; }
+
+.ar-tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:.9rem; margin-bottom:1.25rem; }
+.ar-tile { border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:var(--radius); padding:1rem 1.1rem; }
+.ar-tile-val { font-size:1.75rem; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; line-height:1.1; }
+.ar-tile-val span { font-size:.9rem; font-weight:600; color:var(--text-subtle); }
+.ar-tile-lbl { margin-top:.35rem; font-size:.7rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-subtle); }
+.ar-callout { background:var(--blue-faint); border-left:3px solid var(--blue); border-radius:var(--radius); padding:1rem 1.2rem; }
+.ar-callout p { margin:0; font-size:.88rem; line-height:1.6; color:var(--text); }
+.ar-callout .ar-callout-small { margin-top:.55rem; font-size:.78rem; color:var(--text-muted); }
+
+.ar-diag { display:flex; flex-direction:column; }
+.ar-diag-row { display:grid; grid-template-columns:minmax(160px, 1.2fr) 90px minmax(0, 2fr); gap:1.1rem; align-items:center;
+  padding:1rem 0; border-bottom:1px solid var(--border-light); }
+.ar-diag-row:first-child { padding-top:0; }
+@media (max-width: 700px) { .ar-diag-row { grid-template-columns:1fr; gap:.4rem; } }
+.ar-diag-name strong { font-size:.92rem; color:var(--text); }
+.ar-diag-name .ar-def { margin-bottom:0; }
+.ar-score-sm { font-size:1.45rem !important; }
+.ar-diag-foot { font-size:.72rem; color:var(--text-subtle); margin-top:.4rem; }
+.ar-legend-row { margin-top:1rem; }
+
+.ar-contrasts { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:1rem; }
+.ar-contrast { border:1px solid var(--border); border-top:3px solid var(--blue); border-radius:var(--radius); padding:1rem 1.1rem; }
+.ar-contrast-name { font-weight:700; font-size:.92rem; color:var(--text); margin-bottom:.8rem; }
+.ar-pair { display:flex; flex-direction:column; gap:.75rem; margin-bottom:.85rem; }
+.ar-pair-row { display:grid; grid-template-columns:5.5rem 1fr 2rem; align-items:center; gap:.6rem; }
+.ar-pair-lbl { font-size:.72rem; color:var(--text-muted); }
+.ar-pair-val { font-size:.86rem; font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
+.ar-dot-hollow { background:#fff !important; }
+.ar-contrast-text { font-size:.78rem; color:var(--text-muted); line-height:1.5; margin:0 0 .6rem; }
+
+.ar-points { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.6rem; }
+.ar-point { display:flex; align-items:center; gap:.85rem; padding:.75rem 1rem; border-radius:var(--radius);
+  border:1px solid var(--border); background:#fbfbfd; }
+.ar-point-num { flex:0 0 1.75rem; height:1.75rem; border-radius:50%; display:grid; place-items:center;
+  font-size:.8rem; font-weight:800; color:#fff; background:var(--navy); }
+.ar-point-body { flex:1; font-size:.86rem; color:var(--text-muted); }
+.ar-point-body strong { color:var(--text); }
+.ar-point-tag { font-size:.72rem; font-weight:700; padding:.22rem .65rem; border-radius:999px; white-space:nowrap;
+  background:var(--border-light); color:var(--text-muted); }
+/* Reading order, not a verdict: one emphasised state, the rest neutral. */
+.ar-q-investigate_first { border-color:#cfe0f3; background:var(--blue-faint); }
+.ar-q-investigate_first .ar-point-num { background:var(--blue); }
+.ar-q-investigate_first .ar-point-tag { background:#fff; color:var(--blue); border:1px solid #cfe0f3; }
+
+.ar-empty { text-align:center; padding:1.75rem 1rem; border:1px dashed var(--border); border-radius:var(--radius); }
+.ar-empty p { margin:.3rem 0; font-size:.86rem; }
+.ar-empty-title { font-weight:700; color:var(--text); }
+
+.ar-limits { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:.55rem; }
+.ar-limits li { position:relative; padding-left:1.4rem; font-size:.86rem; line-height:1.55; color:var(--text); }
+.ar-limits li::before { content:''; position:absolute; left:.2rem; top:.55em; width:.5rem; height:.5rem; border-radius:50%; background:var(--navy); }
+</style>
 {% endblock %}

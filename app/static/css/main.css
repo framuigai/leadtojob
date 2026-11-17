@@ -1999,3 +1999,45 @@ a.group-card-title:hover { color: var(--blue); }
   .rp-row { grid-template-columns: 1fr 48px; }
   .rp-row-bar, .rp-row-split { grid-column: 1 / -1; text-align: left; }
 }
+
+
+/* ── Report visuals ─────────────────────────────────────────────────────
+   Shared by org/report_preview.html and org/analysis.html (macros in
+   templates/org/_dist.html). Bars are coloured by RESPONSE CATEGORY, the
+   mean marker in one neutral colour — never a band (§10.5). */
+.rp-lede { font-size:.86rem; color:var(--text-muted); line-height:1.6; margin:0 0 1.25rem; max-width:70ch; }
+.rp-cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:1rem; }
+.rp-card {
+  background:var(--surface); border:1px solid var(--border); border-top:3px solid var(--navy);
+  border-radius:var(--radius); padding:1.1rem 1.2rem 1rem; box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,.04));
+}
+.rp-card-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); min-height:2.2em; }
+.rp-card-score { margin:.35rem 0 .7rem; }
+.rp-score { font-size:2.1rem; font-weight:800; color:var(--navy); font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+.rp-of { font-size:.85rem; color:var(--text-subtle); margin-left:.3rem; }
+.rp-scale { position:relative; height:6px; border-radius:999px; background:var(--border-light); }
+.rp-scale-dot {
+  position:absolute; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%;
+  background:var(--navy); border:2px solid #fff; box-shadow:0 0 0 1px var(--navy);
+}
+.rp-scale-ends { display:flex; justify-content:space-between; font-size:.68rem; color:var(--text-subtle); margin-top:.3rem; }
+.rp-split { display:grid; grid-template-columns:repeat(3, 1fr); gap:.4rem; margin:.95rem 0 .8rem; padding:.7rem 0; border-top:1px solid var(--border-light); border-bottom:1px solid var(--border-light); text-align:center; }
+.rp-split-val { display:block; font-weight:700; font-size:1.02rem; color:var(--text); font-variant-numeric:tabular-nums; }
+.rp-split-lbl { font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-subtle); }
+.rp-card-foot { font-size:.74rem; color:var(--text-subtle); }
+
+.rp-dist { margin-top:1.75rem; padding-top:1.4rem; border-top:1px solid var(--border-light); }
+.rp-dist-head { display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
+.rp-dist-title { font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); }
+.rp-legend { display:flex; flex-wrap:wrap; gap:.4rem 1rem; font-size:.74rem; color:var(--text-muted); }
+.rp-legend span { display:inline-flex; align-items:center; gap:.35rem; }
+.rp-legend i { width:.75rem; height:.75rem; border-radius:3px; display:inline-block; }
+.rp-dist-row { display:grid; grid-template-columns:minmax(150px, 230px) 1fr; gap:1rem; align-items:center; padding:.45rem 0; }
+@media (max-width: 640px) { .rp-dist-row { grid-template-columns:1fr; gap:.35rem; } }
+.rp-dist-label { font-size:.86rem; font-weight:600; color:var(--text); }
+.rp-bar { display:flex; height:22px; border-radius:6px; overflow:hidden; background:var(--border-light); }
+.rp-bar-tall { height:30px; }
+.rp-seg { display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; color:#fff; white-space:nowrap; text-shadow:0 1px 1px rgba(0,0,0,.18); }
+.rp-seg + .rp-seg { box-shadow:inset 1px 0 0 rgba(255,255,255,.55); }
+.rp-bar-empty { align-items:center; padding:0 .75rem; font-size:.76rem; color:var(--text-muted); }
+

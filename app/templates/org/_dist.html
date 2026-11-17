@@ -1,0 +1,41 @@
+{#
+  Shared response-distribution visuals for the report preview and the
+  analysis view. Styles: the "Report visuals" block in main.css.
+
+  Colour encodes the RESPONSE CATEGORY (1–5 anchors, passed in as `anchors`
+  from routes._anchor_ramp), never a judgement of the score — §10.5.
+#}
+
+{% macro bar(result, anchors, tall=false) -%}
+  {% set d = result.distribution %}
+  {% set answered = d.answered %}
+  <div class="rp-bar{{ ' rp-bar-tall' if tall }}" role="img"
+       aria-label="{% for a in anchors %}{{ a.label }} {{ ((d.counts.get(a.score, 0) / answered * 100) if answered else 0)|round|int }}%{{ ', ' if not loop.last }}{% endfor %}">
+    {% for a in anchors %}
+      {% set c = d.counts.get(a.score, 0) %}
+      {% if c %}
+      {% set pct = c / answered * 100 %}
+      <span class="rp-seg" style="width:{{ pct }}%;background:{{ a.colour }};{% if a.score == 3 %}color:#2B2F38;text-shadow:none{% endif %}"
+            title="{{ a.label }}: {{ c }} ({{ pct|round|int }}%)">
+        {% if pct >= 9 %}{{ pct|round|int }}%{% endif %}
+      </span>
+      {% endif %}
+    {% endfor %}
+  </div>
+{%- endmacro %}
+
+{% macro legend(anchors) -%}
+  <div class="rp-legend">
+    {% for a in anchors %}
+    <span><i style="background:{{ a.colour }}"></i>{{ a.label }}</span>
+    {% endfor %}
+  </div>
+{%- endmacro %}
+
+{# Position of a mean on the 1–5 scale, in ONE neutral colour. #}
+{% macro scale(mean) -%}
+  <div class="rp-scale" aria-hidden="true">
+    <span class="rp-scale-dot" style="left:{{ (mean - 1) / 4 * 100 }}%"></span>
+  </div>
+  <div class="rp-scale-ends"><span>1</span><span>3</span><span>5</span></div>
+{%- endmacro %}

@@ -1545,7 +1545,8 @@ def analysis(cycle_id):
 
     return render_template(
         'org/analysis.html', cycle=cycle, deployments=deployments,
-        respondents=len(profiles),
+        respondents=len(profiles), anchors=_anchor_ramp(),
+        invited=sum(w.expected_respondents or 0 for w in deployments),
         outcome_results=outcome_results,
         diagnostic_results=diagnostic_results,
         contrasts=contrasts, priority=priority, comparisons=comparisons,
@@ -1671,17 +1672,22 @@ def report_preview(cycle_id, report_type):
                                title=report_builder.report_title(report_type),
                                reason=str(exc)), 200
 
-    # Colour encodes the RESPONSE CATEGORY (the 1-5 anchors), never a
-    # judgement of the score (§10.5) — the same ramp the PDF charts use.
-    from app.analytics.charts import ANCHOR_COLOURS, NA_COLOUR
-    anchors = [{'score': i + 1, 'label': label, 'colour': ANCHOR_COLOURS[i]}
-               for i, label in enumerate(domains.anchor_labels(domains.DEFAULT_ANCHOR))]
-
     return render_template('org/report_preview.html', cycle=cycle,
                            context=context, report_type=report_type,
-                           branch=scope_branch, anchors=anchors,
-                           na_colour=NA_COLOUR,
+                           branch=scope_branch, anchors=_anchor_ramp(),
                            can_interpret=ai_service.api_key_present())
+
+
+def _anchor_ramp():
+    """
+    The 1-5 response categories with their colours, for on-screen bars.
+
+    Colour encodes the RESPONSE CATEGORY, never a judgement of the score
+    (§10.5) — the same ramp the PDF charts use, imported rather than copied.
+    """
+    from app.analytics.charts import ANCHOR_COLOURS
+    return [{'score': i + 1, 'label': label, 'colour': ANCHOR_COLOURS[i]}
+            for i, label in enumerate(domains.anchor_labels(domains.DEFAULT_ANCHOR))]
 
 
 @org_bp.route('/cycles/<cycle_id>/report/<report_type>/<fmt>')
