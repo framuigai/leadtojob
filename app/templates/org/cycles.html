@@ -13,7 +13,7 @@
 {% macro cycle_table(rows, own) %}
 <div class="panel" style="margin-bottom:2.25rem">
   <div class="table-scroll">
-    <table class="table">
+    <table class="table table-dark-head">
       <thead><tr>
         <th>Cycle ID</th><th>Name</th><th>Owner</th><th>Status</th>
         <th class="num">Responses</th><th>Deployed</th><th>Created</th><th></th>
@@ -60,9 +60,8 @@
   <div class="page-header-left">
     <a href="{{ url_for('org.dashboard') }}" class="back-link">← Dashboard</a>
     <h1 style="margin-top:.5rem">Measurement Cycles</h1>
-    <p class="page-sub">A cycle is one measurement round - "Employee Satisfaction Survey 2026 H1".
-      {% if branch_scoped %}Showing
-      {{ current_user.branch.name if current_user.branch else 'your branch' }} only.{% endif %}</p>
+    {% if branch_scoped %}<p class="page-sub">Showing
+      {{ current_user.branch.name if current_user.branch else 'your branch' }} only.</p>{% endif %}
   </div>
   <div class="page-actions">
     {% if can(current_user, 'manage_cycles') %}

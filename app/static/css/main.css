@@ -499,6 +499,18 @@ blockquote { font-style: normal; }
     background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
 }
 
+/* Dark navy header inside a board-page panel (the sibling's Cycles list).
+   Out-specifies `.board-page .panel .table th`, which lightens it. */
+.board-page .panel .table.table-dark-head th {
+    color: #fff;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+    border-bottom: 2px solid var(--blue-hover);
+    font-size: .74rem;
+    letter-spacing: .07em;
+    padding: .95rem 1rem;
+}
+.board-page .panel .table.table-dark-head td { padding: .85rem 1rem; }
+
 .table td {
     padding: .75rem 1rem;
     border-bottom: 1px solid var(--border-light);
