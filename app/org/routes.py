@@ -30,7 +30,8 @@ from app import db, domains
 from app import external_url
 from app.audit import (
     ORG_SETTINGS_EDIT,
-    BRANCH_CREATE, BRANCH_DEACTIVATE, BRANCH_REACTIVATE, CYCLE_ARCHIVE,
+    BRANCH_CREATE, BRANCH_DEACTIVATE, BRANCH_EDIT, BRANCH_REACTIVATE,
+    CYCLE_ARCHIVE,
     CYCLE_CLOSE, CYCLE_CREATE, CYCLE_EDIT, CYCLE_OPEN, DEPLOYMENT_CLOSE,
     DEPLOYMENT_CREATE, TICKETS_ISSUE,
     USER_CREATE, USER_DEACTIVATE, USER_REACTIVATE, ACTION_COMPLETE, ACTION_CREATE, ACTION_EDIT, ANALYSIS_RUN,
@@ -380,6 +381,39 @@ def branch_toggle(branch_id):
     return redirect(url_for('org.branches_list'))
 
 
+@org_bp.route('/branches/<uuid:branch_id>/rename', methods=['POST'])
+@require_capability(MANAGE_BRANCHES)
+def branch_rename(branch_id):
+    """Rename in place. The id never changes, so history stays attached."""
+    branch = _own_branch_or_404(branch_id)
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        flash('A branch name is required.', 'error')
+    elif name == branch.name:
+        pass
+    elif db.session.query(Branch).filter(
+            Branch.org_id == current_user.org_id, Branch.name == name,
+            Branch.id != branch.id).first():
+        flash(f'{name} already exists.', 'error')
+    else:
+        old = branch.name
+        branch.name = name
+        record_audit(BRANCH_EDIT, 'branch', branch.id,
+                     f'Renamed branch {old} to {name}',
+                     org_id=current_user.org_id, branch_id=branch.id,
+                     payload=branch_payload(branch))
+        db.session.commit()
+        flash(f'Renamed {old} to {name}.', 'success')
+    return redirect(url_for('org.branches_list'))
+
+
+def _admins_return(default_endpoint='org.branch_admins_list', **kw):
+    """Admin actions posted from the Branches page's Manage panel go back there."""
+    if request.form.get('return_to') == 'branches':
+        return redirect(url_for('org.branches_list'))
+    return redirect(url_for(default_endpoint, **kw))
+
+
 @org_bp.route('/branch-admins')
 @require_capability(MANAGE_BRANCH_ADMINS)
 def branch_admins_list():
@@ -442,14 +476,13 @@ def branch_admins_new():
         branch_id = uuid.UUID(request.form.get('branch_id') or '')
     except ValueError:
         flash('Choose the branch this admin belongs to.', 'error')
-        return redirect(url_for('org.branch_admins_list', new=1))
+        return _admins_return(new=1)
     branch = _own_branch_or_404(branch_id)
     if not branch.is_active:
         flash(f'{branch.name} is inactive. Reactivate it first.', 'error')
     elif _create_branch_admin(branch):
-        return redirect(url_for('org.branch_admins_list'))
-    return redirect(url_for('org.branch_admins_list', new=1,
-                            branch_id=branch.id))
+        return _admins_return()
+    return _admins_return(new=1, branch_id=branch.id)
 
 
 @org_bp.route('/branches/<uuid:branch_id>/admins/new', methods=['GET', 'POST'])
@@ -478,7 +511,7 @@ def branch_admin_toggle(user_id):
                  payload=user_payload(user))
     db.session.commit()
     flash(f'{verb} {user.email}.', 'success')
-    return redirect(url_for('org.branch_admins_list'))
+    return _admins_return()
 
 
 # ── Measurement cycles ──────────────────────────────────────────────────────

@@ -112,24 +112,84 @@
             </span>
           </td>
           <td class="num">
-            <details class="br-manage">
-              <summary class="btn btn-sm btn-secondary">Manage</summary>
-              <div class="br-manage-menu">
-                {% if can_manage_admins and live %}
-                <a href="{{ url_for('org.branch_admins_list', new=1, branch_id=b.id) }}"
-                   class="btn btn-sm btn-secondary">+ Branch admin</a>
+            <button type="button" class="btn btn-sm btn-secondary" data-row-toggle
+                    aria-expanded="false"
+                    data-open-label="Close" data-closed-label="Manage">Manage</button>
+          </td>
+        </tr>
+        {# THE MANAGE PANEL — opened in place under its row (collapse.js,
+           data-row-toggle), the same shape as the TNA platform's. Branches here
+           carry no module allocation (domains are chosen per cycle), so the
+           middle column manages the branch's admins instead. #}
+        <tr class="br-panel-row" data-row-panel hidden>
+          <td colspan="7">
+            <div class="br-panel">
+              <div class="br-col">
+                <p class="br-col-label">Branch name</p>
+                <form method="post" action="{{ url_for('org.branch_rename', branch_id=b.id) }}"
+                      class="br-inline-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="text" name="name" value="{{ b.name }}" required
+                         aria-label="Branch name">
+                  <button type="submit" class="btn btn-sm btn-primary">Save name</button>
+                </form>
+              </div>
+
+              <div class="br-col br-col-grow">
+                <p class="br-col-label">Branch admins
+                  <span class="br-col-count">{{ s.admin_users | selectattr('is_active') | list | length }} active</span></p>
+                {% if s.admin_users %}
+                <ul class="br-admin-rows">
+                  {% for u in s.admin_users %}
+                  <li>
+                    <span class="br-admin-chip {{ '' if u.is_active else 'br-admin-chip-off' }}">
+                      <span class="status-dot"></span>{{ u.email }}{% if u.full_name %}
+                      <span class="br-admin-name">· {{ u.full_name }}</span>{% endif %}
+                    </span>
+                    {% if can_manage_admins %}
+                    <form method="post" action="{{ url_for('org.branch_admin_toggle', user_id=u.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="return_to" value="branches">
+                      <button type="submit" class="btn btn-sm btn-secondary">
+                        {{ 'Disable login' if u.is_active else 'Enable login' }}</button>
+                    </form>
+                    {% endif %}
+                  </li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                <p class="br-hint">No admin yet — nothing can be deployed to this branch until one exists.</p>
                 {% endif %}
+
+                {% if can_manage_admins and live %}
+                <form method="post" action="{{ url_for('org.branch_admins_new') }}" class="br-add-admin">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="return_to" value="branches">
+                  <input type="hidden" name="branch_id" value="{{ b.id }}">
+                  <input type="email" name="email" placeholder="Email" required aria-label="Email">
+                  <input type="text" name="full_name" placeholder="Full name (optional)" aria-label="Full name">
+                  <input type="password" name="password" placeholder="Password (8+ chars)"
+                         minlength="8" required aria-label="Password" autocomplete="new-password">
+                  <button type="submit" class="btn btn-sm btn-secondary">+ Add admin</button>
+                </form>
+                <p class="br-hint">Give the password to them directly; it is not emailed.
+                  Disabling a login keeps everything they created.</p>
+                {% endif %}
+              </div>
+
+              <div class="br-col br-col-retire">
+                <p class="br-col-label">{{ 'Retire branch' if live else 'Restore branch' }}</p>
                 <form method="post" action="{{ url_for('org.branch_toggle', branch_id=b.id) }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm {{ 'btn-danger' if live else 'btn-secondary' }}">
                     {{ 'Deactivate' if live else 'Reactivate' }}</button>
                 </form>
-                <span class="br-hint">
+                <p class="br-hint">
                   {% if live %}Hides this branch from new work. Its cycles, surveys and reports are kept.
                   {% else %}Restores this branch for new work.{% endif %}
-                </span>
+                </p>
               </div>
-            </details>
+            </div>
           </td>
         </tr>
       {% endfor %}
@@ -159,18 +219,38 @@
 .br-noadmin { font-size: .78rem; color: var(--amber); }
 .br-noadmin a { color: var(--amber); font-weight: 600; }
 
-.br-manage { position: relative; display: inline-block; text-align: left; }
-.br-manage > summary { list-style: none; cursor: pointer; }
-.br-manage > summary::-webkit-details-marker { display: none; }
-.br-manage[open] > summary { background: var(--blue); color: #fff; border-color: var(--blue); }
-.br-manage-menu {
-  position: absolute; right: 0; top: calc(100% + .4rem); z-index: 20;
-  width: 240px; padding: .9rem; display: flex; flex-direction: column; gap: .6rem;
-  background: var(--surface); border: 1px solid var(--border);
-  border-left: 3px solid var(--blue); border-radius: var(--radius);
-  box-shadow: var(--shadow-md); white-space: normal;
+tr.row-open > td, .table tbody tr.row-open:hover td { background: var(--blue-faint); }
+.br-panel-row > td { padding: 0 !important; background: #f9fafc !important; }
+.br-panel {
+  display: flex; flex-wrap: wrap; gap: 2rem; padding: 1.5rem 1.75rem;
+  border-left: 3px solid var(--blue); text-align: left; white-space: normal;
 }
-.br-manage-menu .btn { width: 100%; justify-content: center; }
-.br-hint { font-size: .74rem; color: var(--text-subtle); line-height: 1.45; }
+.br-col { flex: 0 1 300px; min-width: 0; }
+.br-col-grow { flex: 1 1 380px; }
+.br-col-retire { flex: 0 1 260px; border-left: 1px solid var(--border-light); padding-left: 2rem; }
+.br-col-label {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-subtle); margin: 0 0 .75rem;
+}
+.br-col-count { margin-left: .4rem; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+.br-inline-form { display: flex; gap: .6rem; flex-wrap: wrap; }
+.br-inline-form input, .br-add-admin input {
+  flex: 1 1 160px; min-width: 0; padding: .45rem .7rem; font: inherit; font-size: .875rem;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+}
+.br-admin-rows { list-style: none; margin: 0 0 .9rem; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.br-admin-rows li { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.br-admin-chip {
+  display: inline-flex; align-items: center; gap: .45rem; padding: .35rem .85rem;
+  border-radius: 999px; font-size: .85rem; font-weight: 600;
+  background: var(--blue-faint); color: var(--blue); border: 1px solid #cfe0f3;
+}
+.br-admin-chip .status-dot { background: var(--blue); }
+.br-admin-name { font-weight: 400; color: var(--text-muted); }
+.br-admin-chip-off { background: var(--border-light); color: var(--text-subtle); border-color: var(--border); text-decoration: line-through; }
+.br-admin-chip-off .status-dot { background: #c0c5cd; }
+.br-add-admin { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.br-hint { font-size: .78rem; color: var(--text-subtle); line-height: 1.5; margin: .6rem 0 0; }
+@media (max-width: 760px) { .br-col-retire { border-left: 0; padding-left: 0; } }
 </style>
 {% endblock %}

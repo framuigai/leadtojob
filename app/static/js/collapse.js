@@ -68,7 +68,41 @@
         return Array.prototype.slice.call(document.querySelectorAll(sel));
     }
 
+    /*
+     * TABLE-ROW PANELS. A button in a <tr> with data-row-toggle opens the
+     * next sibling <tr data-row-panel> (hidden by default — unlike cards,
+     * a manage panel is closed until asked for). One open at a time per
+     * table. data-open-label / data-closed-label swap the button text.
+     */
+    function setRow(btn, panel, open) {
+        panel.hidden = !open;
+        btn.closest('tr').classList.toggle('row-open', open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        btn.classList.toggle('btn-primary', open);
+        btn.classList.toggle('btn-secondary', !open);
+        if (btn.dataset.openLabel) {
+            btn.textContent = open ? btn.dataset.openLabel : btn.dataset.closedLabel;
+        }
+    }
+
     document.addEventListener('click', function (event) {
+        var rowBtn = event.target.closest('[data-row-toggle]');
+        if (rowBtn) {
+            var row = rowBtn.closest('tr');
+            var panel = row && row.nextElementSibling;
+            if (!panel || !panel.hasAttribute('data-row-panel')) { return; }
+            var opening = panel.hidden;
+            var table = row.closest('table');
+            if (opening && table) {
+                table.querySelectorAll('[data-row-toggle]').forEach(function (b) {
+                    var p = b.closest('tr').nextElementSibling;
+                    if (b !== rowBtn && p && !p.hidden) { setRow(b, p, false); }
+                });
+            }
+            setRow(rowBtn, panel, opening);
+            return;
+        }
+
         var toggle = event.target.closest('[data-collapse-toggle]');
         if (toggle) {
             var card = toggle.closest('.group-card') || toggle.parentNode;
