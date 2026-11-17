@@ -181,10 +181,14 @@ def test_dashboard_response_counts_are_branch_scoped(client, db, world):
     body = client.get('/org/').get_data(as_text=True)
     assert '>7<' in body.replace(' ', '').replace('\n', '')
     assert '400' not in body
+    assert '>11<' not in body.replace(' ', '').replace('\n', '')
 
+    # The org admin sees every row's own count. (The board no longer carries
+    # an org-wide Responses total card, so the 418 sum is not printed.)
     login(client, world['acme_admin'])
-    body = client.get('/org/').get_data(as_text=True)
-    assert '418' in body          # 400 + 7 + 11, the whole organisation
+    flat = client.get('/org/').get_data(as_text=True).replace(' ', '').replace('\n', '')
+    for n in ('400', '7', '11'):
+        assert f'>{n}<' in flat
 
 
 # ── Branch management is L2's ───────────────────────────────────────────────

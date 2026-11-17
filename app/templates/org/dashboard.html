@@ -4,8 +4,8 @@
 
 {% macro status_pill(c) -%}
     {% if c.status == 'open' %}
-    <span class="status-pill" style="background:#e7f3e2;color:var(--green);">
-        <span class="status-dot" style="background:var(--green);"></span>Live
+    <span class="status-pill" style="background:var(--blue-faint);color:var(--blue);border:1px solid #cfe0f3;">
+        <span class="status-dot" style="background:var(--blue);"></span>Live
     </span>
     {% elif c.status == 'draft' %}
     <span class="status-pill status-amber">Draft</span>
@@ -14,30 +14,6 @@
         {{ c.status|title }}
     </span>
     {% endif %}
-{%- endmacro %}
-
-{#  THE REPORTING STATE, from the same _report_state() the Reports screen uses.
-    It sits where the sibling shows "Latest score" / "Weakest module": this
-    product has no single cycle score to put there (§10.3 — no GEM composite;
-    §10.5 — no band), so the column says whether the cycle can be read yet. #}
-{% macro reporting_pill(row) -%}
-    {% if row.state.key == 'ready' %}
-    <span class="status-pill status-{{ 'amber' if row.state.provisional else 'green' }}">
-        {{ 'provisional' if row.state.provisional else 'reportable' }}
-    </span>
-    {% elif row.state.key == 'below_threshold' %}
-    <span class="status-pill status-suppressed">below threshold</span>
-    {% else %}
-    <span class="status-pill status-amber">not deployed</span>
-    {% endif %}
-{%- endmacro %}
-
-{% macro responses_cell(row) -%}
-    <span class="metric">{{ row.responses }}{% if row.expected %} / {{ row.expected }}{% endif %}</span>
-    <span class="cell-quiet" style="display:block;">
-        {% if row.rate is not none %}{{ row.rate }}% response rate
-        {% else %}not yet invited{% endif %}
-    </span>
 {%- endmacro %}
 
 {% block content %}
@@ -77,29 +53,26 @@
     {% if not branch_scoped %}
     <div class="card stat-card" style="--accent:var(--navy);">
         <div class="stat-val">{{ stats.org_cycles }}</div>
-        <div class="stat-label">Org-wide cycles</div>
+        <div class="stat-label">Org-wide surveys</div>
     </div>
     <div class="card stat-card" style="--accent:var(--green);">
         <div class="stat-val">{{ stats.org_ready }}</div>
-        <div class="stat-label">Org-wide reportable</div>
+        <div class="stat-label">Org-wide reports</div>
     </div>
     <div class="card stat-card" style="--accent:var(--navy);">
         <div class="stat-val">{{ stats.branches }}</div>
         <div class="stat-label">Total branches</div>
     </div>
     {% endif %}
-    {# Scoped by the route: an L3 admin sees only their branch's total. #}
-    <div class="card stat-card" style="--accent:var(--navy);">
-        <div class="stat-val">{{ stats.responses }}</div>
-        <div class="stat-label">Responses</div>
-    </div>
     <div class="card stat-card" style="--accent:var(--blue);">
         <div class="stat-val">{{ stats.live_branch }}</div>
         <div class="stat-label">Live branch surveys</div>
     </div>
+    {#  "Reports" = cycles whose results can be read (above threshold), from
+        the same _report_state() the Reports screen uses. #}
     <div class="card stat-card" style="--accent:var(--green);">
         <div class="stat-val">{{ stats.branch_ready }}</div>
-        <div class="stat-label">Branch reportable</div>
+        <div class="stat-label">Branch reports</div>
     </div>
 </div>
 
@@ -138,7 +111,6 @@
                 <th class="num sortable" data-sort="deployments" data-type="number">Surveys</th>
                 <th class="num sortable" data-sort="live" data-type="number">Live</th>
                 <th class="num sortable" data-sort="responses" data-type="number">Responses</th>
-                <th>Reporting</th>
                 <th class="sortable" data-sort="deployed">Last deployed</th>
                 <th>Status</th>
                 <th></th>
@@ -154,15 +126,18 @@
                 data-responses="{{ row.responses }}"
                 data-deployed="{{ row.last_deployed.isoformat() if row.last_deployed else '' }}">
                 <td>
-                    <a class="org-name"
-                       href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">{{ c.cycle_name }}</a>
-                    <span class="org-industry"><code>{{ c.id }}</code></span>
+                    <div class="org-cell">
+                        <span class="org-mono" style="background:#c55a11">{{ c.cycle_name[:1]|upper }}</span>
+                        <span>
+                            <span class="org-name">{{ c.cycle_name }}</span>
+                            <span class="org-industry">{{ c.id }}</span>
+                        </span>
+                    </div>
                 </td>
                 <td class="num cell-quiet">{{ row.deployments|length }}
                     survey{{ '' if row.deployments|length == 1 else 's' }}</td>
                 <td class="num"><span class="metric">{{ row.open }}</span></td>
-                <td class="num">{{ responses_cell(row) }}</td>
-                <td>{{ reporting_pill(row) }}</td>
+                <td class="num"><span class="metric metric-green">{{ row.responses }}</span></td>
                 <td class="cell-quiet">{{ row.last_deployed.strftime('%d %b %Y') if row.last_deployed else '—' }}</td>
                 <td>{{ status_pill(c) }}</td>
                 <td>
@@ -172,7 +147,7 @@
             </tr>
         {% endfor %}
             <tr class="filter-empty" data-empty-for="org-cycle-table" style="display:none;">
-                <td colspan="8" class="table-empty">No cycle matches these filters.</td>
+                <td colspan="7" class="table-empty">No cycle matches these filters.</td>
             </tr>
         </tbody>
     </table>
@@ -225,7 +200,6 @@
                 <th>Current cycle</th>
                 <th class="num sortable" data-sort="live" data-type="number">Live</th>
                 <th class="num sortable" data-sort="responses" data-type="number">Responses</th>
-                <th>Reporting</th>
                 <th class="sortable" data-sort="deployed">Last deployed</th>
                 <th>Status</th>
                 <th></th>
@@ -240,18 +214,19 @@
                 data-responses="{{ row.responses if row else 0 }}"
                 data-deployed="{{ row.last_deployed.isoformat() if row and row.last_deployed else '' }}">
                 <td>
-                    <span class="org-name">{{ br.branch.name }}</span>
-                    <span class="org-industry">{{ br.cycles }} cycle{{ '' if br.cycles == 1 else 's' }}</span>
+                    <div class="org-cell">
+                        <span class="org-mono" style="background:#375623">{{ br.branch.name[:1]|upper }}</span>
+                        <span>
+                            <span class="org-name">{{ br.branch.name }}</span>
+                            <span class="org-industry">{{ br.cycles }} cycle{{ '' if br.cycles == 1 else 's' }}</span>
+                        </span>
+                    </div>
                 </td>
                 {% if row %}
                 {% set c = row.cycle %}
-                <td>
-                    <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}">{{ c.cycle_name }}</a>
-                    <span class="org-industry"><code>{{ c.id }}</code></span>
-                </td>
+                <td class="cell-quiet">{{ c.cycle_name }}</td>
                 <td class="num"><span class="metric">{{ row.open }}</span></td>
-                <td class="num">{{ responses_cell(row) }}</td>
-                <td>{{ reporting_pill(row) }}</td>
+                <td class="num"><span class="metric metric-green">{{ row.responses }}</span></td>
                 <td class="cell-quiet">{{ row.last_deployed.strftime('%d %b %Y') if row.last_deployed else '—' }}</td>
                 <td>{{ status_pill(c) }}</td>
                 <td>
@@ -264,13 +239,12 @@
                 <td class="num cell-quiet">—</td>
                 <td class="cell-quiet">—</td>
                 <td class="cell-quiet">—</td>
-                <td class="cell-quiet">—</td>
                 <td></td>
                 {% endif %}
             </tr>
         {% endfor %}
             <tr class="filter-empty" data-empty-for="branch-table" style="display:none;">
-                <td colspan="8" class="table-empty">No branch matches these filters.</td>
+                <td colspan="7" class="table-empty">No branch matches these filters.</td>
             </tr>
         </tbody>
     </table>
