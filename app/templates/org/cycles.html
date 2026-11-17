@@ -14,38 +14,42 @@
 <div class="panel" style="margin-bottom:2.25rem">
   <div class="table-scroll">
     <table class="table table-dark-head">
+      {#  Owner is shown only where it varies: in "Your cycles" every row has
+          the same owner (org-wide for L2, the one branch for L3), so the
+          column said the same thing on every line. The cycle ID sits under
+          the name rather than in a column of its own. #}
       <thead><tr>
-        <th>Cycle ID</th><th>Name</th><th>Owner</th><th>Status</th>
-        <th class="num">Responses</th><th>Deployed</th><th>Created</th><th></th>
+        <th>Cycle</th>
+        {% if not own %}<th>Branch</th>{% endif %}
+        <th>Status</th>
+        <th class="num">Responses</th><th>Deployed</th><th></th>
       </tr></thead>
       <tbody>
       {% for r in rows %}
         {% set c = r.cycle %}
         <tr>
-          <td><code class="cy-id">{{ c.id }}</code>{% if c.is_pilot %}
-              <span class="badge badge-outline">pilot</span>{% endif %}</td>
-          <td><strong>{{ c.cycle_name }}</strong>
-              {% if c.previous_cycle_id %}<br>
-              <span class="muted cy-small">follows {{ c.previous_cycle_id }}</span>{% endif %}</td>
-          <td>
-            {% if c.branch_id %}
-            <span class="cy-branch">{{ c.branch.name if c.branch else 'Branch' }}</span>
-            {% else %}<span class="muted">Organisation-wide</span>{% endif %}
+          <td class="cy-main">
+            <span class="cy-name">{{ c.cycle_name }}</span>{% if c.is_pilot %}
+            <span class="badge badge-outline">pilot</span>{% endif %}
+            <span class="cy-meta"><code class="cy-id">{{ c.id }}</code>{% if c.previous_cycle_id %}
+              · follows {{ c.previous_cycle_id }}{% endif %}</span>
           </td>
+          {% if not own %}
+          <td><span class="cy-branch">{{ c.branch.name if c.branch else 'Branch' }}</span></td>
+          {% endif %}
           <td><span class="cy-pill cy-{{ c.status }}">{{ 'Active' if c.status == 'open' else c.status|capitalize }}</span></td>
-          <td class="num">
+          <td class="num cy-nowrap">
             {% if r.deployed %}{{ r.responses }}<span class="muted"> / {{ r.expected }}</span>
-            {% else %}<span class="muted">-</span>{% endif %}
+            {% else %}<span class="muted">—</span>{% endif %}
           </td>
-          <td class="muted">{{ r.deployed_at.strftime('%d %b %Y') if r.deployed_at else 'Not deployed' }}</td>
-          <td class="muted">{{ c.created_at.strftime('%d %b %Y') if c.created_at else '-' }}</td>
-          <td class="row-actions" style="white-space:nowrap">
-            <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}"
-               class="btn btn-sm btn-secondary">View Cycle</a>
+          <td class="muted cy-nowrap">{{ r.deployed_at.strftime('%d %b %Y') if r.deployed_at else 'Not deployed' }}</td>
+          <td class="cy-actions">
             {% if own and can_deploy_any and r.can_deploy %}
             <a href="{{ url_for('org.deploy', cycle_id=c.id) }}"
-               class="btn btn-sm btn-primary">Deploy Survey</a>
+               class="btn btn-sm btn-primary">Deploy</a>
             {% endif %}
+            <a href="{{ url_for('org.cycle_detail', cycle_id=c.id) }}"
+               class="btn btn-sm btn-secondary">View</a>
           </td>
         </tr>
       {% endfor %}
@@ -96,8 +100,13 @@
 {% block head %}
 <style>
 .section-hint { font-size:.75rem; color:var(--text-subtle); }
-.cy-id { font-size:.8rem; background:var(--border-light); padding:.15rem .45rem; border-radius:var(--radius-sm); }
-.cy-small { font-size:.78rem; }
+.cy-id { font-size:.74rem; background:var(--border-light); padding:.1rem .4rem; border-radius:var(--radius-sm); }
+.cy-main { width:100%; }
+.cy-name { font-weight:700; color:var(--text); }
+.cy-meta { display:block; margin-top:.3rem; font-size:.76rem; color:var(--text-muted); white-space:nowrap; }
+.cy-nowrap { white-space:nowrap; }
+.cy-actions { white-space:nowrap; text-align:right; }
+.cy-actions .btn + .btn { margin-left:.4rem; }
 .cy-tag { font-size:.68rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
           color:var(--text-muted); border:1px solid var(--border); border-radius:999px; padding:.15rem .6rem; }
 .cy-branch { display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem; font-weight:600;
