@@ -1,6 +1,13 @@
 {% extends "survey/layout.html" %}
 {% block title %}Thank you{% endblock %}
 {% block content %}
+{% if preview %}
+<h1 class="sv-h1">Preview complete</h1>
+<div class="sv-note sv-note-warn">
+  Nothing was saved — this walkthrough does not count as a response.
+</div>
+<p class="sv-lede"><a href="{{ back_url }}">← Back to the cycle</a></p>
+{% else %}
 <h1 class="sv-h1">Thank you</h1>
 <div class="sv-note sv-note-ok">
   Your response has been recorded.
@@ -14,4 +21,5 @@
   You can close this page. There is nothing further to do, and nothing here
   that identifies you.
 </p>
+{% endif %}
 {% endblock %}

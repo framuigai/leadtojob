@@ -2048,3 +2048,27 @@ a.group-card-title:hover { color: var(--blue); }
 .rp-split-val { font-size:1.15rem !important; }
 .rp-def { font-size:.76rem; color:var(--text-muted); line-height:1.5; margin:0 0 .6rem; }
 .rp-cards-legend { margin-top:1rem; display:flex; justify-content:flex-end; }
+
+/* ── Survey Link card (cycle page) — same design as trainiq's deploy_success ── */
+.sl-card { background:var(--surface); border:1px solid var(--border); border-top:4px solid var(--orange);
+    border-radius:16px; box-shadow:var(--shadow-sm); padding:1.5rem 1.6rem; margin-top:.75rem; }
+.sl-head { display:flex; align-items:center; gap:.9rem; margin-bottom:.4rem; }
+.sl-icon { width:2.4rem; height:2.4rem; border-radius:10px; background:var(--orange-light);
+    color:var(--orange); display:inline-flex; align-items:center; justify-content:center; font-size:1.2rem; flex:none; }
+.sl-head h2 { font-size:1.3rem; font-weight:700; margin:0; }
+.sl-hint { font-size:.9rem; color:var(--text-muted); margin:0 0 1.1rem; }
+.sl-box.link-copy { display:flex; gap:0; min-width:0; align-items:stretch; border:2px solid var(--blue);
+    border-radius:12px; background:var(--blue-faint); overflow:hidden; }
+.sl-box.link-copy input.sl-url { flex:1; min-width:0; border:0; border-radius:0; background:transparent;
+    padding:.95rem 1.1rem; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:.95rem; color:var(--navy); text-overflow:ellipsis; }
+.sl-box.link-copy input.sl-url:focus { outline:none; background:transparent; }
+.sl-box.link-copy button.sl-copy { border:0; border-radius:0; background:var(--blue); color:#fff;
+    font-weight:700; font-size:.95rem; padding:0 1.5rem; cursor:pointer; white-space:nowrap; transition:background .15s; }
+.sl-box.link-copy button.sl-copy:hover { background:var(--blue-hover); color:#fff; }
+.sl-box.link-copy button.sl-copy.copied { background:#16a34a; color:#fff; }
+.sl-actions { display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.9rem; }
+@media (max-width: 640px) {
+    .sl-box.link-copy { flex-direction:column; }
+    .sl-box.link-copy button.sl-copy { padding:.8rem; }
+}

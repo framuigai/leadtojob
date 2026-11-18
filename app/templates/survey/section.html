@@ -16,6 +16,13 @@
       (4, 18) and a section needs to say what it is about.
 #}
 
+{% if preview %}
+{# Admin-only preview (org.deployment_preview). Respondents never reach this. #}
+<div class="sv-note sv-note-warn">
+  <strong>Preview</strong> — your answers won't be saved.
+</div>
+{% endif %}
+
 <p class="sv-progress">Section {{ index }} of {{ section_count }}</p>
 <div class="sv-bar"><div class="sv-bar-fill"
      style="width: {{ ((index - 1) / section_count * 100) | round(1) }}%"></div></div>
@@ -66,6 +73,18 @@
   </fieldset>
   {% endfor %}
 
+  {% if preview %}
+  {# Links, not submits: nothing in a preview is ever posted. #}
+  <div class="sv-actions">
+    {% if index > 1 %}
+    <a class="sv-btn sv-btn-plain" href="{{ url_for('org.deployment_preview',
+       deployment_id=deployment.id, index=index - 1) }}">Back</a>
+    {% endif %}
+    <a class="sv-btn sv-btn-primary" href="{{ url_for('org.deployment_preview',
+       deployment_id=deployment.id, index=index + 1) }}">
+      {% if index < section_count %}Continue{% else %}Finish preview{% endif %}</a>
+  </div>
+  {% else %}
   <div class="sv-actions">
     {% if index > 1 %}
     <button class="sv-btn sv-btn-plain" type="submit" name="direction" value="back">
@@ -79,5 +98,6 @@
     Your answers on this page are saved when you continue. You can leave and
     come back in this browser.
   </p>
+  {% endif %}
 </form>
 {% endblock %}

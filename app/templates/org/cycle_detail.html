@@ -142,20 +142,27 @@
           </div>
 
           {% if not w.closed %}
-          <div class="link-row">
-            <label class="link-row-label" for="link-{{ w.id }}">Survey link</label>
-            {# `.link-copy` wraps input + button; copy.js reads the input inside
-               the same wrapper, so N deployments cannot collide. #}
-            <div class="link-copy">
-              <input type="text" readonly onclick="this.select()"
-                     id="link-{{ w.id }}" value="{{ row.link }}">
-              <button type="button" data-copy data-copy-label="Copy">Copy</button>
+          {# Same design and wording as trainiq's deploy_success Survey Link card.
+             `.link-copy` stays on the box: copy.js reads the input inside the
+             same wrapper, so N deployments cannot collide. #}
+          <div class="sl-card">
+            <div class="sl-head">
+              <span class="sl-icon">🔗</span>
+              <h2>Survey Link</h2>
             </div>
-            <p class="link-row-note">
-              The only way in. It is not recoverable from anywhere else, and anyone
-              holding it can respond - so share it with the invited population and
-              not more widely.
-            </p>
+            <p class="sl-hint">Share this one link with everyone taking the survey — no individual invitations needed.</p>
+            <div class="sl-box link-copy">
+              <input type="text" class="sl-url" readonly onclick="this.select()"
+                     id="link-{{ w.id }}" value="{{ row.link }}" title="{{ row.link }}"
+                     aria-label="Survey link">
+              <button type="button" class="sl-copy" data-copy data-copy-label="Copy link">Copy link</button>
+            </div>
+            <div class="sl-actions">
+              {# Preview, not the live link: walking the live link as an admin
+                 would create a real response session. #}
+              <a href="{{ url_for('org.deployment_preview', deployment_id=w.id) }}"
+                 target="_blank" rel="noopener" class="btn btn-sm btn-secondary">Preview survey ↗</a>
+            </div>
           </div>
           {% else %}
           <p class="link-none">This deployment is closed. Its link no longer

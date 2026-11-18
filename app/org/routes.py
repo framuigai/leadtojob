@@ -1225,6 +1225,41 @@ def deployment_detail(deployment_id):
     return redirect(url_for('org.cycle_detail', cycle_id=deployment.cycle_id))
 
 
+# ── Survey preview (admin-only, never saved) ────────────────────────────────
+#
+# Adapted from trainiq's deployment_preview. Lets an admin click through the
+# survey exactly as respondents see it, without creating a ResponseSession or
+# a single SurveyResponse. It lives in the ORG blueprint (login + tenant and
+# branch scoping via _deployment_or_404), not on the public /survey/<slug>
+# link, so respondents cannot reach it and the live link is untouched.
+#
+# GET only. Navigation is plain links; the radios are never posted, so there
+# is no handler that could write. Works on closed deployments too — reviewing
+# what was asked is still useful after collection stops.
+
+@org_bp.route('/deployments/<uuid:deployment_id>/preview')
+@org_bp.route('/deployments/<uuid:deployment_id>/preview/<int:index>')
+@require_role_any(*_ORG_TIERS)
+def deployment_preview(deployment_id, index=1):
+    from app.survey.routes import _sections
+    deployment = _deployment_or_404(deployment_id)
+    sections = _sections(deployment)
+    if not sections:
+        abort(404)
+    if index == len(sections) + 1:
+        return render_template(
+            'survey/done.html', preview=True, deployment=deployment,
+            back_url=url_for('org.cycle_detail', cycle_id=deployment.cycle_id))
+    if not 1 <= index <= len(sections):
+        abort(404)
+    domain_code, items = sections[index - 1]
+    return render_template(
+        'survey/section.html', deployment=deployment, session=None,
+        index=index, section_count=len(sections), domain_code=domain_code,
+        items=items, answers={}, preview=True,
+    )
+
+
 @org_bp.route('/deployments/<uuid:deployment_id>/tickets', methods=['POST'])
 @require_capability(ISSUE_TICKETS)
 def issue_tickets(deployment_id):
