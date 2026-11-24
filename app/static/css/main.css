@@ -1953,10 +1953,10 @@ a.group-card-title:hover { color: var(--blue); }
 
 .rp-head-note { font-size: .8rem; }
 
-.rp-dist { display: flex; height: 12px; border-radius: 6px; overflow: hidden;
+.rp-distbar { display: flex; height: 12px; border-radius: 6px; overflow: hidden;
            background: var(--border-light); }
-.rp-dist span { display: block; height: 100%; }
-.rp-dist span + span { border-left: 1px solid var(--surface); }
+.rp-distbar span { display: block; height: 100%; }
+.rp-distbar span + span { border-left: 1px solid var(--surface); }
 
 .rp-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
 .rp-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.2rem;

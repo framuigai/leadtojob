@@ -14,7 +14,7 @@
 
 {% macro dist_bar(d) -%}
   {%- set answered = d.answered -%}
-  <div class="rp-dist" role="img"
+  <div class="rp-distbar" role="img"
        aria-label="{% for s in [1,2,3,4,5] %}{{ s }}: {{ d.counts.get(s, 0) }}{{ ', ' if not loop.last }}{% endfor %}">
     {% if answered %}
       {% for s in [1,2,3,4,5] %}{% set c = d.counts.get(s, 0) %}{% if c %}
