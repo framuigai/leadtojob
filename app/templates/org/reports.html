@@ -38,13 +38,13 @@
 {% if rows %}
 {% set ready = rows | selectattr('state.key', 'equalto', 'ready') | list %}
 <div class="stats-row">
-  <div class="stat-card"><div class="stat-val">{{ rows | length }}</div>
+  <div class="card stat-card" style="--accent:var(--navy);"><div class="stat-val">{{ rows | length }}</div>
     <div class="stat-label">Cycles</div></div>
-  <div class="stat-card"><div class="stat-val">{{ ready | length }}</div>
+  <div class="card stat-card" style="--accent:var(--green);"><div class="stat-val">{{ ready | length }}</div>
     <div class="stat-label">Reportable</div></div>
-  <div class="stat-card"><div class="stat-val">{{ rows | sum(attribute='responses') }}</div>
+  <div class="card stat-card" style="--accent:var(--blue);"><div class="stat-val">{{ rows | sum(attribute='responses') }}</div>
     <div class="stat-label">Responses</div></div>
-  <div class="stat-card"><div class="stat-val">{{ rows | sum(attribute='expected') }}</div>
+  <div class="card stat-card" style="--accent:var(--navy);"><div class="stat-val">{{ rows | sum(attribute='expected') }}</div>
     <div class="stat-label">Invited</div></div>
 </div>
 
