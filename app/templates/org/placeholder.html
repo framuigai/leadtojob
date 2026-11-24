@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
     <div class="page-header-left">
-        <div class="section-label">{{ role_label(current_user.role) }}{% if branch_scoped %} · {{ current_user.branch.name if current_user.branch }}{% endif %}</div>
+        {% if branch_scoped %}<div class="section-label">{{ current_user.branch.name if current_user.branch }}</div>{% endif %}
         <h1>{{ heading }}</h1>
         {% if detail %}
         <p style="color:var(--text-muted);font-size:.875rem;max-width:62ch;">{{ detail }}</p>

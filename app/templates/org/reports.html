@@ -22,12 +22,9 @@
 
 <div class="page-header">
   <div class="page-header-left">
-    <div class="section-label">{{ role_label(current_user.role) }}</div>
     <h1>Reports</h1>
     <div class="meta-row">
-      <span>Grouped by measurement cycle.</span>
       {% if branch_scoped %}
-      <span class="meta-sep">&bull;</span>
       <span class="badge pill-branch">{{ current_user.branch.name
         if current_user.branch else 'your branch' }}</span>
       {% endif %}
