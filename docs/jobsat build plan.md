@@ -1,7 +1,8 @@
-# leadTo ➡️ Job Satisfaction Analysis System — Build Plan (v2)
+# leadTo ➡️ Employee Experience Analysis System — Build Plan (v2)
 
 **Product:** `jobs.leadto.co.ke` · **Repo:** new (`leadto-jobsat`) · **Status:** scaffolding not yet started
 **Source of truth:** `LEADTO ➡️ JOB SATISFACTION ANALYSIS SYSTEM.pdf` (Master Spec v3.0, §1–§18).
+**Name:** renamed from *Job Satisfaction* to **Employee Experience** (2026-11-25), display name only. File names, the spec PDF and "General Job Satisfaction" (a subdomain) keep the old wording.
 **Chassis:** `../trainiq` (live TNA) and `../promo` (Promotion Readiness) — inherit, do not reinvent.
 **Content outstanding:** survey workbook and intervention/course curriculum. Everything below is built to receive them.
 
