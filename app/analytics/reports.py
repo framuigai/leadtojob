@@ -53,7 +53,7 @@ _AUDIENCES = {
     MANAGEMENT: 'The manager of this group',
 }
 
-PRODUCT_NAME = 'Job Satisfaction Analysis'
+PRODUCT_NAME = 'Employee Experience Analysis'
 
 
 class ReportNotAvailable(Exception):

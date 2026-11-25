@@ -24,7 +24,7 @@ def test_login_page_renders(client):
     assert res.status_code == 200
     body = res.get_data(as_text=True)
     assert 'Sign in' in body
-    assert 'Job Satisfaction Analysis' in body
+    assert 'Employee Experience Analysis' in body
 
 
 def test_login_rejects_a_bad_password_without_saying_which_part_was_wrong(db, client):
