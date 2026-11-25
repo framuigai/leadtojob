@@ -1,4 +1,4 @@
-# leadTo ➡️ Job Satisfaction Analysis System — Project Context
+# leadTo ➡️ Employee Experience Analysis System — Project Context
 
 Read this before changing anything. It records decisions that are already
 settled, so they are not re-litigated every session.
@@ -6,6 +6,11 @@ settled, so they are not re-litigated every session.
 **Source of truth:** `docs/LEADTO ➡️ JOB SATISFACTION ANALYSIS SYSTEM.pdf`
 (Master Product Concept v3.0, §1–§18).
 **Build plan:** `docs/jobsat build plan.md` (v2).
+
+**Name:** the product was renamed from *Job Satisfaction* to **Employee
+Experience** (2026-11-25) — display name only, no logic change. The spec PDF,
+domain, Render service and repo keep the old name. "General Job Satisfaction"
+is a measured subdomain, not the product name, and stays as written.
 **Product:** `jobs.leadto.co.ke` · **Service:** `leadtojobsat` on Render.
 
 ---
@@ -16,7 +21,7 @@ settled, so they are not re-litigated every session.
 |---|---|---|---|
 | TNA (trainiq) | `tna.leadto.co.ke` | (org\|branch, domain, cycle) | anonymous, pooled |
 | Promotion Readiness (promo) | `promote.leadto.co.ke` | (position, candidate, instrument) | **identified** |
-| **Job Satisfaction (this)** | `jobs.leadto.co.ke` | (cycle, group) over **anonymous sessions** | anonymous, **grouped per respondent** |
+| **Employee Experience (this)** | `jobs.leadto.co.ke` | (cycle, group) over **anonymous sessions** | anonymous, **grouped per respondent** |
 
 They share a visual language and a chassis. They do not share a database, a
 schema or an Alembic chain, and no data crosses between them.
