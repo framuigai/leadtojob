@@ -11,6 +11,7 @@ settled, so they are not re-litigated every session.
 Experience** (2026-11-25) — display name only, no logic change. The spec PDF,
 domain, Render service and repo keep the old name. "General Job Satisfaction"
 is a measured subdomain, not the product name, and stays as written.
+
 **Product:** `jobs.leadto.co.ke` · **Service:** `leadtojobsat` on Render.
 
 ---
